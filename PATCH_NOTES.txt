@@ -1,0 +1,17 @@
+Patches aplicados:
+
+- Criado controllers/profissionaisController.js com endpoints reais (Mongo) para profissionais.
+- Criado routes/profissionaisRoutes.js e montado em /api/profissionais.
+- Garantida a montagem de /api/promocoes (caso existam routes/promocaoRoutes.js e handlers prontos).
+
+Como validar:
+1) Subir o servidor com .env configurado (Mongo, JWT, etc.).
+2) Testar:
+   - GET /api/profissionais
+   - GET /api/profissionais/resumo
+   - GET /api/profissionais/:id
+   - GET /api/profissionais/me (com Bearer)
+   - PUT /api/profissionais/me (com Bearer)
+   - GET /api/promocoes (se as rotas já existirem no seu repo)
+
+Não foram feitos mocks. Todas as operações usam seus models reais (models/user.js).
