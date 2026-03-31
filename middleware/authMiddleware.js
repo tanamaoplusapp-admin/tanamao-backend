@@ -2,7 +2,7 @@
 const jwt = require('jsonwebtoken');
 
 // ⚠️ ATENÇÃO AO CASE no Linux/Render:
-const User    = require('../models/User');       // clientes/profissionais/motoristas
+const User    = require('../models/user');       // clientes/profissionais/motoristas
 const Empresa = require('../models/Empresa');    // empresas
 
 function pick(obj = {}, keys = []) {
