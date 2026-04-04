@@ -417,3 +417,13 @@ exports.updateUserAvailability = async (req, res) => {
   }
 };
 });
+exports.deleteAccount = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  await User.findByIdAndDelete(userId);
+
+  res.json({
+    ok: true,
+    message: "Conta excluída com sucesso"
+  });
+});

@@ -7,7 +7,8 @@ const {
   getMe,
   updateMe,
   updateUserAvailability,
-  savePushToken
+  savePushToken,
+  deleteAccount
 } = require('../controllers/userController');
 
 const User = require('../models/user');
@@ -20,11 +21,11 @@ router.get(
   '/',
   verifyToken,
   requireRoles('admin'),
-  async (req,res)=>{
+  async (req, res) => {
 
     const users = await User.find()
       .select('-password')
-      .sort({ createdAt:-1 });
+      .sort({ createdAt: -1 });
 
     res.json({
       items: users
@@ -42,6 +43,12 @@ router.put('/profile', verifyToken, updateMe);
 
 router.get('/me', verifyToken, getMe);
 router.put('/me', verifyToken, updateMe);
+
+/* =====================================================
+EXCLUIR CONTA (APPLE REQUIREMENT)
+===================================================== */
+
+router.delete('/delete-account', verifyToken, deleteAccount);
 
 /* =====================================================
 STATUS ONLINE

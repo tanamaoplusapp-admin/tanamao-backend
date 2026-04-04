@@ -159,6 +159,7 @@ app.get('/health', (_req, res) => {
 app.get('/', (_req, res) =>
   res.send('🚀 API Tá na Mão+ rodando e saudável!')
 );
+
 app.use((req, res, next) => {
   console.log("➡️", req.method, req.originalUrl);
   next();
@@ -284,10 +285,13 @@ Object.values(routes).forEach(({ path, module: modPath }) => {
     console.error("❌ erro rota:", path, err.message);
   }
 });
+const privacyRoutes = require('./routes/privacy');
+app.use('/', privacyRoutes);
 app.use((req, res) => {
   console.log("❌ ROTA NÃO ENCONTRADA:", req.method, req.originalUrl);
   res.status(404).json({ erro: "Rota não encontrada" });
 });
+
 /* =====================================================
    CRONS
 ===================================================== */
