@@ -71,22 +71,27 @@ exports.registerUser = asyncHandler(async (req, res) => {
   });
 
   /* =========================
-     TRIAL 45 DIAS PROFISSIONAL
-  ========================= */
+   TRIAL 45 DIAS PROFISSIONAL
+========================= */
 
-  if (user.role === 'profissional') {
+if (user.role === 'profissional') {
 
-    const agora = new Date();
+  const agora = new Date();
 
-    const expira = new Date(
-      agora.getTime() + 45 * 24 * 60 * 60 * 1000
-    );
+  const expira = new Date(
+    agora.getTime() + 45 * 24 * 60 * 60 * 1000
+  );
 
-    user.acessoExpiraEm = expira;
-    user.planoAtivo = 'trial_45_dias';
+  user.perfilAtivo = true;
+  user.acessoLiberado = true;
+  user.planoAtivo = true;
+  user.acessoExpiraEm = expira;
 
-    await user.save();
-  }
+  user.planType = 'trial_45_dias';
+  user.subscriptionStatus = 'active';
+
+  await user.save();
+}
 
   const verifyUrl =
     `${config.frontendUrl}/verify-email?token=${rawVerifyToken}`;

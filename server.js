@@ -379,38 +379,48 @@ process.on('unhandledRejection', reason =>
 process.on('uncaughtException', err =>
   console.error('UNCAUGHT EXCEPTION:', err)
 );
-app.use((req,res,next)=>{
+app.use(async (req, res, next) => {
+  console.log("ROTA NÃO ENCONTRADA", req.originalUrl);
 
-  console.log("ROTA NÃO ENCONTRADA", req.originalUrl)
-
-  require('./utils/reportBug')({
-    type: "route_not_found",
-    severity: "medium",
-    source: "backend",
-    meta:{
-      url: req.originalUrl,
-      method: req.method
-    }
-  })
+  try {
+    await require('./utils/reportBug')({
+      type: "route_not_found",
+      severity: "medium",
+      source: "backend",
+      meta: {
+        url: req.originalUrl,
+        method: req.method
+      }
+    });
+  } catch (e) {
+    console.error("Falha ao registrar bug 404:", e.message);
+  }
 
   res.status(404).json({
-    erro:"Rota não encontrada"
-  })
+    erro: "Rota não encontrada"
+  });
+});
 
-})
-app.use((err,req,res,next)=>{
+app.use(async (err, req, res, next) => {
+  console.error("SERVER CRASH", err);
 
-  console.error("SERVER CRASH", err)
-
-  require('./utils/reportBug')({
-    type:"server_crash",
-    severity:"critical",
-    source:"backend",
-    stack: err.stack
-  })
+  try {
+    await require('./utils/reportBug')({
+      type: "server_crash",
+      severity: "critical",
+      source: "backend",
+      stack: err.stack,
+      message: err.message,
+      meta: {
+        url: req.originalUrl,
+        method: req.method
+      }
+    });
+  } catch (e) {
+    console.error("Falha ao registrar crash:", e.message);
+  }
 
   res.status(500).json({
-    erro:"Erro interno"
-  })
-
-})
+    erro: "Erro interno"
+  });
+});

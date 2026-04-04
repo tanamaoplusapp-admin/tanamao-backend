@@ -90,7 +90,18 @@ function safeUserResponse(u, options = {}) {
     email: u?.email,
     role,
     companyId: companyId || null,
-    isVerified: u?.isVerified
+    isVerified: u?.isVerified,
+
+    // 🔥 CAMPOS DE VISIBILIDADE DO PERFIL
+    perfilAtivo: u?.perfilAtivo,
+    acessoLiberado: u?.acessoLiberado,
+    planoAtivo: u?.planoAtivo,
+    acessoExpiraEm: u?.acessoExpiraEm,
+
+    // extras úteis
+    status: u?.status,
+    plano: u?.plano,
+    tipoPlano: u?.tipoPlano
   };
 
 }
@@ -142,20 +153,26 @@ console.log("HEADERS:", req.headers.authorization)
       }).lean();
 
       if (prof) {
+  return res.json({
+    ok:true,
+    user:{
+      id: prof.userId || prof._id,
+      name: prof.nome || prof.name,
+      email: prof.email,
+      role: 'profissional',
+      companyId: null,
+      isVerified: !!prof.isVerified,
 
-        return res.json({
-          ok:true,
-          user:{
-            id: prof.userId || prof._id,
-            name: prof.nome || prof.name,
-            email: prof.email,
-            role: 'profissional',
-            companyId: null,
-            isVerified: !!prof.isVerified
-          }
-        });
+      perfilAtivo: prof.perfilAtivo,
+      acessoLiberado: prof.acessoLiberado,
+      planoAtivo: prof.planoAtivo,
+      acessoExpiraEm: prof.acessoExpiraEm,
 
-      }
+      status: prof.status,
+      plano: prof.plano
+    }
+  });
+}
 
     }
 
