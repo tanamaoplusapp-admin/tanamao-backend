@@ -2,30 +2,77 @@ const AuditEvent = require('../models/AuditEvent');
 
 exports.ingest = async (req, res) => {
   try {
-    const events = Array.isArray(req.body) ? req.body : [req.body];
-    if (!events.length) return res.status(400).json({ ok: false, message: 'Nenhum evento fornecido.' });
+
+    const events = Array.isArray(req.body)
+      ? req.body
+      : [req.body];
+
+    if (!events.length) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Nenhum evento fornecido.'
+      });
+    }
 
     const enriched = events.map(e => ({
+
       ...e,
+
+      // quem fez a ação (admin)
       user: e.user || req.user?.id || null,
-      companyId: e.companyId || req.user?.companyId || null,
-      sessionId: e.sessionId || req.headers['x-session-id'] || null,
-      correlationId: e.correlationId || null,
+
+      // usuário afetado
+      targetUser: e.targetUser || null,
+
+      companyId:
+        e.companyId || req.user?.companyId || null,
+
+      sessionId:
+        e.sessionId || req.headers['x-session-id'] || null,
+
+      correlationId:
+        e.correlationId || null,
+
       payload: e.payload || {},
+
     }));
 
-    await AuditEvent.insertMany(enriched, { ordered: false });
-    res.status(201).json({ ok: true, count: enriched.length });
+    await AuditEvent.insertMany(
+      enriched,
+      { ordered: false }
+    );
+
+    res.status(201).json({
+      ok: true,
+      count: enriched.length
+    });
+
   } catch (err) {
+
     console.error('[auditoria][ingest]', err);
-    res.status(500).json({ ok: false, message: 'Erro ao registrar eventos.', error: err.message || err });
+
+    res.status(500).json({
+      ok: false,
+      message: 'Erro ao registrar eventos.',
+      error: err.message || err
+    });
+
   }
 };
 
+
 exports.list = async (req, res) => {
   try {
-    const { type, limit = 100, user, companyId } = req.query;
+
+    const {
+      type,
+      limit = 100,
+      user,
+      companyId
+    } = req.query;
+
     const q = {};
+
     if (type) q.type = type;
     if (user) q.user = user;
     if (companyId) q.companyId = companyId;
@@ -34,11 +81,26 @@ exports.list = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(Number(limit))
       .populate('user', 'name email')
+      .populate('targetUser', 'name email')
+      .populate('adminId', 'name email')   // compatibilidade antiga
+      .populate('targetId', 'name email')  // compatibilidade antiga
       .populate('companyId', 'nome');
 
-    res.json({ ok: true, total: items.length, data: items });
+    res.json({
+      ok: true,
+      total: items.length,
+      data: items
+    });
+
   } catch (err) {
+
     console.error('[auditoria][list]', err);
-    res.status(500).json({ ok: false, message: 'Erro ao listar eventos.', error: err.message || err });
+
+    res.status(500).json({
+      ok: false,
+      message: 'Erro ao listar eventos.',
+      error: err.message || err
+    });
+
   }
 };

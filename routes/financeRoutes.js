@@ -80,5 +80,42 @@ router.get(
   requireRoles('admin'),
   financeCtrl.adminSummary
 );
+router.patch(
+  '/users/:id/extend-access',
+  verifyToken,
+  requireRoles('admin'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { days } = req.body;
 
+      const User = require('../models/user');
+      const user = await User.findById(id);
+
+      if (!user) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+
+      const now = new Date();
+      const atual = user.accessExpiresAt || now;
+
+      const novaData = new Date(atual);
+      novaData.setDate(novaData.getDate() + (days || 7));
+
+      user.accessExpiresAt = novaData;
+      user.subscriptionStatus = 'active';
+
+      await user.save();
+
+      res.json({
+        success: true,
+        accessExpiresAt: user.accessExpiresAt
+      });
+
+    } catch (err) {
+      console.error('extend-access error:', err);
+      res.status(500).json({ error: 'Erro ao estender acesso' });
+    }
+  }
+);
 module.exports = router;

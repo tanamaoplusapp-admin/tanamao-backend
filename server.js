@@ -287,10 +287,7 @@ Object.values(routes).forEach(({ path, module: modPath }) => {
 });
 const privacyRoutes = require('./routes/privacy');
 app.use('/', privacyRoutes);
-app.use((req, res) => {
-  console.log("❌ ROTA NÃO ENCONTRADA:", req.method, req.originalUrl);
-  res.status(404).json({ erro: "Rota não encontrada" });
-});
+
 
 /* =====================================================
    CRONS
@@ -382,4 +379,38 @@ process.on('unhandledRejection', reason =>
 process.on('uncaughtException', err =>
   console.error('UNCAUGHT EXCEPTION:', err)
 );
+app.use((req,res,next)=>{
 
+  console.log("ROTA NÃO ENCONTRADA", req.originalUrl)
+
+  require('./utils/reportBug')({
+    type: "route_not_found",
+    severity: "medium",
+    source: "backend",
+    meta:{
+      url: req.originalUrl,
+      method: req.method
+    }
+  })
+
+  res.status(404).json({
+    erro:"Rota não encontrada"
+  })
+
+})
+app.use((err,req,res,next)=>{
+
+  console.error("SERVER CRASH", err)
+
+  require('./utils/reportBug')({
+    type:"server_crash",
+    severity:"critical",
+    source:"backend",
+    stack: err.stack
+  })
+
+  res.status(500).json({
+    erro:"Erro interno"
+  })
+
+})

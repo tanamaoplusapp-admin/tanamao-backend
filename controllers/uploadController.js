@@ -71,7 +71,7 @@ exports.uploadOne = async (req, res) => {
     fs.writeFileSync(filePath, file.buffer);
 
     // URL pública servida pelo express.static('/uploads', ...)
-    const url = `/uploads/${name}`;
+    const url = `${process.env.APP_BASE_URL}/uploads/${name}`;
 
     // ✅ NOVO — salva avatar do usuário quando for foto de perfil
     if (tipo === 'perfil' && req.user?._id) {

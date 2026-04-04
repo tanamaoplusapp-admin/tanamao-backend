@@ -332,4 +332,32 @@ res.status(500).json({erro:e.message})
 
 }
 )
+router.patch(
+  '/users/:id/status',
+  verifyToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { status } = req.body;
+
+      const user = await User.findById(req.params.id);
+
+      if (!user) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+
+      user.status = status;
+
+      await user.save();
+
+      res.json({
+        success: true,
+        status: user.status
+      });
+
+    } catch (err) {
+      res.status(500).json({ error: 'Erro ao alterar status' });
+    }
+  }
+);
 module.exports = router;

@@ -68,4 +68,72 @@ router.patch(
   updateFinancialStatus
 );
 
+/* ===================== ACCESS CONTROL ===================== */
+
+const User = require('../models/user');
+
+/* LIBERAR ACESSO */
+router.patch(
+  '/users/:id/extend-access',
+  verifyToken,
+  requireRoles('admin'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { days } = req.body;
+
+      const user = await User.findById(id);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+
+      const agora = new Date();
+      const atual = user.acessoExpiraEm || agora;
+
+      const novaData = new Date(atual);
+      novaData.setDate(novaData.getDate() + Number(days || 7));
+
+      user.acessoExpiraEm = novaData;
+
+      await user.save();
+
+      res.json({
+        success: true,
+        acessoExpiraEm: user.acessoExpiraEm
+      });
+
+    } catch (err) {
+      console.error('extend-access error:', err);
+      res.status(500).json({ error: 'Erro ao estender acesso' });
+    }
+  }
+);
+
+/* BLOQUEAR ACESSO */
+router.patch(
+  '/users/:id/expire-access',
+  verifyToken,
+  requireRoles('admin'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const user = await User.findById(id);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+
+      // força expiração
+      user.acessoExpiraEm = new Date(0);
+
+      await user.save();
+
+      res.json({ success: true });
+
+    } catch (err) {
+      res.status(500).json({ error: 'Erro ao bloquear acesso' });
+    }
+  }
+);
+
 module.exports = router;
