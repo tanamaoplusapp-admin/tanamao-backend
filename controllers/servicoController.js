@@ -551,25 +551,37 @@ GET /api/servicos/profissional/:profissionalId
 ===================================================== */
 
 exports.listByProfissional = async (req, res, next) => {
-
   try {
-
     const { profissionalId } = req.params;
 
     console.log('==============================');
     console.log('LIST BY PROFISSIONAL');
     console.log('profissionalId:', profissionalId);
 
-    // 🔎 pega alguns serviços pra inspecionar
+    const profissionalUser = await User.findById(profissionalId)
+      .select('online receberServicos acessoExpiraEm');
+
+    if (!profissionalUser) {
+      return res.status(404).json({
+        message: 'Profissional não encontrado.'
+      });
+    }
+
+    if (profissionalUser.online !== true) {
+      return res.json({ servicos: [] });
+    }
+
     const todos = await Servico.find().limit(5);
 
     console.log('TODOS SERVICOS DO BANCO:');
     todos.forEach(s => {
       console.log({
-        _id: s._id,
+        id: s._id,
+        cliente: s.cliente,
         profissional: s.profissional,
-        profissionalId: s.profissionalId,
-        status: s.status
+        empresa: s.empresa,
+        status: s.status,
+        categoria: s.categoria
       });
     });
 
@@ -586,7 +598,6 @@ exports.listByProfissional = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-
 };
 /* =====================================================
 LISTAR TODOS SERVIÇOS

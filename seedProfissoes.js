@@ -31,6 +31,7 @@ const data = [
     profissões: [
         
       'Eletricista',
+      'Borracheiro',
       'Encanador',
       'Mestre de obras',
       'Pedreiro',
@@ -98,7 +99,7 @@ const data = [
     'Despachante',
     'Corretor de imóveis',
     'Consultor',
-    'Consultor'
+    
   ]
 },
   /* =========================

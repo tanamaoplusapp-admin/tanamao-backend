@@ -162,7 +162,9 @@ console.log("HEADERS:", req.headers.authorization)
       role: 'profissional',
       companyId: null,
       isVerified: !!prof.isVerified,
-
+// 🔥 ADICIONAR ISSO
+      fotoPerfil: prof.photoUrl,
+      photoUrl: prof.photoUrl,
       perfilAtivo: prof.perfilAtivo,
       acessoLiberado: prof.acessoLiberado,
       planoAtivo: prof.planoAtivo,
