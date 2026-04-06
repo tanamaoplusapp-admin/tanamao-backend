@@ -139,9 +139,7 @@ connectDB();
    UPLOADS
 ===================================================== */
 
-app.use('/uploads', express.static(
-  path.resolve(config.files?.uploadsDir || 'uploads')
-));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 /* =====================================================
    HEALTH
