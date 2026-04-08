@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const centralController = require('../controllers/centralController');
 
+// Dashboard geral
+router.get('/dashboard', centralController.getCentralDashboard);
 // ================================
 // Profissionais
 // ================================

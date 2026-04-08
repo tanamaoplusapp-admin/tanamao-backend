@@ -111,30 +111,132 @@ exports.summary = async (req, res) => {
   }
 
 };
-exports.adminSummary = async (req,res)=>{
+exports.adminSummary = async (_req, res) => {
+  try {
+    const agora = new Date();
+    const hoje = startOf('day');
+    const semana = startOf('week');
+    const mes = startOf('month');
 
-const users = await User.find();
+    /* =========================
+       USUÁRIOS / ACESSO
+    ========================= */
 
-let comissoes = 0;
-let mensalidades = 0;
+    const users = await User.find(
+      {},
+      {
+        acessoExpiraEm: 1,
+        planoAtivo: 1,
+      }
+    ).lean();
 
-users.forEach(u=>{
+    let ativos = 0;
+    let expirados = 0;
 
-comissoes += u.comissaoTotalPaga || 0;
+    const planosCount = {
+      '1_dia': 0,
+      '7_dias': 0,
+      '15_dias': 0,
+      '30_dias': 0,
+    };
 
-if(u.mensalidadesPagas){
-u.mensalidadesPagas.forEach(m=>{
-mensalidades += m.valor || 0;
-});
-}
+    for (const user of users) {
+      const acessoAtivo =
+        user?.acessoExpiraEm && new Date(user.acessoExpiraEm) > agora;
 
-});
+      if (acessoAtivo) ativos += 1;
+      else expirados += 1;
 
-res.json({
-today: comissoes + mensalidades,
-month: comissoes + mensalidades
-});
+      const plano = user?.planoAtivo;
+      if (plano && planosCount[plano] !== undefined) {
+        planosCount[plano] += 1;
+      }
+    }
 
+    /* =========================
+       TRANSAÇÕES
+    ========================= */
+
+    const [todayRows, weekRows, monthRows] = await Promise.all(
+      [hoje, semana, mes].map(async (from) => {
+        const rows = await Transaction.aggregate([
+          {
+            $match: {
+              createdAt: { $gte: from },
+              status: 'approved',
+              type: { $in: ['access', 'subscription', 'monthly_fee'] },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: '$amount' },
+            },
+          },
+        ]);
+
+        return rows[0]?.total || 0;
+      })
+    );
+
+    const [pendentes, aprovados] = await Promise.all([
+      Transaction.countDocuments({
+        status: { $in: ['pending', 'in_process'] },
+        type: { $in: ['access', 'subscription', 'monthly_fee'] },
+      }),
+      Transaction.countDocuments({
+        status: 'approved',
+        type: { $in: ['access', 'subscription', 'monthly_fee'] },
+      }),
+    ]);
+
+    const [umDia, seteDias, quinzeDias, trintaDias] = await Promise.all([
+      Transaction.countDocuments({
+        status: 'approved',
+        planoAplicado: '1_dia',
+      }),
+      Transaction.countDocuments({
+        status: 'approved',
+        planoAplicado: '7_dias',
+      }),
+      Transaction.countDocuments({
+        status: 'approved',
+        planoAplicado: '15_dias',
+      }),
+      Transaction.countDocuments({
+        status: 'approved',
+        planoAplicado: '30_dias',
+      }),
+    ]);
+
+    return res.json({
+      ativos,
+      expirados,
+      pendentes,
+      aprovados,
+
+      today: todayRows,
+      week: weekRows,
+      month: monthRows,
+      planos: monthRows,
+
+      '1_dia': umDia,
+      '7_dias': seteDias,
+      '15_dias': quinzeDias,
+      '30_dias': trintaDias,
+
+      // compat extra
+      plano1Dia: umDia,
+      plano7Dias: seteDias,
+      plano15Dias: quinzeDias,
+      plano30Dias: trintaDias,
+    });
+  } catch (err) {
+    console.error('finance.adminSummary:', err);
+    return res.status(500).json({
+      message: 'Erro ao gerar resumo financeiro do admin',
+    });
+  }
 };
 /* =========================================================
 LISTA DE TRANSAÇÕES

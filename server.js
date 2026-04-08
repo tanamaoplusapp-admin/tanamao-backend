@@ -183,6 +183,7 @@ const adminUsersRoutes = require('./routes/adminUsersRoutes')
 const adminBugRoutes = require('./routes/adminBugRoutes')
 const adminAuditRoutes = require('./routes/adminAuditRoutes')
 const supportRoutes = require("./routes/supportRoutes")
+const centralRoutes = require("./routes/centralRoutes");
 const adminCentralMensalidadeRoutes = require('./routes/adminCentralMensalidadeRoutes')
 
 /*
@@ -212,6 +213,8 @@ app.use('/api/admin', adminAuditRoutes.router || adminAuditRoutes)
 
 // SUPORTE
 app.use('/api/support', supportRoutes.router || supportRoutes)
+app.use("/api/central", centralRoutes);
+
 
 // CENTRAL DE MENSALIDADES
 app.use('/api/admin', adminCentralMensalidadeRoutes.router || adminCentralMensalidadeRoutes)

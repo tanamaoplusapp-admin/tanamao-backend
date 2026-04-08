@@ -123,15 +123,10 @@ const handlePix = async (req, res) => {
 
         sponsor_id = company.collector_id;
 
-        const calc = calcularComissao(
-          amount,
-          company.porteEmpresa,
-          req.user
-        );
-
-        comissao = calc.comissao;
-        valorLiquido = calc.valorLiquido;
-        porcentagem = calc.porcentagem;
+       // temporariamente sem comissão
+comissao = 0;
+valorLiquido = amount;
+porcentagem = 0;
 
       }
 
@@ -457,6 +452,7 @@ error:'Erro ao gerar pagamento'
 const PagamentoMensalidade = require('../models/PagamentoMensalidade');
 const User = require('../models/user');
 const WebhookEvent = require('../models/WebhookEvent');
+const Transaction = require('../models/Transaction');
 
 router.post('/webhook', webhookLimiter, async (req, res) => {
 
@@ -479,7 +475,50 @@ const payment = await new Payment(mp).get({
 id: dataId
 });
 
-if(payment.status !== 'approved'){
+if(!payment || !payment.id){
+return res.status(200).json({ ignored:true });
+}
+
+const metadata = payment.metadata || {};
+const status = payment.status;
+
+/* =============================
+REGISTRO / IDMP TRANSACTION
+============================= */
+
+const tx = await Transaction.findOneAndUpdate(
+  { mpPaymentId: String(payment.id) },
+  {
+    $set: {
+      mpPaymentId: String(payment.id),
+      paymentId: String(payment.id),
+      status: String(status || '').toLowerCase(),
+      amount: Number(payment.transaction_amount || 0),
+      currency: payment.currency_id || 'BRL',
+      paymentMethod: payment.payment_method_id === 'pix' ? 'pix' : 'manual',
+      method: payment.payment_method_id || null,
+      userId: metadata.user_id || null,
+      metadata,
+      raw: payment,
+      type:
+        metadata.type === 'access'
+          ? 'access'
+          : metadata.type === 'subscription'
+          ? 'subscription'
+          : 'monthly_fee',
+    },
+    $setOnInsert: {
+      aplicadoAoUsuario: false,
+    }
+  },
+  { upsert: true, new: true }
+);
+
+/* =============================
+SÓ APROVADO SEGUE
+============================= */
+
+if(status !== 'approved'){
 return res.status(200).json({ ignored:true });
 }
 
@@ -487,15 +526,19 @@ return res.status(200).json({ ignored:true });
 NOVO — ACESSO POR DIAS
 ============================= */
 
-const metadata = payment.metadata || {}
-
 if(metadata.type === 'access'){
+
+if(tx.aplicadoAoUsuario){
+return res.status(200).json({ already:true });
+}
 
 const user = await User.findById(metadata.user_id)
 
 if(user){
 
 const dias = Number(metadata.dias || 0)
+
+if(dias > 0){
 
 const agora = new Date()
 
@@ -518,6 +561,23 @@ user.planoAtivo = `${dias}_dias`
 
 await user.save()
 
+await Transaction.updateOne(
+  { mpPaymentId: String(payment.id) },
+  {
+    $set: {
+      aplicadoAoUsuario: true,
+      aplicadoEm: new Date(),
+      diasLiberados: dias,
+      planoAplicado: user.planoAtivo,
+      acessoExpiraEm: user.acessoExpiraEm,
+      valorPago: Number(payment.transaction_amount || 0),
+      motivoNaoAplicado: null,
+    }
+  }
+)
+
+}
+
 }
 
 return res.status(200).json({ access:true })
@@ -530,6 +590,10 @@ PLANO 30 DIAS (subscription)
 ============================= */
 
 if(metadata.type === 'subscription'){
+
+if(tx.aplicadoAoUsuario){
+return res.status(200).json({ already:true });
+}
 
 const user = await User.findById(metadata.user_id)
 
@@ -556,11 +620,27 @@ user.planoAtivo = '30_dias'
 
 await user.save()
 
+await Transaction.updateOne(
+  { mpPaymentId: String(payment.id) },
+  {
+    $set: {
+      aplicadoAoUsuario: true,
+      aplicadoEm: new Date(),
+      diasLiberados: 30,
+      planoAplicado: '30_dias',
+      acessoExpiraEm: user.acessoExpiraEm,
+      valorPago: Number(payment.transaction_amount || 0),
+      motivoNaoAplicado: null,
+    }
+  }
+)
+
 }
 
 return res.status(200).json({ subscription:true })
 
 }
+
 /* =============================
 LÓGICA ANTIGA (EMPRESAS)
 ============================= */
