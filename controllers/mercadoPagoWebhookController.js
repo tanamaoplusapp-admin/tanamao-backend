@@ -3,7 +3,7 @@
 const mongoose = require('mongoose');
 const { mp, Payment } = require('../services/mercadoPago');
 const User = require('../models/user');
-const Transaction = require('../models/Transaction');
+const Transaction = require('../models/transaction');
 
 /* =========================================================
 HELPERS

@@ -1,6 +1,6 @@
 // controllers/financeController.js
 
-const Transaction = require('../models/Transaction');
+const Transaction = require('../models/transaction');
 const User = require('../models/user');
 const { mp, Payment } = require('../services/mercadoPago');
 
