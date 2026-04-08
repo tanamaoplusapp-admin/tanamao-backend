@@ -54,6 +54,7 @@ const defaultOrigins = [
   'http://localhost:8080',
   'http://localhost:19006',
   'https://backend-tanamao.onrender.com',
+  'https://tanamao-admin.onrender.com',
 ].filter(Boolean);
 
 const allowMatchers = [
