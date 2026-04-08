@@ -1,4 +1,4 @@
-// models/Transaction.js
+// models/transaction.js
 
 const mongoose = require('mongoose');
 
