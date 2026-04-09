@@ -3,8 +3,16 @@ const express = require('express');
 const router = express.Router();
 const centralController = require('../controllers/centralController');
 
+// 🔐 corrigido caminho
+const verifyToken = require('../middleware/verifyToken');
+const requireAdmin = require('../middleware/requireAdmin');
+
+// 🔐 protege TODA central
+router.use(verifyToken, requireAdmin);
+
 // Dashboard geral
 router.get('/dashboard', centralController.getCentralDashboard);
+
 // ================================
 // Profissionais
 // ================================
@@ -29,7 +37,4 @@ router.get('/clientes/dashboard', centralController.dashboardClients);
 router.get('/empresas', centralController.listCompaniesForAdmin);
 router.get('/empresas/dashboard', centralController.dashboardCompanies);
 
-// ================================
-// Exporta router
-// ================================
 module.exports = router;

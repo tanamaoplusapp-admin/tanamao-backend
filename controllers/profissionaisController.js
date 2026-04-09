@@ -87,21 +87,33 @@ exports.list = async (req, res) => {
       filtro.socorristaAutomotivo = true;
     } else {
       if (categoriaId) {
-        filtro.categoriaId =
-          new mongoose.Types.ObjectId(categoriaId);
+        if (!mongoose.Types.ObjectId.isValid(categoriaId)) {
+          return res.status(400).json({
+            ok: false,
+            message: 'categoriaId inválido',
+          });
+        }
+        filtro.categoriaId = new mongoose.Types.ObjectId(categoriaId);
       }
 
       if (profissaoId) {
-        filtro.profissaoId =
-          new mongoose.Types.ObjectId(profissaoId);
+        if (!mongoose.Types.ObjectId.isValid(profissaoId)) {
+          return res.status(400).json({
+            ok: false,
+            message: 'profissaoId inválido',
+          });
+        }
+        filtro.profissaoId = new mongoose.Types.ObjectId(profissaoId);
       }
     }
 
-    if (cidade)
+    if (cidade) {
       filtro['endereco.cidadeSlug'] = cidade.toLowerCase();
+    }
 
-    if (tipoAtendimento)
+    if (tipoAtendimento) {
       filtro[`tipoAtendimento.${tipoAtendimento}`] = true;
+    }
 
     const profs = await Profissional.find(filtro)
       .populate({
@@ -112,14 +124,12 @@ exports.list = async (req, res) => {
 
     const agora = new Date();
 
-    const filtrados = profs.filter(p => {
+    const filtrados = profs.filter((p) => {
       const user = p.userId;
 
-      // só bloqueia se expirado
-      if (
-        user?.acessoExpiraEm &&
-        user.acessoExpiraEm < agora
-      ) return false;
+      if (!user) return false;
+      if (!user.acessoExpiraEm) return false;
+      if (user.acessoExpiraEm < agora) return false;
 
       return true;
     });
