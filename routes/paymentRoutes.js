@@ -452,7 +452,7 @@ error:'Erro ao gerar pagamento'
 const PagamentoMensalidade = require('../models/PagamentoMensalidade');
 const User = require('../models/user');
 const WebhookEvent = require('../models/WebhookEvent');
-const Transaction = require('../models/Transaction');
+const Transaction = require('../models/transaction');
 
 router.post('/webhook', webhookLimiter, async (req, res) => {
 
