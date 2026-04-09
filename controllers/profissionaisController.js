@@ -81,57 +81,138 @@ exports.list = async (req, res) => {
       tipoAtendimento
     } = req.query;
 
-    const filtro = {};
+    const filtroProfissional = {};
+    const filtroUser = {};
 
     if (req.query.socorristaAutomotivo === 'true') {
-      filtro.socorristaAutomotivo = true;
+      filtroProfissional.socorristaAutomotivo = true;
+      filtroUser.socorristaAutomotivo = true;
     } else {
-      if (categoriaId) filtro.categoriaId = categoriaId;
-      if (profissaoId) filtro.profissaoId = profissaoId;
+      if (categoriaId) {
+        filtroProfissional.categoriaId = categoriaId;
+        filtroUser.categoriaId = categoriaId;
+      }
+
+      if (profissaoId) {
+        filtroProfissional.profissaoId = profissaoId;
+        filtroUser.profissaoId = profissaoId;
+      }
     }
 
-    if (cidade)
-      filtro['endereco.cidadeSlug'] = cidade.toLowerCase();
+    if (cidade) {
+      filtroProfissional['endereco.cidadeSlug'] = cidade.toLowerCase();
+      filtroUser['endereco.cidadeSlug'] = cidade.toLowerCase();
+    }
 
-    if (tipoAtendimento)
-      filtro[`tipoAtendimento.${tipoAtendimento}`] = true;
+    if (tipoAtendimento) {
+      filtroProfissional[`tipoAtendimento.${tipoAtendimento}`] = true;
+      filtroUser[`tipoAtendimento.${tipoAtendimento}`] = true;
+    }
 
-    const profs = await Profissional.find(filtro)
+    // =========================
+    // 1) BUSCA EM PROFISSIONAIS
+    // =========================
+    const profs = await Profissional.find(filtroProfissional)
       .populate({
         path: 'userId',
-        select: 'acessoExpiraEm'
+        select: 'acessoExpiraEm online name email phone photoUrl'
       })
       .lean();
 
     const agora = new Date();
 
-    const filtrados = profs.filter(p => {
-      const user = p.userId;
+    const profsNormalizados = profs
+      .filter((p) => {
+        const user = p.userId;
+        if (!user) return false;
+        if (!user.acessoExpiraEm) return false;
+        if (user.acessoExpiraEm < agora) return false;
+        return true;
+      })
+      .map((p) => {
+        const user = p.userId || {};
 
-      if (!user) return false;
-      if (!user.acessoExpiraEm) return false;
-      if (user.acessoExpiraEm < agora) return false;
+        return {
+          ...p,
+          _id: p._id,
+          origemColecao: 'profissionais',
+          name: p.name || user.name || 'Profissional',
+          email: p.email || user.email || '',
+          phone: p.phone || user.phone || '',
+          photoUrl: p.photoUrl || user.photoUrl || '',
+          online: user.online ?? p.online ?? false,
+        };
+      });
 
-      return true;
+    // =========================
+    // 2) BUSCA EM USERS
+    // =========================
+    const users = await User.find({
+      ...filtroUser,
+      tipo: { $in: ['profissional', 'prestador', 'prestador_servico'] }
+    })
+      .select(
+        'name email phone photoUrl acessoExpiraEm online endereco categoriaId profissaoId profissoes profissao categoria tipoAtendimento socorristaAutomotivo metrics valorMedio precoMedio aceitaPix aceitaCartao aceitaDinheiro servicos galeria status aprovado'
+      )
+      .lean();
+
+    const userIdsJaRepresentados = new Set(
+      profsNormalizados.map((p) => String(p.userId?._id || p.userId || ''))
+    );
+
+    const usersNormalizados = users
+      .filter((u) => {
+        if (!u.acessoExpiraEm) return false;
+        if (u.acessoExpiraEm < agora) return false;
+
+        // evita duplicar user que já tem documento em profissionais
+        if (userIdsJaRepresentados.has(String(u._id))) return false;
+
+        return true;
+      })
+      .map((u) => ({
+        _id: u._id,
+        userId: u._id,
+        origemColecao: 'users',
+        name: u.name || 'Profissional',
+        email: u.email || '',
+        phone: u.phone || '',
+        photoUrl: u.photoUrl || '',
+        online: u.online ?? false,
+        endereco: u.endereco || {},
+        categoriaId: u.categoriaId || null,
+        profissaoId: u.profissaoId || null,
+        profissoes: Array.isArray(u.profissoes)
+          ? u.profissoes
+          : u.profissao
+          ? [u.profissao]
+          : [],
+        categoria: u.categoria || null,
+        metrics: u.metrics || {
+          mediaAvaliacoes: 0,
+          totalAvaliacoes: 0,
+        },
+        valorMedio: u.valorMedio || u.precoMedio || null,
+        aceitaPix: u.aceitaPix ?? false,
+        aceitaCartao: u.aceitaCartao ?? false,
+        aceitaDinheiro: u.aceitaDinheiro ?? false,
+        servicos: Array.isArray(u.servicos) ? u.servicos : [],
+        galeria: Array.isArray(u.galeria) ? u.galeria : [],
+        status: u.status || 'pendente',
+        aprovado: u.aprovado ?? false,
+      }));
+
+    // =========================
+    // 3) JUNTA TUDO
+    // =========================
+    const listaFinal = [...profsNormalizados, ...usersNormalizados];
+
+    return res.json({
+      ok: true,
+      data: listaFinal
     });
-
-    return res.json({ ok: true, data: filtrados });
-
   } catch (e) {
     console.error('profissionais.list:', e);
-    return res.status(500).json({
-      ok: false,
-      message: 'Erro ao listar profissionais',
-    });
-  }
-};
-
-exports.listForAdmin = async (req, res) => {
-  try {
-    const profs = await Profissional.find().lean();
-    return res.json({ ok: true, data: profs });
-  } catch (e) {
-    console.error('profissionais.listForAdmin:', e);
     return res.status(500).json({
       ok: false,
       message: 'Erro ao listar profissionais',
