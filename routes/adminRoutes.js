@@ -142,6 +142,56 @@ router.get('/users', verifyToken, requireAdmin, async (_req, res) => {
     res.status(500).json({ error: 'Erro ao listar usuários' });
   }
 });
+router.get('/users/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const Profissional = require('../models/Profissional');
+
+    const user = await User.findById(req.params.id).lean();
+
+    if (user) {
+      const profissional = await Profissional.findOne({ userId: user._id }).lean();
+
+      return res.json({
+        ...user,
+        profissional: profissional || null,
+        isProfissional: !!profissional || user.role === 'profissional',
+        statusProfissional: profissional?.status || null,
+        statusCadastro: profissional?.statusCadastro || null,
+        aprovado: profissional?.aprovado || false,
+      });
+    }
+
+    // fallback: profissional sem vínculo correto em User
+    const profissional = await Profissional.findOne({
+      $or: [
+        { userId: req.params.id },
+        { _id: req.params.id }
+      ]
+    }).lean();
+
+    if (profissional) {
+      return res.json({
+        _id: String(profissional.userId || profissional._id),
+        name: profissional.name || 'Profissional sem usuário',
+        email: profissional.email || '—',
+        role: 'profissional',
+        status: profissional.status || 'pendente',
+        isVerified: false,
+        createdAt: profissional.createdAt,
+        profissional,
+        isProfissional: true,
+        statusProfissional: profissional.status || null,
+        statusCadastro: profissional.statusCadastro || null,
+        aprovado: profissional.aprovado || false,
+      });
+    }
+
+    return res.status(404).json({ error: 'Usuário não encontrado' });
+  } catch (err) {
+    console.error('[admin/users/:id]', err);
+    res.status(500).json({ error: 'Erro ao buscar usuário' });
+  }
+});
 /* ================= PEDIDOS ================= */
 
 // GET /api/admin/orders
