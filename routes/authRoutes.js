@@ -217,11 +217,28 @@ if (resetPassword) {
   router.post('/reset-password/:token', createLimiter(60), resetPassword);
 }
 
-if (loginMulti) {
-  router.post('/login', createLimiter(300), loginMulti);
-} else if (authUser) {
-  router.post('/login', createLimiter(300), authUser);
-}
+router.post('/login', createLimiter(300), async (req, res, next) => {
+  try {
+    if (authController?.login) {
+      return authController.login(req, res, next);
+    }
+
+    if (loginMulti) {
+      return loginMulti(req, res, next);
+    }
+
+    if (authUser) {
+      return authUser(req, res, next);
+    }
+
+    return res.status(500).json({
+      ok: false,
+      message: 'Handler de login não encontrado',
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
 
 if (registerEmpresa) {
   router.post('/register-empresa', createLimiter(60), registerEmpresa);
