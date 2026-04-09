@@ -67,7 +67,7 @@ const allowMatchers = [
   /^file:\/\/.*/,
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
 
@@ -81,9 +81,13 @@ app.use(cors({
     return cb(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
+};
 
-app.options('*', cors());
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 /* =====================================================
    MIDDLEWARES GLOBAIS
