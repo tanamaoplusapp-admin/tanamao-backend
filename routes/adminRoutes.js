@@ -83,16 +83,46 @@ router.get('/stats/overview', verifyToken, requireAdmin, async (_req, res) => {
 
 /* ================= USUÁRIOS ================= */
 
+// ================= USUÁRIOS =================
+
 // GET /api/admin/users
 router.get('/users', verifyToken, requireAdmin, async (_req, res) => {
   try {
+
+    const Profissional = require('../models/Profissional');
+
+    // busca usuários
     const users = await User.find({})
-      .select('name email role isVerified createdAt')
       .sort({ createdAt: -1 })
       .limit(500)
       .lean();
 
-    res.json(users);
+    // busca profissionais
+    const profissionais = await Profissional.find({}).lean();
+
+    // mapa userId -> profissional
+    const profissionalMap = new Map(
+      profissionais.map(p => [String(p.userId), p])
+    );
+
+    // junta users + profissionais
+    const merged = users.map(user => {
+
+      const profissional = profissionalMap.get(String(user._id));
+
+      return {
+        ...user,
+        profissional: profissional || null,
+        isProfissional: !!profissional,
+        statusProfissional: profissional?.status || null,
+        statusCadastro: profissional?.statusCadastro || null,
+        aprovado: profissional?.aprovado || false
+      };
+
+    });
+
+    res.json(merged);
+
   } catch (err) {
     console.error('[admin/users]', err);
     res.status(500).json({ error: 'Erro ao listar usuários' });
