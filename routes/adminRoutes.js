@@ -82,88 +82,66 @@ router.get('/stats/overview', verifyToken, requireAdmin, async (_req, res) => {
 });
 
 /* ================= USUÁRIOS ================= */
-
-// ================= USUÁRIOS =================
-
 // GET /api/admin/users
 router.get('/users', verifyToken, requireAdmin, async (_req, res) => {
   try {
-
     const Profissional = require('../models/Profissional');
 
-    // busca usuários
     const users = await User.find({})
       .sort({ createdAt: -1 })
       .limit(500)
       .lean();
 
-    // busca profissionais
-    const profissionais = await Profissional.find({}).lean();
+    const profissionais = await Profissional.find({})
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // mapa userId -> profissional
-    const profissionalMap = new Map(
-      profissionais.map(p => [String(p.userId), p])
+    const usersMap = new Map(
+      users.map((u) => [String(u._id), u])
     );
 
-    // junta users + profissionais
-    const merged = users.map(user => {
+    const profissionaisMap = new Map(
+      profissionais
+        .filter((p) => p.userId)
+        .map((p) => [String(p.userId), p])
+    );
 
-      const profissional = profissionalMap.get(String(user._id));
+    const mergedUsers = users.map((user) => {
+      const profissional = profissionaisMap.get(String(user._id));
 
       return {
         ...user,
         profissional: profissional || null,
-        isProfissional: !!profissional,
+        isProfissional: !!profissional || user.role === 'profissional',
         statusProfissional: profissional?.status || null,
         statusCadastro: profissional?.statusCadastro || null,
         aprovado: profissional?.aprovado || false
       };
-
     });
 
-    res.json(merged);
+    const profissionaisSemUser = profissionais
+      .filter((p) => !p.userId || !usersMap.has(String(p.userId)))
+      .map((p) => ({
+        _id: String(p.userId || p._id),
+        name: p.name || 'Profissional sem usuário',
+        email: p.email || '—',
+        role: 'profissional',
+        status: p.status || 'pendente',
+        isVerified: false,
+        createdAt: p.createdAt,
+        profissional: p,
+        isProfissional: true,
+        statusProfissional: p.status || null,
+        statusCadastro: p.statusCadastro || null,
+        aprovado: p.aprovado || false
+      }));
 
+    res.json([...mergedUsers, ...profissionaisSemUser]);
   } catch (err) {
     console.error('[admin/users]', err);
     res.status(500).json({ error: 'Erro ao listar usuários' });
   }
 });
-
-// GET /api/admin/users/:id
-router.get('/users/:id', verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).lean();
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
-    res.json(user);
-  } catch (err) {
-    console.error('[admin/users/:id]', err);
-    res.status(500).json({ error: 'Erro ao buscar usuário' });
-  }
-});
-
-// PATCH /api/admin/users/:id
-router.patch('/users/:id', verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const { role, isVerified } = req.body;
-
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      {
-        ...(role && { role }),
-        ...(isVerified !== undefined && { isVerified }),
-      },
-      { new: true }
-    );
-
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
-
-    res.json(user);
-  } catch (err) {
-    console.error('[admin/users PATCH]', err);
-    res.status(500).json({ error: 'Erro ao atualizar usuário' });
-  }
-});
-
 /* ================= PEDIDOS ================= */
 
 // GET /api/admin/orders
