@@ -39,13 +39,19 @@ app.disable('x-powered-by');
 app.use(helmet());
 
 /* =====================================================
-   CORS
+   cors
 ===================================================== */
 
 const defaultOrigins = [
   ...(config.allowedOrigins || []),
-  ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
-  ...(process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
+  ...(process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean),
+  ...(process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean),
   process.env.FRONTEND_URL,
   process.env.APP_BASE_URL,
   'http://localhost:3000',
@@ -54,6 +60,7 @@ const defaultOrigins = [
   'http://localhost:8080',
   'http://localhost:19006',
   'https://tanamao-backend.onrender.com',
+  'https://tanamao-backend-plyd.onrender.com',
   'https://tanamao-admin.onrender.com',
 ].filter(Boolean);
 
@@ -71,11 +78,13 @@ const corsOptions = {
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
 
-    const allowed = allowMatchers.some(o =>
-      o instanceof RegExp ? o.test(origin) : o === origin
+    const allowed = allowMatchers.some(entry =>
+      entry instanceof RegExp ? entry.test(origin) : entry === origin
     );
 
-    if (allowed) return cb(null, true);
+    if (allowed) {
+      return cb(null, origin);
+    }
 
     console.warn('❌ CORS bloqueado:', origin);
     return cb(new Error(`Not allowed by CORS: ${origin}`));
@@ -85,9 +94,8 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
   optionsSuccessStatus: 204,
 };
-
 app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 /* =====================================================
    MIDDLEWARES GLOBAIS
