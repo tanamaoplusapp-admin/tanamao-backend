@@ -29,7 +29,7 @@ const app = express();
 const PAYMENT_WEBHOOK_PATH = '/api/payment/webhook';
 const mpWebhookRoutes = require('./routes/mercadoPagoWebhookRoutes');
 const categoriaPrestadorRoutes = require('./routes/categoriaPrestadorRoutes');
-
+const notificationRoutes = require('./routes/notificationRoutes');
 /* =====================================================
    CONFIGURAÇÕES BÁSICAS
 ===================================================== */
@@ -185,7 +185,7 @@ app.use(
 
 app.use('/api/categorias-prestador', categoriaPrestadorRoutes);
 
-
+app.use('/api/notifications', notificationRoutes.router || notificationRoutes);
 /* ================= ADMIN ================= */
 
 // IMPORTS DAS ROTAS ADMIN
