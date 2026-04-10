@@ -2,7 +2,6 @@
 
 const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
-const Profissional = require('../models/Profissional');
 const User = require('../models/user');
 
 const resolveUserId = (req) => {
@@ -28,36 +27,10 @@ exports.listMine = async (req, res) => {
   try {
     const userId = resolveUserId(req);
 
-    if (!userId)
+    if (!userId) {
       return res
         .status(401)
         .json({ ok: false, message: 'Não autenticado' });
-
-    console.log(
-      '[notification.listMine] token payload:',
-      req.user || req.userId
-    );
-
-    console.log(
-      '[notification.listMine] resolved userId:',
-      userId
-    );
-
-    const profissional = await Profissional
-      .findOne({ userId })
-      .lean();
-
-    if (!profissional) {
-
-      console.warn(
-        '[notification.listMine] profissional não encontrado para userId:',
-        userId
-      );
-
-      return res.status(404).json({
-        ok: false,
-        error: 'Profissional não encontrado.',
-      });
     }
 
     const items = await Notification.find({ userId })
@@ -69,9 +42,7 @@ exports.listMine = async (req, res) => {
       ok: true,
       items,
     });
-
   } catch (err) {
-
     console.error('notification.listMine error', err);
 
     return res.status(500).json({
@@ -79,7 +50,6 @@ exports.listMine = async (req, res) => {
       message: 'Erro ao buscar notificações',
       details: err.message,
     });
-
   }
 };
 
@@ -89,41 +59,12 @@ exports.listMine = async (req, res) => {
 
 exports.markRead = async (req, res) => {
   try {
-
     const userId = resolveUserId(req);
 
-    if (!userId)
+    if (!userId) {
       return res
         .status(401)
         .json({ ok: false, message: 'Não autenticado' });
-
-    console.log(
-      '[notification.markRead] token payload:',
-      req.user || req.userId
-    );
-
-    console.log(
-      '[notification.markRead] resolved userId:',
-      userId,
-      'notificationId:',
-      req.params.id
-    );
-
-    const profissional = await Profissional
-      .findOne({ userId })
-      .lean();
-
-    if (!profissional) {
-
-      console.warn(
-        '[notification.markRead] profissional não encontrado para userId:',
-        userId
-      );
-
-      return res.status(404).json({
-        ok: false,
-        error: 'Profissional não encontrado.',
-      });
     }
 
     const result = await Notification.updateOne(
@@ -137,30 +78,18 @@ exports.markRead = async (req, res) => {
     );
 
     if (result.matchedCount === 0) {
-
-      console.warn(
-        '[notification.markRead] nenhuma notificação encontrada para atualizar',
-        { id: req.params.id, userId }
-      );
-
       return res.status(404).json({
         ok: false,
         message: 'Notificação não encontrada.',
       });
     }
 
-    /* =========================================================
-       ATUALIZA CONTADOR DE NOTIFICAÇÕES
-    ========================================================= */
-
     await User.findByIdAndUpdate(userId, {
-      $inc: { unreadNotifications: -1 }
+      $inc: { unreadNotifications: -1 },
     });
 
     return res.json({ ok: true });
-
   } catch (err) {
-
     console.error('notification.markRead error', err);
 
     return res.status(500).json({
@@ -168,7 +97,6 @@ exports.markRead = async (req, res) => {
       message: 'Erro ao marcar leitura',
       details: err.message,
     });
-
   }
 };
 
@@ -183,10 +111,11 @@ exports.createNotification = async ({
   message,
   chatId = null,
   servicoId = null,
+  urgente = false,
+  payload = {},
+  relatedId = null,
 }) => {
-
   try {
-
     const notification = await Notification.create({
       userId,
       type,
@@ -194,28 +123,20 @@ exports.createNotification = async ({
       message,
       chatId,
       servicoId,
+      urgente,
+      payload,
+      relatedId,
       read: false,
       createdAt: new Date(),
     });
 
-    /* =========================================================
-       INCREMENTA CONTADOR DE NOTIFICAÇÕES
-    ========================================================= */
-
     await User.findByIdAndUpdate(userId, {
-      $inc: { unreadNotifications: 1 }
+      $inc: { unreadNotifications: 1 },
     });
 
     return notification;
-
   } catch (err) {
-
-    console.error(
-      '[notification.createNotification]',
-      err
-    );
-
+    console.error('[notification.createNotification]', err);
     return null;
-
   }
 };

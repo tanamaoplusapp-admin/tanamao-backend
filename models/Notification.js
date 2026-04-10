@@ -13,7 +13,6 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       required: true,
       enum: [
-
         // TIPOS ANTIGOS (mantidos)
         'NOVA_SOLICITACAO',
         'SERVICO_CANCELADO',
@@ -24,10 +23,31 @@ const notificationSchema = new mongoose.Schema(
         'CHAT_MESSAGE',
         'NOVO_SERVICO',
         'SERVICO_ACEITO',
-        'PAGAMENTO_RECEBIDO'
+        'PAGAMENTO_RECEBIDO',
 
+        // NOVOS TIPOS ÚTEIS PARA EVOLUÇÃO
+        'AGENDAMENTO_CRIADO',
+        'AGENDAMENTO_CONFIRMADO',
+        'AGENDAMENTO_CANCELADO',
+        'ORCAMENTO_RECEBIDO',
+        'ORCAMENTO_ACEITO',
+        'ORCAMENTO_RECUSADO',
       ],
       index: true,
+    },
+
+    // Título curto da notificação
+    title: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+
+    // Mensagem principal exibida na tela/push
+    message: {
+      type: String,
+      default: '',
+      trim: true,
     },
 
     urgente: {
@@ -36,20 +56,54 @@ const notificationSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Campo genérico legado/relacional
     relatedId: {
       type: mongoose.Types.ObjectId,
+      default: null,
       index: true,
     },
 
+    // Navegação futura / deep link interno
+    chatId: {
+      type: mongoose.Types.ObjectId,
+      default: null,
+      index: true,
+    },
+
+    servicoId: {
+      type: mongoose.Types.ObjectId,
+      default: null,
+      index: true,
+    },
+
+    agendamentoId: {
+      type: mongoose.Types.ObjectId,
+      default: null,
+      index: true,
+    },
+
+    // Metadados flexíveis para push e tela
     payload: {
       type: Object,
       default: {},
     },
 
+    // Controle de leitura no app
     read: {
       type: Boolean,
       default: false,
       index: true,
+    },
+
+    // Opcional: rastrear envio de push
+    pushSent: {
+      type: Boolean,
+      default: false,
+    },
+
+    pushSentAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }
