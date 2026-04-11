@@ -151,7 +151,7 @@ const expira = new Date(
 
 user.perfilAtivo = true;
 user.acessoLiberado = true;
-user.planoAtivo = 'trial_45_dias';
+
 user.acessoExpiraEm = expira;
 
 user.planType = 'trial_45_dias';
