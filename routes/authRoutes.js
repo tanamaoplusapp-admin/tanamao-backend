@@ -140,7 +140,24 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
       cpf,
       avatar: photoUrl || null,
     });
+/* =========================
+TRIAL 45 DIAS PROFISSIONAL
+========================= */
 
+const agora = new Date();
+const expira = new Date(
+  agora.getTime() + 45 * 24 * 60 * 60 * 1000
+);
+
+user.perfilAtivo = true;
+user.acessoLiberado = true;
+user.planoAtivo = 'trial_45_dias';
+user.acessoExpiraEm = expira;
+
+user.planType = 'trial_45_dias';
+user.subscriptionStatus = 'active';
+
+await user.save();
     const profissional = await Profissional.create({
       userId: user._id,
       name: nome,
