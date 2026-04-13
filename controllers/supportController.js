@@ -1,4 +1,4 @@
-const SupportChat = require("../models/supportChat");
+const SupportChat = require("../models/SupportChat");
 const SupportMessage = require("../models/SupportMessage");
 // criar ou pegar chat do usuario
 exports.getOrCreateSupportChat = async (req, res) => {
