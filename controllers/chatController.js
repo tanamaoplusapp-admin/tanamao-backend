@@ -180,7 +180,11 @@ exports.enviarMensagem = async (req, res) => {
     const io = req.app.get('io');
 
     if (io) {
-
+ // ✅ NOVO: envia para sala do chat (tempo real correto)
+  io.to(String(chatId)).emit(
+    'nova_mensagem',
+    novaMensagem
+  );
       chat.participantes.forEach((userId) => {
 
         if (String(userId) !== String(remetenteId)) {
