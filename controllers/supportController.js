@@ -49,21 +49,24 @@ exports.sendMessage = async (req, res) => {
       return res.status(400).json({ message: "chatId e text são obrigatórios" });
     }
 
+    const cleanText = text.trim();
+
     const message = await SupportMessage.create({
       chat: chatId,
       sender: "user",
-      text: text.trim(),
+      text: cleanText,
     });
 
     await SupportChat.findByIdAndUpdate(chatId, {
-      lastMessage: text.trim(),
+      lastMessage: cleanText,
       lastMessageAt: new Date(),
       status: "aberto",
     });
 
     // tempo real via socket
-    if (req.io) {
-      req.io.to(String(chatId)).emit("support:new_message", message);
+    const io = req.app.get("io");
+    if (io) {
+      io.to(String(chatId)).emit("support:new_message", message);
     }
 
     res.json(message);
@@ -82,21 +85,24 @@ exports.adminSendMessage = async (req, res) => {
       return res.status(400).json({ message: "chatId e text são obrigatórios" });
     }
 
+    const cleanText = text.trim();
+
     const message = await SupportMessage.create({
       chat: chatId,
       sender: "admin",
-      text: text.trim(),
+      text: cleanText,
     });
 
     await SupportChat.findByIdAndUpdate(chatId, {
-      lastMessage: text.trim(),
+      lastMessage: cleanText,
       lastMessageAt: new Date(),
       status: "respondido",
     });
 
     // tempo real via socket
-    if (req.io) {
-      req.io.to(String(chatId)).emit("support:new_message", message);
+    const io = req.app.get("io");
+    if (io) {
+      io.to(String(chatId)).emit("support:new_message", message);
     }
 
     res.json(message);
