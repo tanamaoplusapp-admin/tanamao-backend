@@ -150,17 +150,16 @@ chat = await Chat.findById(chatId);
 if (profissionalId) {
 
   chat = await Chat.findOne({
-    cliente: cliente,
-    profissional: profissionalId
-  });
+  participantes: { $all: [cliente, profissionalId] }
+});
 
-  // cria somente se não existir
-  if (!chat) {
-    chat = await Chat.create({
-      cliente: cliente,
-      profissional: profissionalId
-    });
-  }
+if (!chat) {
+  chat = await Chat.create({
+    participantes: [cliente, profissionalId],
+    ultimoTexto: '',
+    atualizadoEm: new Date(),
+  });
+}
 
 }
 
