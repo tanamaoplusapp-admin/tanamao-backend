@@ -21,20 +21,22 @@ const getUserId = (req) =>
 
 exports.criarChat = async (req, res) => {
   try {
-
     const remetenteId = getUserId(req);
     const { destinatarioId } = req.body || {};
 
-    if (!remetenteId)
+    if (!remetenteId) {
       return res.status(401).json({ error: 'Não autenticado' });
+    }
 
-    if (!isObjectId(destinatarioId))
+    if (!isObjectId(destinatarioId)) {
       return res.status(400).json({ error: 'destinatarioId inválido.' });
+    }
 
-    if (String(remetenteId) === String(destinatarioId))
+    if (String(remetenteId) === String(destinatarioId)) {
       return res.status(400).json({
-        error: 'Não é possível criar chat consigo mesmo.'
+        error: 'Não é possível criar chat consigo mesmo.',
       });
+    }
 
     /* ===============================
        1 CLIENTE + 1 PRESTADOR = 1 CHAT
@@ -42,9 +44,9 @@ exports.criarChat = async (req, res) => {
 
     let chat = await Chat.findOne({
       participantes: {
-        $all: [remetenteId, destinatarioId]
-      }
-    });
+        $all: [remetenteId, destinatarioId],
+      },
+    }).populate('participantes', 'name online');
 
     if (chat) {
       return res.json(chat);
@@ -56,16 +58,17 @@ exports.criarChat = async (req, res) => {
       atualizadoEm: new Date(),
     });
 
-    return res.status(201).json(chat);
+    const chatCriado = await Chat.findById(chat._id)
+      .populate('participantes', 'name online')
+      .lean();
 
+    return res.status(201).json(chatCriado);
   } catch (error) {
-
     console.error('criarChat erro:', error);
 
     return res.status(500).json({
-      error: 'Erro ao criar chat'
+      error: 'Erro ao criar chat',
     });
-
   }
 };
 
@@ -75,11 +78,11 @@ exports.criarChat = async (req, res) => {
 
 exports.buscarChatsDoUsuario = async (req, res) => {
   try {
-
     const userId = getUserId(req);
 
-    if (!userId)
+    if (!userId) {
       return res.status(401).json({ error: 'Não autenticado' });
+    }
 
     const chats = await Chat.find({
       participantes: userId,
@@ -90,7 +93,6 @@ exports.buscarChatsDoUsuario = async (req, res) => {
 
     const chatsComResumo = await Promise.all(
       chats.map(async (chat) => {
-
         const naoLidas = await Mensagem.countDocuments({
           chatId: chat._id,
           remetente: { $ne: userId },
@@ -100,8 +102,9 @@ exports.buscarChatsDoUsuario = async (req, res) => {
         const ultimaMensagem = await Mensagem.findOne({
           chatId: chat._id,
         })
-          .sort({ enviadoEm: -1 })
-          .select('texto remetente enviadoEm')
+          .sort({ enviadoEm: -1, createdAt: -1 })
+          .populate('remetente', 'name')
+          .select('texto remetente enviadoEm createdAt imagemUrl')
           .lean();
 
         return {
@@ -109,20 +112,16 @@ exports.buscarChatsDoUsuario = async (req, res) => {
           naoLidas,
           ultimaMensagem: ultimaMensagem || null,
         };
-
       })
     );
 
     return res.json(chatsComResumo);
-
   } catch (error) {
-
     console.error('buscarChatsDoUsuario erro:', error);
 
     return res.status(500).json({
-      error: 'Erro ao buscar chats'
+      error: 'Erro ao buscar chats',
     });
-
   }
 };
 
@@ -132,84 +131,80 @@ exports.buscarChatsDoUsuario = async (req, res) => {
 
 exports.enviarMensagem = async (req, res) => {
   try {
-
     const remetenteId = getUserId(req);
 
-    if (!remetenteId)
+    if (!remetenteId) {
       return res.status(401).json({ error: 'Não autenticado' });
+    }
 
     const { chatId } = req.params;
     const { texto, imagemUrl } = req.body || {};
 
-    if (!isObjectId(chatId))
+    if (!isObjectId(chatId)) {
       return res.status(400).json({ error: 'chatId inválido.' });
+    }
 
-    if (!texto && !imagemUrl)
+    const textoLimpo = typeof texto === 'string' ? texto.trim() : '';
+
+    if (!textoLimpo && !imagemUrl) {
       return res.status(400).json({ error: 'Mensagem vazia.' });
+    }
 
     const chat = await Chat.findById(chatId);
 
-    if (!chat)
+    if (!chat) {
       return res.status(404).json({ error: 'Chat não encontrado' });
+    }
 
     const participa = chat.participantes.some(
       (p) => String(p) === String(remetenteId)
     );
 
-    if (!participa)
+    if (!participa) {
       return res.status(403).json({
-        error: 'Você não participa deste chat.'
+        error: 'Você não participa deste chat.',
       });
+    }
 
-    const novaMensagem = await Mensagem.create({
+    const mensagemCriada = await Mensagem.create({
       chatId,
       remetente: remetenteId,
-      texto: (texto || '').trim(),
+      texto: textoLimpo,
       imagemUrl: imagemUrl || null,
       enviadoEm: new Date(),
       lidoPor: [remetenteId],
     });
 
     await Chat.findByIdAndUpdate(chatId, {
-      ultimoTexto: texto?.trim() || '[Imagem]',
+      ultimoTexto: textoLimpo || '[Imagem]',
       atualizadoEm: new Date(),
       ultimoRemetente: remetenteId,
       $currentDate: { updatedAt: true },
     });
 
+    const novaMensagem = await Mensagem.findById(mensagemCriada._id)
+      .populate('remetente', 'name')
+      .lean();
+
     const io = req.app.get('io');
 
-    if (io) {
- // ✅ NOVO: envia para sala do chat (tempo real correto)
-  io.to(String(chatId)).emit(
-    'nova_mensagem',
-    novaMensagem
-  );
+    if (io && novaMensagem) {
+      io.to(String(chatId)).emit('nova_mensagem', novaMensagem);
+
       chat.participantes.forEach((userId) => {
-
         if (String(userId) !== String(remetenteId)) {
-
-          io.to(String(userId)).emit(
-            'nova_mensagem',
-            novaMensagem
-          );
-
+          io.to(String(userId)).emit('nova_mensagem', novaMensagem);
         }
-
       });
-
     }
 
-    return res.status(201).json(novaMensagem);
-
+    return res.status(201).json(novaMensagem || mensagemCriada);
   } catch (error) {
-
     console.error('enviarMensagem erro:', error);
 
     return res.status(500).json({
-      error: 'Erro ao enviar mensagem'
+      error: 'Erro ao enviar mensagem',
     });
-
   }
 };
 
@@ -219,23 +214,45 @@ exports.enviarMensagem = async (req, res) => {
 
 exports.listarMensagens = async (req, res) => {
   try {
-
     const userId = getUserId(req);
-
     const { chatId } = req.params;
 
+    if (!userId) {
+      return res.status(401).json({ error: 'Não autenticado' });
+    }
+
+    if (!isObjectId(chatId)) {
+      return res.status(400).json({ error: 'chatId inválido.' });
+    }
+
+    const chat = await Chat.findById(chatId);
+
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat não encontrado' });
+    }
+
+    const participa = chat.participantes.some(
+      (p) => String(p) === String(userId)
+    );
+
+    if (!participa) {
+      return res.status(403).json({
+        error: 'Você não participa deste chat.',
+      });
+    }
+
     const mensagens = await Mensagem.find({ chatId })
+      .populate('remetente', 'name')
       .sort({ enviadoEm: 1, createdAt: 1 })
       .lean();
 
     return res.json(mensagens);
-
   } catch (error) {
+    console.error('listarMensagens erro:', error);
 
     return res.status(500).json({
-      error: 'Erro ao buscar mensagens'
+      error: 'Erro ao buscar mensagens',
     });
-
   }
 };
 
@@ -245,7 +262,6 @@ exports.listarMensagens = async (req, res) => {
 
 exports.marcarComoLido = async (req, res) => {
   try {
-
     const userId =
       req.userId ||
       req.user?.id ||
@@ -253,37 +269,58 @@ exports.marcarComoLido = async (req, res) => {
 
     const { chatId } = req.params;
 
+    if (!userId) {
+      return res.status(401).json({ error: 'Não autenticado' });
+    }
+
+    if (!isObjectId(chatId)) {
+      return res.status(400).json({ error: 'chatId inválido.' });
+    }
+
+    const chat = await Chat.findById(chatId);
+
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat não encontrado' });
+    }
+
+    const participa = chat.participantes.some(
+      (p) => String(p) === String(userId)
+    );
+
+    if (!participa) {
+      return res.status(403).json({
+        error: 'Você não participa deste chat.',
+      });
+    }
+
     const mensagens = await Mensagem.find({
-      chatId: chatId
+      chatId: chatId,
     });
 
     for (const msg of mensagens) {
-
-      // ignora mensagens enviadas por mim
-      if (msg.remetente.toString() === userId.toString()) {
+      if (String(msg.remetente) === String(userId)) {
         continue;
       }
 
-      const jaLeu = msg.lidoPor.some(
-        (id) => id.toString() === userId.toString()
-      );
+      const jaLeu = Array.isArray(msg.lidoPor)
+        ? msg.lidoPor.some(
+            (id) => String(id) === String(userId)
+          )
+        : false;
 
       if (!jaLeu) {
+        msg.lidoPor = Array.isArray(msg.lidoPor) ? msg.lidoPor : [];
         msg.lidoPor.push(userId);
         await msg.save();
       }
-
     }
 
     return res.json({ ok: true });
-
   } catch (error) {
-
     console.error('marcarComoLido erro:', error);
 
     return res.status(500).json({
-      error: 'Erro ao marcar mensagens como lidas'
+      error: 'Erro ao marcar mensagens como lidas',
     });
-
   }
 };
