@@ -148,19 +148,20 @@ if (chatId) {
 }
 
 if (!chat && profissionalId) {
-  const clienteIdStr = String(cliente);
+  const clienteId = String(cliente);
   const profissionalIdStr = String(profissionalId);
 
   chat = await Chat.findOne({
-    participantes: {
-      $all: [clienteIdStr, profissionalIdStr],
-      $size: 2,
-    },
+    $and: [
+      { participantes: clienteId },
+      { participantes: profissionalIdStr },
+      { $expr: { $eq: [{ $size: '$participantes' }, 2] } }
+    ]
   });
 
   if (!chat) {
     chat = await Chat.create({
-      participantes: [clienteIdStr, profissionalIdStr],
+      participantes: [clienteId, profissionalIdStr],
       ultimoTexto: '',
       atualizadoEm: new Date(),
     });
