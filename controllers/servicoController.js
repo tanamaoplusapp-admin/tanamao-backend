@@ -144,23 +144,27 @@ CHAT ÚNICO (REUTILIZAR)
 let chat = null;
 
 if (chatId) {
-chat = await Chat.findById(chatId);
+  chat = await Chat.findById(chatId);
 }
 
-if (profissionalId) {
+if (!chat && profissionalId) {
+  const clienteIdStr = String(cliente);
+  const profissionalIdStr = String(profissionalId);
 
-  chat = await Chat.findOne()
-    .where('participantes')
-    .all([cliente, profissionalId]);
+  chat = await Chat.findOne({
+    participantes: {
+      $all: [clienteIdStr, profissionalIdStr],
+      $size: 2,
+    },
+  });
 
   if (!chat) {
     chat = await Chat.create({
-      participantes: [cliente, profissionalId],
+      participantes: [clienteIdStr, profissionalIdStr],
       ultimoTexto: '',
       atualizadoEm: new Date(),
     });
   }
-
 }
 
 
@@ -304,8 +308,8 @@ if (profissionalId) {
 
     // bloqueio financeiro
     const ativo =
-profissional.acessoExpiraEm &&
-profissional.acessoExpiraEm > new Date()
+  user.acessoExpiraEm &&
+  user.acessoExpiraEm > new Date();
 
     return ativo;
   });
@@ -400,7 +404,7 @@ exports.getServiceById = async (req, res, next) => {
         message: 'Serviço não encontrado.',
       });
 
-    return res.json({ service: doc });
+   
 
   } catch (err) {
     next(err);
@@ -693,52 +697,49 @@ exports.updateProgress = async (req, res, next) => {
   }
 
 };
-exports.salvarAgendamento = async (req,res)=>{
+exports.salvarAgendamento = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { dataAgendada, horaAgendada, valorFinal } = req.body;
 
-try{
+    const service = await Servico.findById(id);
 
-const { id } = req.params
-const { dataAgendada, horaAgendada, valorFinal } = req.body
+    if (!service) {
+      return res.status(404).json({ erro: 'Serviço não encontrado' });
+    }
 
-const service = await Servico.findById(id)
-const profissional = await User.findById(service.profissional)
-.select('acessoExpiraEm receberServicos')
+    const profissional = await User.findById(service.profissional)
+      .select('acessoExpiraEm receberServicos');
 
-if(!profissional){
-return res.status(404).json({erro:'Profissional não encontrado'})
-}
+    if (!profissional) {
+      return res.status(404).json({ erro: 'Profissional não encontrado' });
+    }
 
-if(profissional.receberServicos === false){
-return res.status(403).json({erro:'Profissional bloqueado'})
-}
+    if (profissional.receberServicos === false) {
+      return res.status(403).json({ erro: 'Profissional bloqueado' });
+    }
 
-const ativo =
-user.acessoExpiraEm &&
-user.acessoExpiraEm > new Date()
+    const ativo =
+      profissional.acessoExpiraEm &&
+      profissional.acessoExpiraEm > new Date();
 
-if(!ativo){
-return res.status(403).json({
-erro:'Sem crédito ou mensalidade'
-})
-}
-if(!service){
-return res.status(404).json({erro:'Serviço não encontrado'})
-}
+    if (!ativo) {
+      return res.status(403).json({
+        erro: 'Sem crédito ou mensalidade',
+      });
+    }
 
-service.dataAgendada = dataAgendada
-service.horaAgendada = horaAgendada
-service.valorFinal = valorFinal
+    service.dataAgendada = dataAgendada;
+    service.horaAgendada = horaAgendada;
+    service.valorFinal = valorFinal;
 
-await service.save()
+    await service.save();
 
-res.json({service})
-
-}catch(e){
-res.status(500).json({erro:e.message})
-}
-
-}
-
+    return res.json({ service });
+  } catch (e) {
+    return res.status(500).json({ erro: e.message });
+  }
+};
 /* =====================================================
 ACEITAR SERVICE (AGENDAMENTO)
 PATCH /api/servicos/:id/aceitar
