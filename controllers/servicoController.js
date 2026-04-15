@@ -149,17 +149,17 @@ chat = await Chat.findById(chatId);
 
 if (profissionalId) {
 
-  chat = await Chat.findOne({
-  participantes: { $all: [cliente, profissionalId] }
-});
+  chat = await Chat.findOne()
+    .where('participantes')
+    .all([cliente, profissionalId]);
 
-if (!chat) {
-  chat = await Chat.create({
-    participantes: [cliente, profissionalId],
-    ultimoTexto: '',
-    atualizadoEm: new Date(),
-  });
-}
+  if (!chat) {
+    chat = await Chat.create({
+      participantes: [cliente, profissionalId],
+      ultimoTexto: '',
+      atualizadoEm: new Date(),
+    });
+  }
 
 }
 
