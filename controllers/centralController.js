@@ -6,6 +6,7 @@ const Chat = require('../models/Chat');
 const Avaliacao = require('../models/Avaliacao');
 const Profissional = require('../models/Profissional');
 const Mensagem = require('../models/Mensagem');
+const mongoose = require('mongoose');
 
 /* ============================================================================
  * HELPERS
@@ -230,7 +231,9 @@ const chatsHoje = chatsHojeList.length;
 const chatIdsHoje = chatsHojeList
   .map((c) => c?._id)
   .filter(Boolean)
-  .map((id) => String(id));
+  .map((id) => String(id))
+  .filter((id) => mongoose.Types.ObjectId.isValid(id))
+  .map((id) => new mongoose.Types.ObjectId(id));
 
 const chatsAbertosSuporte = chats.filter((c) => {
   const type = getChatType(c);
