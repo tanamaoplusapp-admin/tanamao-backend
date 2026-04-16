@@ -231,9 +231,9 @@ const chatsHoje = chatsHojeList.length;
 const chatIdsHoje = chatsHojeList
   .map((c) => c?._id)
   .filter(Boolean)
-  .map((id) => String(id))
-  .filter((id) => mongoose.Types.ObjectId.isValid(id))
-  .map((id) => new mongoose.Types.ObjectId(id));
+  .map((id) => String(id));
+
+const chatIdsHojeSet = new Set(chatIdsHoje);
 
 const chatsAbertosSuporte = chats.filter((c) => {
   const type = getChatType(c);
@@ -267,13 +267,17 @@ let tempoPrimeiroChat = 0;
 
 let mensagens = [];
 
-if (chatIdsHoje.length > 0) {
-  mensagens = await Mensagem.find(
-    { chatId: { $in: chatIdsHoje } },
+if (chatIdsHojeSet.size > 0) {
+  const todasMensagens = await Mensagem.find(
+    {},
     { chatId: 1, remetente: 1, createdAt: 1, enviadoEm: 1 }
   )
     .sort({ chatId: 1, createdAt: 1, enviadoEm: 1 })
     .lean();
+
+  mensagens = todasMensagens.filter((msg) =>
+    chatIdsHojeSet.has(String(msg.chatId))
+  );
 }
 
 const mensagensPorChat = new Map();
