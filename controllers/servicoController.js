@@ -390,59 +390,55 @@ GET /api/servicos/:id
 ===================================================== */
 
 exports.getServiceById = async (req, res, next) => {
-
   try {
-
     const { id } = req.params;
 
     const doc = await Servico.findById(id)
-      .populate('cliente', 'name email')
-      .populate('profissional', 'name email')
+      .populate('cliente', 'name email telefone')
+      .populate('profissional', 'name email telefone')
       .populate('empresa', 'name');
 
-    if (!doc)
+    if (!doc) {
       return res.status(404).json({
         message: 'Serviço não encontrado.',
       });
+    }
 
-   
-
+    return res.json({ service: doc });
   } catch (err) {
     next(err);
   }
-
 };
-
 /* =====================================================
 ALTERAR STATUS
 PUT /api/servicos/:id/status
 ===================================================== */
 
 exports.updateStatus = async (req, res, next) => {
-
   try {
-
     const io = req.app.get('io');
-
     const { id } = req.params;
     const { status, profissionalId, empresaId } = req.body || {};
 
-    if (!status)
+    if (!status) {
       return res.status(400).json({
         message: 'status é obrigatório.',
       });
+    }
 
     const doc = await Servico.findById(id);
 
-    if (!doc)
+    if (!doc) {
       return res.status(404).json({
         message: 'Serviço não encontrado.',
       });
+    }
 
-    if (!doc.canTransitionTo(status))
+    if (!doc.canTransitionTo(status)) {
       return res.status(400).json({
         message: `Transição inválida: ${doc.status} → ${status}`,
       });
+    }
 
     const eraPendente = doc.status === 'pendente';
 
@@ -451,67 +447,47 @@ exports.updateStatus = async (req, res, next) => {
 
     doc.status = status;
 
-/* MÉTRICA */
-if (status === 'aceito' && eraPendente) {
-
-const agora = new Date();
-
-doc.respondidoEm = agora;
-
-const diffMs = agora - doc.createdAt;
-
-doc.tempoRespostaSegundos =
-Math.floor(diffMs / 1000);
-
-}
-
-await doc.save();
-
-return res.json({ service: doc });
-    
-
- 
+    if (status === 'aceito' && eraPendente) {
+      const agora = new Date();
+      doc.respondidoEm = agora;
+      const diffMs = agora - doc.createdAt;
+      doc.tempoRespostaSegundos = Math.floor(diffMs / 1000);
+    }
 
     /* =========================
        SOCKET
     ========================= */
+    await doc.save();
 
     if (io) {
-
       if (status === 'aceito' && doc.cliente) {
-
         io.to(doc.cliente.toString()).emit('servico_aceito', {
           serviceId: doc._id,
           profissionalId: doc.profissional,
         });
-
       }
 
       if (status === 'cancelado' && doc.cliente) {
-
         io.to(doc.cliente.toString()).emit('servico_cancelado', {
           serviceId: doc._id,
         });
-
       }
 
       if (status === 'finalizado' && doc.cliente) {
-
         io.to(doc.cliente.toString()).emit('servico_finalizado', {
           serviceId: doc._id,
         });
-
       }
-
     }
 
     return res.json({ service: doc });
-
   } catch (err) {
     next(err);
   }
-
 };
+
+
+  
 /* =====================================================
 LISTAR POR CLIENTE
 GET /api/servicos/cliente/:clienteId
@@ -653,11 +629,6 @@ exports.getServicoAtivo = async (req, res, next) => {
     next(err);
   }
 };
-/* =====================================================
-ATUALIZAR POSIÇÃO
-PUT /api/servicos/:id/progress
-===================================================== */
-
 /* =====================================================
 ATUALIZAR POSIÇÃO
 PUT /api/servicos/:id/progress
