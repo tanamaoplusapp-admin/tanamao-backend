@@ -1,14 +1,22 @@
-// services/notificationService.js
-
-const axios = require('axios');
-
 const Notification = require('../models/Notification');
 const User = require('../models/user');
+const { enviarPushParaUsuario } = require('./pushService');
+
+/* =========================================================
+   NORMALIZAR PAYLOAD PARA PUSH
+========================================================= */
+function normalizePushData(data = {}) {
+  return Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [
+      key,
+      value == null ? '' : String(value),
+    ])
+  );
+}
 
 /* =========================================================
    ENVIAR NOTIFICAÇÃO COMPLETA
 ========================================================= */
-
 exports.sendNotification = async ({
   userId,
   type,
@@ -19,11 +27,9 @@ exports.sendNotification = async ({
   urgente = false,
 }) => {
   try {
-
     /* =====================================================
        SALVAR NOTIFICAÇÃO NO BANCO
     ===================================================== */
-
     const notification = await Notification.create({
       userId,
       type,
@@ -35,9 +41,8 @@ exports.sendNotification = async ({
     });
 
     /* =====================================================
-       INCREMENTAR CONTADOR DE NOTIFICAÇÕES
+       INCREMENTAR CONTADOR DE NÃO LIDAS
     ===================================================== */
-
     await User.findByIdAndUpdate(userId, {
       $inc: { unreadNotifications: 1 },
     });
@@ -45,55 +50,50 @@ exports.sendNotification = async ({
     /* =====================================================
        BUSCAR USUÁRIO PARA PUSH
     ===================================================== */
-
     const user = await User.findById(userId)
-      .select('fcmToken pushEnabled online')
+      .select('fcmToken pushEnabled')
       .lean();
 
-    if (
-      user?.fcmToken &&
-      user?.pushEnabled &&
-      !user?.online
-    ) {
-
+    /* =====================================================
+       ENVIAR PUSH VIA FCM
+    ===================================================== */
+    if (user?.fcmToken && user?.pushEnabled) {
       try {
+        const pushData = normalizePushData({
+          type,
+          relatedId,
+          notificationId: notification?._id,
+          ...payload,
+        });
 
-        await axios.post(
-          'https://exp.host/--/api/v2/push/send',
-          {
-            to: user.fcmToken,
-            sound: 'default',
-            title,
-            body: message,
-            data: {
-              type,
-              relatedId,
-              ...payload,
-            },
-          }
-        );
-
+        await enviarPushParaUsuario(userId, {
+          title: title || 'Notificação',
+          body: message || '',
+          data: pushData,
+        });
       } catch (err) {
-
         console.error(
           '[notificationService.push]',
-          err?.response?.data || err
+          err?.message || err
         );
-
       }
-
+    } else {
+      console.log(
+        '[notificationService.push] Push não enviado:',
+        {
+          userId,
+          hasToken: !!user?.fcmToken,
+          pushEnabled: !!user?.pushEnabled,
+        }
+      );
     }
 
     return notification;
-
   } catch (err) {
-
     console.error(
       '[notificationService.sendNotification]',
       err
     );
-
     return null;
-
   }
 };
