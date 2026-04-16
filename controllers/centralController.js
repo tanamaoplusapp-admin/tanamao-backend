@@ -220,91 +220,99 @@ const getCentralDashboard = async (_req, res) => {
         : 0;
 
     // KPIs de chats calculados em memória para evitar CastError no createdAt
-    const chatsHojeList = chats.filter((c) => {
-      const createdAt = toDate(c.createdAt);
-      return createdAt && createdAt >= todayStart;
-    });
+const chatsHojeList = chats.filter((c) => {
+  const createdAt = toDate(c.createdAt);
+  return createdAt && createdAt >= todayStart;
+});
 
-    const chatsHoje = chatsHojeList.length;
-    const chatIdsHoje = chatsHojeList.map((c) => c._id);
+const chatsHoje = chatsHojeList.length;
 
-    const chatsAbertosSuporte = chats.filter((c) => {
-      const type = getChatType(c);
-      const status = getChatStatus(c);
+const chatIdsHoje = chatsHojeList
+  .map((c) => c?._id)
+  .filter(Boolean)
+  .map((id) => String(id));
 
-      const isSupport =
-        type.includes('support') ||
-        type.includes('suporte') ||
-        c.isSupport === true;
+const chatsAbertosSuporte = chats.filter((c) => {
+  const type = getChatType(c);
+  const status = getChatStatus(c);
 
-      const isOpen =
-        !status ||
-        status === 'open' ||
-        status === 'aberto' ||
-        status === 'pending' ||
-        status === 'pendente';
+  const isSupport =
+    type.includes('support') ||
+    type.includes('suporte') ||
+    c.isSupport === true;
 
-      return isSupport && isOpen;
-    }).length;
+  const isOpen =
+    !status ||
+    status === 'open' ||
+    status === 'aberto' ||
+    status === 'pending' ||
+    status === 'pendente';
 
-    const somaAvaliacoes = avaliacoes.reduce((acc, item) => {
-      const value = item.rating ?? item.nota ?? item.score ?? item.stars;
-      return acc + toNumber(value, 0);
-    }, 0);
+  return isSupport && isOpen;
+}).length;
 
-    const ratingMedio =
-      avaliacoes.length > 0 ? somaAvaliacoes / avaliacoes.length : 0;
+const somaAvaliacoes = avaliacoes.reduce((acc, item) => {
+  const value = item.rating ?? item.nota ?? item.score ?? item.stars;
+  return acc + toNumber(value, 0);
+}, 0);
 
-    let tempoResposta = 0;
-    let tempoPrimeiroChat = 0;
+const ratingMedio =
+  avaliacoes.length > 0 ? somaAvaliacoes / avaliacoes.length : 0;
 
-    if (chatIdsHoje.length > 0) {
-      const mensagens = await Mensagem.find(
-        { chatId: { $in: chatIdsHoje } },
-        { chatId: 1, remetente: 1, createdAt: 1, enviadoEm: 1 }
-      )
-        .sort({ chatId: 1, createdAt: 1, enviadoEm: 1 })
-        .lean();
+let tempoResposta = 0;
+let tempoPrimeiroChat = 0;
 
-      const mensagensPorChat = new Map();
+let mensagens = [];
 
-      for (const msg of mensagens) {
-        const key = String(msg.chatId);
-        if (!mensagensPorChat.has(key)) mensagensPorChat.set(key, []);
-        mensagensPorChat.get(key).push(msg);
-      }
+if (chatIdsHoje.length > 0) {
+  mensagens = await Mensagem.find(
+    { chatId: { $in: chatIdsHoje } },
+    { chatId: 1, remetente: 1, createdAt: 1, enviadoEm: 1 }
+  )
+    .sort({ chatId: 1, createdAt: 1, enviadoEm: 1 })
+    .lean();
+}
 
-      const tempos = [];
+const mensagensPorChat = new Map();
 
-      for (const [, msgs] of mensagensPorChat) {
-        if (!msgs || msgs.length < 2) continue;
+for (const msg of mensagens) {
+  const key = String(msg.chatId);
+  if (!mensagensPorChat.has(key)) {
+    mensagensPorChat.set(key, []);
+  }
+  mensagensPorChat.get(key).push(msg);
+}
 
-        const primeira = msgs[0];
+const tempos = [];
 
-        const resposta = msgs.find(
-          (m) => String(m.remetente) !== String(primeira.remetente)
-        );
+for (const [, msgs] of mensagensPorChat) {
+  if (!msgs || msgs.length < 2) continue;
 
-        if (!resposta) continue;
+  const primeira = msgs[0];
 
-        const t1 = new Date(primeira.createdAt || primeira.enviadoEm);
-        const t2 = new Date(resposta.createdAt || resposta.enviadoEm);
+  const resposta = msgs.find(
+    (m) => String(m.remetente) !== String(primeira.remetente)
+  );
 
-        if (Number.isNaN(t1.getTime()) || Number.isNaN(t2.getTime())) continue;
-        if (t2 < t1) continue;
+  if (!resposta) continue;
 
-        const diffMin = Math.round((t2 - t1) / 60000);
-        tempos.push(diffMin);
-      }
+  const t1 = new Date(primeira.createdAt || primeira.enviadoEm);
+  const t2 = new Date(resposta.createdAt || resposta.enviadoEm);
 
-      if (tempos.length > 0) {
-        const media = Math.round(
-          tempos.reduce((acc, n) => acc + n, 0) / tempos.length
-        );
-        tempoResposta = media;
-        tempoPrimeiroChat = media;
-      }
-    }
+  if (Number.isNaN(t1.getTime()) || Number.isNaN(t2.getTime())) continue;
+  if (t2 < t1) continue;
+
+  const diffMin = Math.round((t2 - t1) / 60000);
+  tempos.push(diffMin);
+}
+
+if (tempos.length > 0) {
+  const media = Math.round(
+    tempos.reduce((acc, n) => acc + n, 0) / tempos.length
+  );
+  tempoResposta = media;
+  tempoPrimeiroChat = media;
+}
 
     const servicosHoje = servicos.filter((s) => {
       const createdAt = toDate(s.createdAt);
