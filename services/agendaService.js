@@ -12,6 +12,7 @@ exports.criar = async ({
   clienteId,
   clienteNome,
   clienteTelefone,
+  clienteTelefoneOriginal,
   data,
   horaInicio,
   horaFim,
@@ -38,9 +39,10 @@ exports.criar = async ({
 
   const novo = await Agenda.create({
     profissionalId,
-    clienteId,
+    clienteId: clienteId || null,
     clienteNome,
     clienteTelefone,
+    clienteTelefoneOriginal: clienteTelefoneOriginal || clienteTelefone,
     data,
     horaInicio,
     horaFim,
@@ -62,7 +64,7 @@ exports.listarPorCliente = async (clienteId) => {
 };
 
 
-// 📥 LISTAR AGENDAMENTOS DO PROFISSIONAL (MANTIDO)
+// 📥 LISTAR AGENDAMENTOS DO PROFISSIONAL
 exports.listar = async (profissionalId) => {
   return await Agenda.find({
     profissionalId,
@@ -72,19 +74,19 @@ exports.listar = async (profissionalId) => {
 };
 
 
-// 🔥 📥 LISTAR COM FILTRO (NOVO - SEM QUEBRAR NADA)
+// 🔥 📥 LISTAR COM FILTRO
 exports.listarComFiltro = async (profissionalId, inicio, fim) => {
-
   const filtro = {
     profissionalId,
     status: 'ativo',
   };
 
-  // 🔥 só aplica se vier corretamente
+  // Como "data" está em String no formato YYYY-MM-DD,
+  // filtra como string para manter compatibilidade
   if (inicio && fim) {
     filtro.data = {
-      $gte: new Date(inicio),
-      $lte: new Date(fim),
+      $gte: inicio,
+      $lte: fim,
     };
   }
 
@@ -96,7 +98,6 @@ exports.listarComFiltro = async (profissionalId, inicio, fim) => {
 
 // ✏️ EDITAR
 exports.editar = async (id, profissionalId, dados) => {
-
   const agendamento = await Agenda.findOne({
     _id: id,
     profissionalId,
@@ -106,9 +107,13 @@ exports.editar = async (id, profissionalId, dados) => {
     throw new Error('Agendamento não encontrado');
   }
 
+  const novaData = dados.data || agendamento.data;
+  const novaHoraInicio = dados.horaInicio || agendamento.horaInicio;
+  const novaHoraFim = dados.horaFim || agendamento.horaFim;
+
   const agendamentos = await Agenda.find({
     profissionalId,
-    data: dados.data,
+    data: novaData,
     status: 'ativo',
     _id: { $ne: id },
   });
@@ -116,8 +121,8 @@ exports.editar = async (id, profissionalId, dados) => {
   for (let ag of agendamentos) {
     if (
       isConflito(
-        dados.horaInicio,
-        dados.horaFim,
+        novaHoraInicio,
+        novaHoraFim,
         ag.horaInicio,
         ag.horaFim
       )
@@ -128,6 +133,10 @@ exports.editar = async (id, profissionalId, dados) => {
 
   Object.assign(agendamento, dados);
 
+  if (dados.clienteTelefoneOriginal && !dados.clienteTelefone) {
+    agendamento.clienteTelefoneOriginal = dados.clienteTelefoneOriginal;
+  }
+
   await agendamento.save();
 
   return agendamento;
@@ -136,7 +145,6 @@ exports.editar = async (id, profissionalId, dados) => {
 
 // ❌ CANCELAR
 exports.cancelar = async (id, profissionalId) => {
-
   const agendamento = await Agenda.findOne({
     _id: id,
     profissionalId,

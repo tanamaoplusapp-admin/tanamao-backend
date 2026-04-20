@@ -160,7 +160,18 @@ socorristaAutomotivo: {
   default: false,
   index: true
 },
-
+servicosSocorroAutomotivo: [{
+  type: String,
+  enum: [
+    'pneu_furado',
+    'bateria_descarregada',
+    'guincho',
+    'sem_combustivel',
+    'pane_eletrica',
+    'problema_motor',
+  ],
+  index: true,
+}],
 atendeFimSemana: {
   type: Boolean,
   default: false

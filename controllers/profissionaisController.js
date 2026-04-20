@@ -4,6 +4,14 @@ const mongoose = require('mongoose');
 const Profissional = require('../models/Profissional');
 const User = require('../models/user');
 const Order = require('../models/order');
+const SERVICOS_SOCORRO_VALIDOS = [
+  'pneu_furado',
+  'bateria_descarregada',
+  'guincho',
+  'sem_combustivel',
+  'pane_eletrica',
+  'problema_motor',
+];
 
 /* ============================================================================ 
  * HELPERS
@@ -75,17 +83,22 @@ exports.getResumoProfissionalLogado = async (req, res) => {
 exports.list = async (req, res) => {
   try {
     const {
-      categoriaId,
-      profissaoId,
-      cidade,
-      tipoAtendimento
-    } = req.query;
+  categoriaId,
+  profissaoId,
+  cidade,
+  tipoAtendimento,
+  servicoEmergencial,
+} = req.query;
 
     const filtro = {};
 
     if (req.query.socorristaAutomotivo === 'true') {
-      filtro.socorristaAutomotivo = true;
-    } else {
+  filtro.socorristaAutomotivo = true;
+
+  if (servicoEmergencial) {
+    filtro.servicosSocorroAutomotivo = servicoEmergencial;
+  }
+} else {
       if (categoriaId) {
         if (!mongoose.Types.ObjectId.isValid(categoriaId)) {
           return res.status(400).json({
@@ -197,12 +210,16 @@ exports.getById = async (req, res) => {
     // 🔥 GARANTIR CAMPOS PADRÃO
     prof.galeria = Array.isArray(prof.galeria) ? prof.galeria : [];
     prof.servicos = Array.isArray(prof.servicos) ? prof.servicos : [];
+    prof.servicosSocorroAutomotivo = Array.isArray(prof.servicosSocorroAutomotivo)
+  ? prof.servicosSocorroAutomotivo
+  : [];
     prof.metrics = prof.metrics || {
       mediaAvaliacoes: 0,
       totalAvaliacoes: 0,
     };
     // online vem do USER
 prof.online = prof.userId?.online ?? false;
+
 
 // pagamentos vêm do PROFISSIONAL
 prof.aceitaPix = prof.aceitaPix ?? false;
@@ -332,8 +349,19 @@ if (req.body.aceitaDinheiro !== undefined)
    SOCORRISTA AUTOMOTIVO
 ============================ */
 
+/* ============================
+   SOCORRISTA AUTOMOTIVO
+============================ */
+
 if (req.body.socorristaAutomotivo !== undefined)
   updateData.socorristaAutomotivo = req.body.socorristaAutomotivo;
+
+if (Array.isArray(req.body.servicosSocorroAutomotivo)) {
+  updateData.servicosSocorroAutomotivo =
+    req.body.servicosSocorroAutomotivo.filter((item) =>
+      SERVICOS_SOCORRO_VALIDOS.includes(item)
+    );
+}
 
 if (req.body.atendeFimSemana !== undefined)
   updateData.atendeFimSemana = req.body.atendeFimSemana;
@@ -382,6 +410,30 @@ if (Array.isArray(req.body.servicos)) {
     nome: s.nome,
     valor: s.valor
   }));
+}
+/* ============================
+   VALIDAÇÃO SOCORRISTA
+============================ */
+
+const socorristaFinal =
+  updateData.socorristaAutomotivo !== undefined
+    ? updateData.socorristaAutomotivo
+    : prof.socorristaAutomotivo;
+
+const servicosSocorroFinal =
+  updateData.servicosSocorroAutomotivo !== undefined
+    ? updateData.servicosSocorroAutomotivo
+    : prof.servicosSocorroAutomotivo || [];
+
+if (!socorristaFinal) {
+  updateData.servicosSocorroAutomotivo = [];
+}
+
+if (socorristaFinal && servicosSocorroFinal.length === 0) {
+  return res.status(400).json({
+    ok: false,
+    message: 'Selecione pelo menos um serviço de socorro automotivo.',
+  });
 }
     /* ============================
        UPDATE FINAL
@@ -465,7 +517,9 @@ exports.getMe = async (req, res) => {
         ok: false,
         message: 'Profissional não encontrado',
       });
-
+prof.servicosSocorroAutomotivo = Array.isArray(prof.servicosSocorroAutomotivo)
+  ? prof.servicosSocorroAutomotivo
+  : [];
     return res.json({ ok: true, data: prof });
 
   } catch (e) {

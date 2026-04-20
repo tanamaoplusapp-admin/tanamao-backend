@@ -70,7 +70,20 @@ router.get('/profissoes', async (req, res) => {
     });
   }
 });
-
+// 🔥 NOVO — CATÁLOGO DE SOCORRO AUTOMOTIVO
+router.get('/catalogos/socorro-automotivo', (_req, res) => {
+  return res.json({
+    ok: true,
+    data: [
+      { codigo: 'pneu_furado', label: 'Pneu furado' },
+      { codigo: 'bateria_descarregada', label: 'Bateria descarregada' },
+      { codigo: 'guincho', label: 'Guincho' },
+      { codigo: 'sem_combustivel', label: 'Sem combustível' },
+      { codigo: 'pane_eletrica', label: 'Pane elétrica' },
+      { codigo: 'problema_motor', label: 'Problema no motor' },
+    ],
+  });
+});
 /* =========================================================
    🔒 ROTAS AUTENTICADAS
 ========================================================= */
