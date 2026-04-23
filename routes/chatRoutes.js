@@ -24,13 +24,40 @@ if (typeof verifyToken !== 'function') {
 }
 
 /* ================= CONTROLLER ================= */
+const chatController = require('../controllers/chatController');
+
 const {
   criarChat,
   buscarChatsDoUsuario,
   enviarMensagem,
   listarMensagens,
   marcarComoLido,
-} = require('../controllers/chatController');
+  buscarChatPorId,
+} = chatController;
+
+if (typeof criarChat !== 'function') {
+  throw new Error('[chatRoutes] criarChat não exportado corretamente do chatController.');
+}
+
+if (typeof buscarChatsDoUsuario !== 'function') {
+  throw new Error('[chatRoutes] buscarChatsDoUsuario não exportado corretamente do chatController.');
+}
+
+if (typeof enviarMensagem !== 'function') {
+  throw new Error('[chatRoutes] enviarMensagem não exportado corretamente do chatController.');
+}
+
+if (typeof listarMensagens !== 'function') {
+  throw new Error('[chatRoutes] listarMensagens não exportado corretamente do chatController.');
+}
+
+if (typeof marcarComoLido !== 'function') {
+  throw new Error('[chatRoutes] marcarComoLido não exportado corretamente do chatController.');
+}
+
+if (typeof buscarChatPorId !== 'function') {
+  throw new Error('[chatRoutes] buscarChatPorId não exportado corretamente do chatController.');
+}
 
 /* ================= RATE LIMIT ================= */
 
@@ -74,6 +101,12 @@ router.post('/', verifyToken, createChatLimiter, criarChat);
 router.get('/meus', verifyToken, buscarChatsDoUsuario);
 
 /**
+ * Buscar chat por ID
+ * GET /api/chat/:chatId
+ */
+router.get('/:chatId', verifyToken, buscarChatPorId);
+
+/**
  * Enviar mensagem
  * POST /api/chat/:chatId/mensagem
  */
@@ -88,20 +121,12 @@ router.post(
  * Listar mensagens
  * GET /api/chat/:chatId/mensagens
  */
-router.get(
-  '/:chatId/mensagens',
-  verifyToken,
-  listarMensagens
-);
+router.get('/:chatId/mensagens', verifyToken, listarMensagens);
 
 /**
  * Marcar mensagens como lidas
  * PATCH /api/chat/:chatId/lido
  */
-router.patch(
-  '/:chatId/lido',
-  verifyToken,
-  marcarComoLido
-);
+router.patch('/:chatId/lido', verifyToken, marcarComoLido);
 
 module.exports = router;

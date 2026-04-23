@@ -324,3 +324,52 @@ exports.marcarComoLido = async (req, res) => {
     });
   }
 };
+
+/* =========================================================
+   BUSCAR CHAT POR ID
+========================================================= */
+
+exports.buscarChatPorId = async (req, res) => {
+  try {
+    const userId =
+      req.userId ||
+      req.user?.id ||
+      req.user?._id;
+
+    const { chatId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Não autenticado' });
+    }
+
+    if (!isObjectId(chatId)) {
+      return res.status(400).json({ error: 'chatId inválido.' });
+    }
+
+    const chat = await Chat.findById(chatId)
+      .populate('participantes', 'name online')
+      .lean();
+
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat não encontrado' });
+    }
+
+    const participa = chat.participantes.some(
+      (p) => String(p._id) === String(userId)
+    );
+
+    if (!participa) {
+      return res.status(403).json({
+        error: 'Você não participa deste chat.',
+      });
+    }
+
+    return res.json(chat);
+  } catch (error) {
+    console.error('buscarChatPorId erro:', error);
+
+    return res.status(500).json({
+      error: 'Erro ao buscar chat',
+    });
+  }
+};
