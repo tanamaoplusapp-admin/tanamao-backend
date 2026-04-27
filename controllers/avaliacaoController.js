@@ -55,49 +55,47 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
         ],
       }).lean();
 
-      if (prof?._id) {
+      if (prof?._id && isObjectId(prof._id)) {
         idsObj.push(prof._id);
         idsStr.push(String(prof._id));
       }
 
-      if (prof?.userId) {
+      if (prof?.userId && isObjectId(prof.userId)) {
         idsObj.push(prof.userId);
         idsStr.push(String(prof.userId));
       }
     }
 
-    const servicos = await Servico.find({
-      $or: [
-        { profissional: { $in: idsObj } },
-        { profissional: { $in: idsStr } },
-        { profissionalId: { $in: idsObj } },
-        { profissionalId: { $in: idsStr } },
-        { prestador: { $in: idsObj } },
-        { prestador: { $in: idsStr } },
-        { prestadorId: { $in: idsObj } },
-        { prestadorId: { $in: idsStr } },
-        { 'profissional.id': { $in: idsStr } },
-        { 'profissional._id': { $in: idsStr } },
-        { 'profissional.userId': { $in: idsStr } },
-      ],
-    })
-      .select('_id descricao categoria profissional profissionalId prestador prestadorId createdAt')
-      .lean();
+    const idsObjUnicos = [
+      ...new Map(idsObj.map((v) => [String(v), v])).values(),
+    ];
 
-    const servicoIds = servicos.map((s) => s._id);
+    console.log('🔎 BUSCANDO AVALIAÇÕES DO PROFISSIONAL:', {
+      id,
+      ids: idsObjUnicos.map(String),
+    });
 
     const items = await Avaliacao.find({
-      pedido: { $in: servicoIds },
+      $or: [
+        { profissionalId: { $in: idsObjUnicos } },
+        { profissionalUserId: { $in: idsObjUnicos } },
+        { prestadorId: { $in: idsObjUnicos } },
+      ],
     })
       .populate('clienteId', 'name nome email')
       .sort({ createdAt: -1 })
       .lean();
 
+    console.log('⭐ AVALIAÇÕES ENCONTRADAS:', items.length);
+
     const total = items.length;
 
     const media =
       total > 0
-        ? items.reduce((acc, item) => acc + Number(item.nota || 0), 0) / total
+        ? items.reduce(
+            (acc, item) => acc + Number(item.nota || 0),
+            0
+          ) / total
         : 0;
 
     return res.json({
