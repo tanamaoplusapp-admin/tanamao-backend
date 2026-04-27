@@ -31,6 +31,36 @@ const uniqueObjectIds = (values = []) => {
   return [...map.values()];
 };
 
+const getProfissionalIdsFromService = ({
+  servico,
+  profissionalIdBody,
+  profissionalUserIdBody,
+  profissionalBody,
+}) => {
+  const profissionalIdRaw =
+    profissionalIdBody ||
+    profissionalBody ||
+    servico?.profissional?.id ||
+    servico?.profissional?._id ||
+    servico?.profissional ||
+    servico?.profissionalId ||
+    servico?.prestadorId ||
+    null;
+
+  const profissionalUserIdRaw =
+    profissionalUserIdBody ||
+    servico?.profissional?.userId ||
+    servico?.profissional?.user?._id ||
+    servico?.profissional?.user?.id ||
+    servico?.profissionalUserId ||
+    null;
+
+  return {
+    profissionalId: toObjectId(profissionalIdRaw),
+    profissionalUserId: toObjectId(profissionalUserIdRaw),
+  };
+};
+
 exports.getAvaliacoesPorMotorista = async (req, res) => {
   try {
     const { id } = req.params;
@@ -85,19 +115,13 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
       ids: idsObjUnicos.map(String),
     });
 
-    /**
-     * IMPORTANTE:
-     * Não usar $in aqui.
-     * Em alguns ambientes/configurações do Mongoose, o $in está sendo tratado
-     * como objeto comum e causa CastError em ObjectId.
-     */
     const queryOr = [];
 
     idsObjUnicos.forEach((objId) => {
-  queryOr.push({ profissionalId: objId });
-  queryOr.push({ profissionalUserId: objId });
-  queryOr.push({ profissional: objId });
-});
+      queryOr.push({ profissionalId: objId });
+      queryOr.push({ profissionalUserId: objId });
+      queryOr.push({ profissional: objId });
+    });
 
     const items = await Avaliacao.find({ $or: queryOr })
       .populate('clienteId', 'name nome email')
@@ -129,27 +153,27 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
     });
   }
 };
+
 exports.createAvaliacaoGeneric = async (req, res) => {
   try {
     const authUserId = req.userId || req.user?._id || req.user?.id || null;
 
-   const {
-  motoristaId,
-  motorista,
-  companyId,
-  pedidoId,
-  productId,
-  estrelas,
-  rating,
-  nota: notaBody,
-  comentario,
-  comment,
-  clienteId,
-  profissionalId: profissionalIdBody,
-  profissionalUserId: profissionalUserIdBody,
-  profissional: profissionalBody,
-
-} = req.body || {};
+    const {
+      motoristaId,
+      motorista,
+      companyId,
+      pedidoId,
+      productId,
+      estrelas,
+      rating,
+      nota: notaBody,
+      comentario,
+      comment,
+      clienteId,
+      profissionalId: profissionalIdBody,
+      profissionalUserId: profissionalUserIdBody,
+      profissional: profissionalBody,
+    } = req.body || {};
 
     const notaInput = Number(estrelas ?? rating ?? notaBody);
 
@@ -187,9 +211,7 @@ exports.createAvaliacaoGeneric = async (req, res) => {
 
       const motoristaObj = toObjectId(id);
 
-      const filtroDuplicidade = {
-        clienteId: cliente,
-      };
+      const filtroDuplicidade = { clienteId: cliente };
 
       if (pedidoId && isObjectId(pedidoId)) {
         filtroDuplicidade.pedido = toObjectId(pedidoId);
@@ -212,26 +234,13 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         servico = await Servico.findById(toObjectId(pedidoId)).lean();
       }
 
-      const profissionalIdRaw =
-  profissionalIdBody ||
-  profissionalBody ||
-  servico?.profissional?.id ||
-  servico?.profissional?._id ||
-  servico?.profissional ||
-  servico?.profissionalId ||
-  servico?.prestadorId ||
-  null;
-
-const profissionalUserIdRaw =
-  profissionalUserIdBody ||
-  servico?.profissional?.userId ||
-  servico?.profissional?.user?._id ||
-  servico?.profissional?.user?.id ||
-  servico?.profissionalUserId ||
-  null;
-
-      const profissionalId = toObjectId(profissionalIdRaw);
-      const profissionalUserId = toObjectId(profissionalUserIdRaw);
+      const { profissionalId, profissionalUserId } =
+        getProfissionalIdsFromService({
+          servico,
+          profissionalIdBody,
+          profissionalUserIdBody,
+          profissionalBody,
+        });
 
       console.log('⭐ VINCULANDO AVALIAÇÃO:', {
         pedidoId,
@@ -253,9 +262,9 @@ const profissionalUserIdRaw =
       }
 
       if (profissionalId) {
-  payload.profissionalId = profissionalId;
-  payload.profissional = profissionalId;
-}
+        payload.profissionalId = profissionalId;
+        payload.profissional = profissionalId;
+      }
 
       if (profissionalUserId) {
         payload.profissionalUserId = profissionalUserId;
@@ -339,20 +348,19 @@ const profissionalUserIdRaw =
 
       const servico = await Servico.findById(pedidoObj).lean();
 
-      const profissionalIdRaw =
-        servico?.profissional?.id ||
-        servico?.profissional?._id ||
-        servico?.profissionalId ||
-        servico?.prestadorId ||
-        null;
+      const { profissionalId, profissionalUserId } =
+        getProfissionalIdsFromService({
+          servico,
+          profissionalIdBody,
+          profissionalUserIdBody,
+          profissionalBody,
+        });
 
-      const profissionalUserIdRaw =
-        servico?.profissional?.userId ||
-        servico?.profissionalUserId ||
-        null;
-
-      const profissionalId = toObjectId(profissionalIdRaw);
-      const profissionalUserId = toObjectId(profissionalUserIdRaw);
+      console.log('⭐ VINCULANDO AVALIAÇÃO POR PEDIDO:', {
+        pedidoId,
+        profissionalId: profissionalId ? String(profissionalId) : null,
+        profissionalUserId: profissionalUserId ? String(profissionalUserId) : null,
+      });
 
       const payload = {
         pedido: pedidoObj,
@@ -364,6 +372,7 @@ const profissionalUserIdRaw =
 
       if (profissionalId) {
         payload.profissionalId = profissionalId;
+        payload.profissional = profissionalId;
       }
 
       if (profissionalUserId) {
