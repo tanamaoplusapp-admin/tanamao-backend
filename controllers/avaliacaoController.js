@@ -74,13 +74,8 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
         ],
       }).lean();
 
-      if (prof?._id) {
-        idsParaBuscar.push(prof._id);
-      }
-
-      if (prof?.userId) {
-        idsParaBuscar.push(prof.userId);
-      }
+      if (prof?._id) idsParaBuscar.push(prof._id);
+      if (prof?.userId) idsParaBuscar.push(prof.userId);
     }
 
     const idsObjUnicos = uniqueObjectIds(idsParaBuscar);
@@ -90,12 +85,20 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
       ids: idsObjUnicos.map(String),
     });
 
-    const items = await Avaliacao.find({
-      $or: [
-        { profissionalId: { $in: idsObjUnicos } },
-        { profissionalUserId: { $in: idsObjUnicos } },
-      ],
-    })
+    /**
+     * IMPORTANTE:
+     * Não usar $in aqui.
+     * Em alguns ambientes/configurações do Mongoose, o $in está sendo tratado
+     * como objeto comum e causa CastError em ObjectId.
+     */
+    const queryOr = [];
+
+    idsObjUnicos.forEach((objId) => {
+      queryOr.push({ profissionalId: objId });
+      queryOr.push({ profissionalUserId: objId });
+    });
+
+    const items = await Avaliacao.find({ $or: queryOr })
       .populate('clienteId', 'name nome email')
       .sort({ createdAt: -1 })
       .lean();
@@ -125,7 +128,6 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
     });
   }
 };
-
 exports.createAvaliacaoGeneric = async (req, res) => {
   try {
     const authUserId = req.userId || req.user?._id || req.user?.id || null;
@@ -385,4 +387,4 @@ exports.createAvaliacaoPedidoAlias = async (req, res) => {
   };
 
   return exports.createAvaliacaoGeneric(req, res);
-};
+};h
