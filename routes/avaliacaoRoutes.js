@@ -3,6 +3,8 @@ const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const router = express.Router();
 
+const verifyToken = require('../middlewares/verifyToken');
+
 const {
   getAvaliacoesPorMotorista,
   createAvaliacaoGeneric,
@@ -15,7 +17,10 @@ const validate = (rules) => [
   (req, res, next) => {
     const errors = validationResult(req);
     if (errors.isEmpty()) return next();
-    return res.status(400).json({ errors: errors.array() });
+
+    return res.status(400).json({
+      errors: errors.array(),
+    });
   },
 ];
 
@@ -26,7 +31,9 @@ const validate = (rules) => [
 // GET /api/avaliacoes/motorista/:id
 router.get(
   '/motorista/:id',
-  validate([param('id').isMongoId().withMessage('ID de motorista inválido')]),
+  validate([
+    param('id').isMongoId().withMessage('ID de motorista inválido'),
+  ]),
   getAvaliacoesPorMotorista
 );
 
@@ -37,25 +44,38 @@ router.get(
 // POST /api/avaliacoes
 router.post(
   '/',
+  verifyToken,
   validate([
     body().custom((v) => {
-      if (!v || typeof v !== 'object') throw new Error('Body inválido');
+      if (!v || typeof v !== 'object') {
+        throw new Error('Body inválido');
+      }
 
       const keys = ['motoristaId', 'motorista', 'companyId', 'pedidoId'];
       const found = keys.filter((k) => v[k] != null);
-      if (found.length !== 1) throw new Error('Informe exatamente um alvo: motoristaId | companyId | pedidoId');
+
+      if (found.length !== 1) {
+        throw new Error(
+          'Informe exatamente um alvo: motoristaId | companyId | pedidoId'
+        );
+      }
 
       const rating = v.estrelas ?? v.rating ?? v.nota;
-      if (!Number.isFinite(Number(rating))) throw new Error('Informe a nota em "estrelas" (1..5)');
+
+      if (!Number.isFinite(Number(rating))) {
+        throw new Error('Informe a nota em "estrelas" (1..5)');
+      }
+
       return true;
     }),
   ]),
   createAvaliacaoGeneric
 );
 
-// Alias específico para pedido
+// POST /api/avaliacoes/pedido
 router.post(
   '/pedido',
+  verifyToken,
   validate([
     body('pedidoId').isMongoId().withMessage('pedidoId inválido'),
     body('clienteId').optional().isMongoId(),
