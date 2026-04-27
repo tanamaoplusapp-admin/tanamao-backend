@@ -3,76 +3,33 @@ const mongoose = require('mongoose');
 const Avaliacao = require('../models/Avaliacao');
 const Servico = require('../models/Servico');
 
+let Profissional = null;
+try {
+  Profissional = require('../models/Profissional');
+} catch (_) {}
+
 const isObjectId = (v) => mongoose.Types.ObjectId.isValid(String(v));
 
-/**
- * GET /api/avaliacoes/motorista/:id
- */
 exports.getAvaliacoesPorMotorista = async (req, res) => {
   try {
     const { id } = req.params;
+
     if (!isObjectId(id)) {
       return res.status(400).json({ error: 'ID de motorista inválido.' });
     }
 
-    const q = { motorista: id };
+    const items = await Avaliacao.find({ motorista: id })
+      .populate('clienteId', 'name nome email')
+      .sort({ createdAt: -1 })
+      .lean();
 
-    const page = Math.max(1, parseInt(req.query.page || '1', 10));
-    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit || '20', 10)));
-    const skip = (page - 1) * limit;
-
-    const sort = { createdAt: -1 };
-
-    const [items, total] = await Promise.all([
-      Avaliacao.find(q).sort(sort).skip(skip).limit(limit).lean(),
-      Avaliacao.countDocuments(q),
-    ]);
-
-    if (String(req.query.withMeta || '').toLowerCase() === 'true') {
-      const stats = await Avaliacao.aggregate([
-        { $match: { motorista: new mongoose.Types.ObjectId(id) } },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: 1 },
-            media: { $avg: '$nota' },
-            n1: { $sum: { $cond: [{ $eq: ['$nota', 1] }, 1, 0] } },
-            n2: { $sum: { $cond: [{ $eq: ['$nota', 2] }, 1, 0] } },
-            n3: { $sum: { $cond: [{ $eq: ['$nota', 3] }, 1, 0] } },
-            n4: { $sum: { $cond: [{ $eq: ['$nota', 4] }, 1, 0] } },
-            n5: { $sum: { $cond: [{ $eq: ['$nota', 5] }, 1, 0] } },
-          },
-        },
-      ]);
-
-      const s = stats[0] || { total: 0, media: null, n1: 0, n2: 0, n3: 0, n4: 0, n5: 0 };
-
-      return res.json({
-        items,
-        meta: {
-          total,
-          page,
-          limit,
-          pages: Math.max(1, Math.ceil(total / limit)),
-          stats: {
-            total: s.total,
-            media: s.media ? Number(s.media.toFixed(2)) : null,
-            distribuicao: { 1: s.n1, 2: s.n2, 3: s.n3, 4: s.n4, 5: s.n5 },
-          },
-        },
-      });
-    }
-
-    return res.json(items);
+    return res.json({ items });
   } catch (err) {
     console.error('Erro ao buscar avaliações do motorista:', err);
     return res.status(500).json({ error: 'Erro ao carregar avaliações' });
   }
 };
 
-/**
- * GET /api/avaliacoes/profissional/:id
- */
 exports.getAvaliacoesPorProfissional = async (req, res) => {
   try {
     const { id } = req.params;
@@ -86,19 +43,42 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
 
     const idObj = new mongoose.Types.ObjectId(id);
 
+    const idsObj = [idObj];
+    const idsStr = [String(id)];
+
+    if (Profissional) {
+      const prof = await Profissional.findOne({
+        $or: [
+          { _id: idObj },
+          { userId: idObj },
+          { userId: String(id) },
+        ],
+      }).lean();
+
+      if (prof?._id) {
+        idsObj.push(prof._id);
+        idsStr.push(String(prof._id));
+      }
+
+      if (prof?.userId) {
+        idsObj.push(prof.userId);
+        idsStr.push(String(prof.userId));
+      }
+    }
+
     const servicos = await Servico.find({
       $or: [
-        { profissional: idObj },
-        { profissional: id },
-        { profissionalId: idObj },
-        { profissionalId: id },
-        { prestador: idObj },
-        { prestador: id },
-        { prestadorId: idObj },
-        { prestadorId: id },
-        { 'profissional.id': id },
-        { 'profissional._id': idObj },
-        { 'profissional.userId': id },
+        { profissional: { $in: idsObj } },
+        { profissional: { $in: idsStr } },
+        { profissionalId: { $in: idsObj } },
+        { profissionalId: { $in: idsStr } },
+        { prestador: { $in: idsObj } },
+        { prestador: { $in: idsStr } },
+        { prestadorId: { $in: idsObj } },
+        { prestadorId: { $in: idsStr } },
+        { 'profissional.id': { $in: idsStr } },
+        { 'profissional._id': { $in: idsStr } },
+        { 'profissional.userId': { $in: idsStr } },
       ],
     })
       .select('_id descricao categoria profissional profissionalId prestador prestadorId createdAt')
@@ -106,34 +86,18 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
 
     const servicoIds = servicos.map((s) => s._id);
 
-    console.log('🔎 PROFISSIONAL ID:', id);
-    console.log('🔎 SERVIÇOS DO PROFISSIONAL:', servicoIds);
-
     const items = await Avaliacao.find({
-      $or: [
-        { pedido: { $in: servicoIds } },
-        { pedidoId: { $in: servicoIds } },
-        { profissional: idObj },
-        { profissional: id },
-        { profissionalId: idObj },
-        { profissionalId: id },
-        { prestador: idObj },
-        { prestador: id },
-        { prestadorId: idObj },
-        { prestadorId: id },
-      ],
+      pedido: { $in: servicoIds },
     })
-      .populate('cliente', 'name nome email')
+      .populate('clienteId', 'name nome email')
       .sort({ createdAt: -1 })
       .lean();
-
-    console.log('⭐ AVALIAÇÕES ENCONTRADAS:', items.length);
 
     const total = items.length;
 
     const media =
       total > 0
-        ? items.reduce((acc, item) => acc + Number(item.nota || item.rating || item.estrelas || 0), 0) / total
+        ? items.reduce((acc, item) => acc + Number(item.nota || 0), 0) / total
         : 0;
 
     return res.json({
@@ -148,25 +112,26 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
 
     return res.status(500).json({
       code: 'SERVER_ERROR',
-      message: 'Erro ao carregar avaliações do profissional.',
+      message: err?.message || 'Erro ao carregar avaliações do profissional.',
     });
   }
 };
 
-/**
- * POST /api/avaliacoes
- */
 exports.createAvaliacaoGeneric = async (req, res) => {
   try {
     const authUserId = req.userId || req.user?._id || req.user?.id || null;
 
     const {
-      motoristaId, motorista,
+      motoristaId,
+      motorista,
       companyId,
       pedidoId,
       productId,
-      estrelas, rating, nota: notaBody,
-      comentario, comment,
+      estrelas,
+      rating,
+      nota: notaBody,
+      comentario,
+      comment,
       clienteId,
     } = req.body || {};
 
@@ -181,9 +146,13 @@ exports.createAvaliacaoGeneric = async (req, res) => {
 
     const nota = Math.round(notaInput);
     const texto = (comentario ?? comment ?? '').trim();
-    const cliente = (clienteId && isObjectId(clienteId)) ? clienteId : authUserId;
 
-    if (!cliente) {
+    const cliente =
+      clienteId && isObjectId(clienteId)
+        ? clienteId
+        : authUserId;
+
+    if (!cliente || !isObjectId(cliente)) {
       return res.status(401).json({
         code: 'UNAUTHORIZED',
         message: 'Sessão inválida.',
@@ -200,7 +169,10 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         });
       }
 
-      const existe = await Avaliacao.findOne({ motorista: id, cliente });
+      const existe = await Avaliacao.findOne({
+        motorista: id,
+        clienteId: cliente,
+      });
 
       if (existe) {
         return res.status(409).json({
@@ -211,7 +183,7 @@ exports.createAvaliacaoGeneric = async (req, res) => {
 
       const doc = await Avaliacao.create({
         motorista: id,
-        cliente,
+        clienteId: cliente,
         nota,
         comentario: texto,
       });
@@ -230,7 +202,10 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         });
       }
 
-      const filtroDuplicidade = { empresa: companyId, cliente };
+      const filtroDuplicidade = {
+        empresa: companyId,
+        clienteId: cliente,
+      };
 
       if (productId && isObjectId(productId)) {
         filtroDuplicidade.produto = productId;
@@ -248,7 +223,7 @@ exports.createAvaliacaoGeneric = async (req, res) => {
       const doc = await Avaliacao.create({
         empresa: companyId,
         produto: productId && isObjectId(productId) ? productId : undefined,
-        cliente,
+        clienteId: cliente,
         nota,
         comentario: texto,
       });
@@ -267,7 +242,10 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         });
       }
 
-      const existe = await Avaliacao.findOne({ pedido: pedidoId, cliente });
+      const existe = await Avaliacao.findOne({
+        pedido: pedidoId,
+        clienteId: cliente,
+      });
 
       if (existe) {
         return res.status(409).json({
@@ -278,7 +256,7 @@ exports.createAvaliacaoGeneric = async (req, res) => {
 
       const doc = await Avaliacao.create({
         pedido: pedidoId,
-        cliente,
+        clienteId: cliente,
         nota,
         comentario: texto,
       });
@@ -295,11 +273,19 @@ exports.createAvaliacaoGeneric = async (req, res) => {
     });
   } catch (err) {
     console.error('Erro ao criar avaliação:', err);
-    return res.status(500).json({ error: 'Erro ao criar avaliação' });
+
+    return res.status(500).json({
+      code: 'SERVER_ERROR',
+      message: err?.message || 'Erro ao criar avaliação.',
+    });
   }
 };
 
 exports.createAvaliacaoPedidoAlias = async (req, res) => {
-  req.body = { ...req.body, pedidoId: req.body.pedidoId };
+  req.body = {
+    ...req.body,
+    pedidoId: req.body.pedidoId,
+  };
+
   return exports.createAvaliacaoGeneric(req, res);
 };
