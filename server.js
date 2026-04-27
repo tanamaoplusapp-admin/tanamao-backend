@@ -234,6 +234,9 @@ app.use('/api/admin', adminCentralMensalidadeRoutes.router || adminCentralMensal
 const authRoutes = require('./routes/authRoutes');
 app.use('/api/auth', authRoutes);
 console.log('🟢 Rota pública registrada (isolada): /api/auth');
+const avaliacaoRoutes = require('./routes/avaliacaoRoutes');
+app.use('/api/avaliacoes', avaliacaoRoutes.router || avaliacaoRoutes);
+console.log('🟢 Rota de avaliações registrada: /api/avaliacoes');
 
 const routes = {
   users: { path: '/api/users', module: './routes/userRoutes' },
@@ -252,7 +255,7 @@ agenda: { path: '/api/agenda', module: './routes/agendaRoutes' },
   mensalidade: { path: '/api/mensalidade', module: './routes/mensalidadeRoutes' },
   email: { path: '/api/email', module: './routes/emailRoutes' },
   pedidos: { path: '/api/pedidos', module: './routes/pedidoRoutes' },
-  avaliacoes: { path: '/api/avaliacoes', module: './routes/avaliacaoRoutes' },
+
   motorista: { path: '/api/motorista', module: './routes/motoristaRoutes' },
   chat: { path: '/api/chat', module: './routes/chatRoutes' },
   comparacao: { path: '/api/comparacao', module: './routes/comparacaoRoutes' },
