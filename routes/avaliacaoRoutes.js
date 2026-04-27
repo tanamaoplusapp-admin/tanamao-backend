@@ -7,11 +7,11 @@ const verifyToken = require('../middleware/verifyToken');
 
 const {
   getAvaliacoesPorMotorista,
+  getAvaliacoesPorProfissional,
   createAvaliacaoGeneric,
   createAvaliacaoPedidoAlias,
 } = require('../controllers/avaliacaoController');
 
-// Middleware simples de validação
 const validate = (rules) => [
   ...rules,
   (req, res, next) => {
@@ -35,6 +35,16 @@ router.get(
     param('id').isMongoId().withMessage('ID de motorista inválido'),
   ]),
   getAvaliacoesPorMotorista
+);
+
+// GET /api/avaliacoes/profissional/:id
+router.get(
+  '/profissional/:id',
+  verifyToken,
+  validate([
+    param('id').isMongoId().withMessage('ID de profissional inválido'),
+  ]),
+  getAvaliacoesPorProfissional
 );
 
 /** ===========================

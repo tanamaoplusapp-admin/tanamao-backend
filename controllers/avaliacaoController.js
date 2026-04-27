@@ -1,6 +1,7 @@
 // controllers/avaliacaoController.js
 const mongoose = require('mongoose');
 const Avaliacao = require('../models/Avaliacao');
+const Servico = require('../models/Servico');
 
 const isObjectId = (v) => mongoose.Types.ObjectId.isValid(String(v));
 
@@ -16,9 +17,9 @@ exports.getAvaliacoesPorMotorista = async (req, res) => {
 
     const q = { motorista: id };
 
-    const page  = Math.max(1, parseInt(req.query.page || '1', 10));
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit || '20', 10)));
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     const sort = { createdAt: -1 };
 
@@ -43,7 +44,9 @@ exports.getAvaliacoesPorMotorista = async (req, res) => {
           },
         },
       ]);
-      const s = stats[0] || { total: 0, media: null, n1:0, n2:0, n3:0, n4:0, n5:0 };
+
+      const s = stats[0] || { total: 0, media: null, n1: 0, n2: 0, n3: 0, n4: 0, n5: 0 };
+
       return res.json({
         items,
         meta: {
@@ -68,11 +71,65 @@ exports.getAvaliacoesPorMotorista = async (req, res) => {
 };
 
 /**
+ * GET /api/avaliacoes/profissional/:id
+ */
+exports.getAvaliacoesPorProfissional = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isObjectId(id)) {
+      return res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'ID de profissional inválido.',
+      });
+    }
+
+    const servicos = await Servico.find({
+      $or: [
+        { profissional: id },
+        { profissionalId: id },
+        { prestador: id },
+        { prestadorId: id },
+      ],
+    })
+      .select('_id descricao categoria createdAt')
+      .lean();
+
+    const servicoIds = servicos.map((s) => s._id);
+
+    const items = await Avaliacao.find({
+      pedido: { $in: servicoIds },
+    })
+      .populate('cliente', 'name nome email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const total = items.length;
+
+    const media =
+      total > 0
+        ? items.reduce((acc, item) => acc + Number(item.nota || 0), 0) / total
+        : 0;
+
+    return res.json({
+      items,
+      meta: {
+        total,
+        media: Number(media.toFixed(1)),
+      },
+    });
+  } catch (err) {
+    console.error('Erro ao buscar avaliações do profissional:', err);
+
+    return res.status(500).json({
+      code: 'SERVER_ERROR',
+      message: 'Erro ao carregar avaliações do profissional.',
+    });
+  }
+};
+
+/**
  * POST /api/avaliacoes
- * Alvos suportados:
- *  - Motorista:  { motoristaId|motorista, estrelas|rating|nota, comentario|comment, clienteId? }
- *  - Empresa:    { companyId, productId?, estrelas|rating|nota, comentario|comment, clienteId? }
- *  - Pedido:     { pedidoId,  estrelas|rating|nota, comentario|comment, clienteId? }
  */
 exports.createAvaliacaoGeneric = async (req, res) => {
   try {
@@ -89,24 +146,43 @@ exports.createAvaliacaoGeneric = async (req, res) => {
     } = req.body || {};
 
     const notaInput = Number(estrelas ?? rating ?? notaBody);
+
     if (!Number.isFinite(notaInput) || notaInput < 1 || notaInput > 5) {
-      return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Nota deve ser um número entre 1 e 5.' });
+      return res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        message: 'Nota deve ser um número entre 1 e 5.',
+      });
     }
+
     const nota = Math.round(notaInput);
     const texto = (comentario ?? comment ?? '').trim();
     const cliente = (clienteId && isObjectId(clienteId)) ? clienteId : authUserId;
 
     if (!cliente) {
-      return res.status(401).json({ code: 'UNAUTHORIZED', message: 'Sessão inválida.' });
+      return res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Sessão inválida.',
+      });
     }
 
-    // MOTORISTA
     if (motoristaId || motorista) {
       const id = motoristaId || motorista;
-      if (!isObjectId(id)) return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'motoristaId inválido.' });
+
+      if (!isObjectId(id)) {
+        return res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'motoristaId inválido.',
+        });
+      }
 
       const existe = await Avaliacao.findOne({ motorista: id, cliente });
-      if (existe) return res.status(409).json({ code: 'ALREADY_RATED', message: 'Você já avaliou este motorista.' });
+
+      if (existe) {
+        return res.status(409).json({
+          code: 'ALREADY_RATED',
+          message: 'Você já avaliou este motorista.',
+        });
+      }
 
       const doc = await Avaliacao.create({
         motorista: id,
@@ -114,21 +190,34 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         nota,
         comentario: texto,
       });
-      return res.status(201).json({ message: 'Avaliação registrada', avaliacao: doc });
+
+      return res.status(201).json({
+        message: 'Avaliação registrada',
+        avaliacao: doc,
+      });
     }
 
-    // EMPRESA (opcionalmente com produto)
     if (companyId) {
       if (!isObjectId(companyId)) {
-        return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'companyId inválido.' });
+        return res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'companyId inválido.',
+        });
       }
 
       const filtroDuplicidade = { empresa: companyId, cliente };
-      if (productId && isObjectId(productId)) filtroDuplicidade.produto = productId;
+
+      if (productId && isObjectId(productId)) {
+        filtroDuplicidade.produto = productId;
+      }
 
       const existe = await Avaliacao.findOne(filtroDuplicidade);
+
       if (existe) {
-        return res.status(409).json({ code: 'ALREADY_RATED', message: 'Você já avaliou esta empresa/produto.' });
+        return res.status(409).json({
+          code: 'ALREADY_RATED',
+          message: 'Você já avaliou esta empresa/produto.',
+        });
       }
 
       const doc = await Avaliacao.create({
@@ -138,17 +227,29 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         nota,
         comentario: texto,
       });
-      return res.status(201).json({ message: 'Avaliação registrada', avaliacao: doc });
+
+      return res.status(201).json({
+        message: 'Avaliação registrada',
+        avaliacao: doc,
+      });
     }
 
-    // PEDIDO
     if (pedidoId) {
       if (!isObjectId(pedidoId)) {
-        return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'pedidoId inválido.' });
+        return res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'pedidoId inválido.',
+        });
       }
 
       const existe = await Avaliacao.findOne({ pedido: pedidoId, cliente });
-      if (existe) return res.status(409).json({ code: 'ALREADY_RATED', message: 'Você já avaliou este pedido.' });
+
+      if (existe) {
+        return res.status(409).json({
+          code: 'ALREADY_RATED',
+          message: 'Você já avaliou este pedido.',
+        });
+      }
 
       const doc = await Avaliacao.create({
         pedido: pedidoId,
@@ -156,17 +257,23 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         nota,
         comentario: texto,
       });
-      return res.status(201).json({ message: 'Avaliação registrada', avaliacao: doc });
+
+      return res.status(201).json({
+        message: 'Avaliação registrada',
+        avaliacao: doc,
+      });
     }
 
-    return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Informe motoristaId | companyId | pedidoId.' });
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      message: 'Informe motoristaId | companyId | pedidoId.',
+    });
   } catch (err) {
     console.error('Erro ao criar avaliação:', err);
     return res.status(500).json({ error: 'Erro ao criar avaliação' });
   }
 };
 
-// Alias específico para pedido
 exports.createAvaliacaoPedidoAlias = async (req, res) => {
   req.body = { ...req.body, pedidoId: req.body.pedidoId };
   return exports.createAvaliacaoGeneric(req, res);
