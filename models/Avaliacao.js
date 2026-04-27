@@ -30,18 +30,29 @@ const avaliacaoSchema = new Schema(
     },
 
     // ===== Prestador / Profissional =====
+
+    // Perfil profissional, quando existir model Profissional separado
     profissionalId: {
       type: Schema.Types.ObjectId,
       ref: 'Profissional',
       index: true,
     },
 
+    // User do profissional/prestador
     profissionalUserId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       index: true,
     },
 
+    // Compatibilidade com serviços que salvam o profissional neste campo
+    profissional: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+
+    // Legado/compatibilidade
     prestadorId: {
       type: Schema.Types.ObjectId,
       index: true,
@@ -95,6 +106,7 @@ avaliacaoSchema.pre('validate', function (next) {
     this.produto ||
     this.profissionalId ||
     this.profissionalUserId ||
+    this.profissional ||
     this.prestadorId;
 
   if (!temAlvo) {
@@ -119,6 +131,7 @@ avaliacaoSchema.index({ pedido: 1, createdAt: -1 });
 avaliacaoSchema.index({ produto: 1, createdAt: -1 });
 avaliacaoSchema.index({ profissionalId: 1, createdAt: -1 });
 avaliacaoSchema.index({ profissionalUserId: 1, createdAt: -1 });
+avaliacaoSchema.index({ profissional: 1, createdAt: -1 });
 avaliacaoSchema.index({ prestadorId: 1, createdAt: -1 });
 avaliacaoSchema.index({ clienteId: 1, createdAt: -1 });
 avaliacaoSchema.index({ nota: 1 });

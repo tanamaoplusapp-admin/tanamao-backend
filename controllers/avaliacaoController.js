@@ -94,9 +94,10 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
     const queryOr = [];
 
     idsObjUnicos.forEach((objId) => {
-      queryOr.push({ profissionalId: objId });
-      queryOr.push({ profissionalUserId: objId });
-    });
+  queryOr.push({ profissionalId: objId });
+  queryOr.push({ profissionalUserId: objId });
+  queryOr.push({ profissional: objId });
+});
 
     const items = await Avaliacao.find({ $or: queryOr })
       .populate('clienteId', 'name nome email')
@@ -146,6 +147,7 @@ exports.createAvaliacaoGeneric = async (req, res) => {
   clienteId,
   profissionalId: profissionalIdBody,
   profissionalUserId: profissionalUserIdBody,
+  profissional: profissionalBody,
 
 } = req.body || {};
 
@@ -212,8 +214,10 @@ exports.createAvaliacaoGeneric = async (req, res) => {
 
       const profissionalIdRaw =
   profissionalIdBody ||
+  profissionalBody ||
   servico?.profissional?.id ||
   servico?.profissional?._id ||
+  servico?.profissional ||
   servico?.profissionalId ||
   servico?.prestadorId ||
   null;
@@ -249,8 +253,9 @@ const profissionalUserIdRaw =
       }
 
       if (profissionalId) {
-        payload.profissionalId = profissionalId;
-      }
+  payload.profissionalId = profissionalId;
+  payload.profissional = profissionalId;
+}
 
       if (profissionalUserId) {
         payload.profissionalUserId = profissionalUserId;
