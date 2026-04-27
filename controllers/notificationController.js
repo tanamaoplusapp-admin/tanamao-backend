@@ -3,6 +3,7 @@
 const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
 const User = require('../models/user');
+const { enviarPushParaUsuario } = require('../services/pushService');
 
 const resolveUserId = (req) => {
   const maybe =
@@ -15,7 +16,7 @@ const resolveUserId = (req) => {
   if (!maybe) return null;
 
   return mongoose.Types.ObjectId.isValid(maybe)
-    ? mongoose.Types.ObjectId(maybe)
+    ? new mongoose.Types.ObjectId(maybe)
     : String(maybe);
 };
 
@@ -111,18 +112,21 @@ exports.createNotification = async ({
   message,
   chatId = null,
   servicoId = null,
+  serviceId = null,
   urgente = false,
   payload = {},
   relatedId = null,
 }) => {
   try {
+    const finalServicoId = servicoId || serviceId || null;
+
     const notification = await Notification.create({
       userId,
       type,
       title,
       message,
       chatId,
-      servicoId,
+      servicoId: finalServicoId,
       urgente,
       payload,
       relatedId,
@@ -130,9 +134,38 @@ exports.createNotification = async ({
       createdAt: new Date(),
     });
 
-    await User.findByIdAndUpdate(userId, {
-      $inc: { unreadNotifications: 1 },
-    });
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $inc: { unreadNotifications: 1 },
+      },
+      { new: true }
+    );
+
+    try {
+      await enviarPushParaUsuario(userId, {
+        title: title || 'Tanamão+',
+        body: message || 'Você tem uma nova notificação',
+        type,
+        notificationId: notification._id,
+        chatId,
+        servicoId: finalServicoId,
+        serviceId: finalServicoId,
+        unreadNotifications: updatedUser?.unreadNotifications || 1,
+        data: {
+          type,
+          notificationId: notification._id,
+          chatId,
+          servicoId: finalServicoId,
+          serviceId: finalServicoId,
+          relatedId,
+          urgente,
+          ...payload,
+        },
+      });
+    } catch (pushErr) {
+      console.error('[notification.createNotification.push]', pushErr);
+    }
 
     return notification;
   } catch (err) {

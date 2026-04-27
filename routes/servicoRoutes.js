@@ -14,7 +14,11 @@ const checkProfessionalAccess = require('../middleware/checkProfessionalAccess')
    ORDEM IMPORTA!
    Rotas específicas antes de /:id
 ===================================================== */
-
+router.patch(
+  '/:id/cancelar',
+  verifyToken,
+  ctrl.cancelarService
+);
 
 /**
  * 📋 Listar serviços do cliente

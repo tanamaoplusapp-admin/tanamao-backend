@@ -9,6 +9,7 @@ const mensagemSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
     remetente: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -16,50 +17,107 @@ const mensagemSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Conteúdo
-    texto: { type: String, trim: true },
-    imagemUrl: { type: String, trim: true },
+    /* ================= CONTEÚDO ================= */
 
-    // Tipo de mensagem (ajuda no front)
-    type: {
+    texto: {
       type: String,
-      enum: ['text', 'image', 'system'],
-      default: 'text',
+      trim: true,
     },
 
-    // Recursos para evolução (não quebram nada existente)
-    lidoPor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // quem já leu
-    replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Mensagem' }, // resposta a outra msg
-    removido: { type: Boolean, default: false }, // soft delete
+    imagemUrl: {
+      type: String,
+      trim: true,
+    },
 
-    // Datas
-    enviadoEm: { type: Date, default: Date.now, index: true },
+    // 🔥 NOVO: localização estruturada (sem quebrar o atual)
+    localizacao: {
+      latitude: Number,
+      longitude: Number,
+      expiraEm: Date,
+    },
+
+    /* ================= TIPO ================= */
+
+    type: {
+      type: String,
+      enum: ['text', 'image', 'location', 'system'],
+      default: 'text',
+      index: true,
+    },
+
+    /* ================= CONTROLE ================= */
+
+    lidoPor: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Mensagem',
+    },
+
+    removido: {
+      type: Boolean,
+      default: false,
+    },
+
+    /* ================= DATAS ================= */
+
+    enviadoEm: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-/* --------------------- Validações/normalizações --------------------- */
-// exige ao menos texto OU imagem (exceto "system")
+/* ================= VALIDAÇÕES ================= */
+
 mensagemSchema.pre('validate', function (next) {
-  if (this.type !== 'system' && !this.texto && !this.imagemUrl) {
-    return next(new Error('A mensagem precisa conter texto ou imagem.'));
+
+  // 🔥 compatibilidade com sistema antigo (prefixo)
+  const LOCATION_PREFIX = '[LOCALIZACAO]';
+
+  if (this.texto && this.texto.startsWith(LOCATION_PREFIX)) {
+    this.type = 'location';
   }
-  // define tipo automaticamente se não vier
-  if (!this.type) {
-    this.type = this.imagemUrl ? 'image' : 'text';
+
+  if (this.imagemUrl) {
+    this.type = 'image';
   }
+
+  if (this.localizacao) {
+    this.type = 'location';
+  }
+
+  if (this.type !== 'system') {
+    const temConteudo =
+      this.texto ||
+      this.imagemUrl ||
+      this.localizacao;
+
+    if (!temConteudo) {
+      return next(new Error('Mensagem vazia.'));
+    }
+  }
+
   return next();
 });
 
-/* --------------------------- Índices úteis --------------------------- */
-// Ordenação rápida por chat e horário
+/* ================= ÍNDICES ================= */
+
 mensagemSchema.index({ chatId: 1, enviadoEm: 1 });
-// Listagens e estatísticas por remetente
 mensagemSchema.index({ remetente: 1, enviadoEm: -1 });
-// Acesso eficiente ao histórico num chat
 mensagemSchema.index({ chatId: 1, _id: 1 });
 
-/* ---------------------- Serialização segura ------------------------- */
+/* ================= SERIALIZAÇÃO ================= */
+
 mensagemSchema.set('toJSON', {
   transform(_doc, ret) {
     delete ret.__v;

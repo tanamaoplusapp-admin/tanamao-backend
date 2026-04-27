@@ -775,4 +775,67 @@ exports.aceitarService = async (req,res)=>{
    } catch(e){
     res.status(500).json({erro:e.message})
   }
+  
   };
+  /* =====================================================
+CANCELAR SERVIÇO (CLIENTE)
+PATCH /api/servicos/:id/cancelar
+===================================================== */
+
+exports.cancelarService = async (req, res) => {
+  try {
+    const io = req.app.get('io');
+    const { id } = req.params;
+    const userId = req.user?.id || req.user?._id;
+
+    const service = await Servico.findById(id);
+
+    if (!service) {
+      return res.status(404).json({
+        message: 'Serviço não encontrado',
+      });
+    }
+
+    // 🔒 segurança: só cliente pode cancelar antes do aceite
+    if (String(service.cliente) !== String(userId)) {
+      return res.status(403).json({
+        message: 'Sem permissão para cancelar este serviço',
+      });
+    }
+
+    // 🔒 só pode cancelar se ainda não foi aceito
+    if (service.status !== 'pendente') {
+      return res.status(400).json({
+        message: 'Só é possível cancelar serviços pendentes',
+      });
+    }
+
+    service.status = 'cancelado';
+    await service.save();
+
+    /* =========================
+       SOCKET
+    ========================= */
+
+    if (io && service.profissional) {
+      io.to(service.profissional.toString()).emit('servico_cancelado', {
+        serviceId: service._id,
+        motivo: 'cancelado_cliente',
+      });
+    }
+
+    if (io && service.cliente) {
+      io.to(service.cliente.toString()).emit('servico_cancelado', {
+        serviceId: service._id,
+        motivo: 'cancelado_cliente',
+      });
+    }
+
+    return res.json({ service });
+
+  } catch (e) {
+    return res.status(500).json({
+      message: e.message,
+    });
+  }
+};
