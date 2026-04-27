@@ -8,7 +8,28 @@ try {
   Profissional = require('../models/Profissional');
 } catch (_) {}
 
-const isObjectId = (v) => mongoose.Types.ObjectId.isValid(String(v));
+const isObjectId = (v) => {
+  if (!v) return false;
+  return mongoose.Types.ObjectId.isValid(String(v));
+};
+
+const toObjectId = (v) => {
+  if (!isObjectId(v)) return null;
+  return new mongoose.Types.ObjectId(String(v));
+};
+
+const uniqueObjectIds = (values = []) => {
+  const map = new Map();
+
+  values.forEach((value) => {
+    const obj = toObjectId(value);
+    if (obj) {
+      map.set(String(obj), obj);
+    }
+  });
+
+  return [...map.values()];
+};
 
 exports.getAvaliacoesPorMotorista = async (req, res) => {
   try {
@@ -18,7 +39,7 @@ exports.getAvaliacoesPorMotorista = async (req, res) => {
       return res.status(400).json({ error: 'ID de motorista inválido.' });
     }
 
-    const items = await Avaliacao.find({ motorista: id })
+    const items = await Avaliacao.find({ motorista: toObjectId(id) })
       .populate('clienteId', 'name nome email')
       .sort({ createdAt: -1 })
       .lean();
@@ -41,47 +62,49 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
       });
     }
 
-    const idObj = new mongoose.Types.ObjectId(id);
-
-    const idsObj = [idObj];
-    const idsStr = [String(id)];
+    const idObj = toObjectId(id);
+    const idsParaBuscar = [idObj];
 
     if (Profissional) {
       const prof = await Profissional.findOne({
         $or: [
           { _id: idObj },
           { userId: idObj },
-          { userId: String(id) },
+          { userId: String(idObj) },
         ],
       }).lean();
 
-      if (prof?._id && isObjectId(prof._id)) {
-        idsObj.push(prof._id);
-        idsStr.push(String(prof._id));
+      if (prof?._id) {
+        idsParaBuscar.push(prof._id);
       }
 
-      if (prof?.userId && isObjectId(prof.userId)) {
-        idsObj.push(prof.userId);
-        idsStr.push(String(prof.userId));
+      if (prof?.userId) {
+        idsParaBuscar.push(prof.userId);
       }
     }
 
-    const idsObjUnicos = [
-      ...new Map(idsObj.map((v) => [String(v), v])).values(),
-    ];
+    const idsObjUnicos = uniqueObjectIds(idsParaBuscar);
 
     console.log('🔎 BUSCANDO AVALIAÇÕES DO PROFISSIONAL:', {
       id,
       ids: idsObjUnicos.map(String),
     });
 
-    const items = await Avaliacao.find({
-      $or: [
-        { profissionalId: { $in: idsObjUnicos } },
-        { profissionalUserId: { $in: idsObjUnicos } },
-        { prestadorId: { $in: idsObjUnicos } },
-      ],
-    })
+    const queryOr = [
+      { profissionalId: { $in: idsObjUnicos } },
+      { profissionalUserId: { $in: idsObjUnicos } },
+    ];
+
+    /**
+     * Mantido por compatibilidade com avaliações antigas.
+     * Importante: só entra na query se o schema carregado reconhecer prestadorId.
+     * Isso evita CastError caso exista divergência de model/cache/deploy.
+     */
+    if (Avaliacao.schema.path('prestadorId')) {
+      queryOr.push({ prestadorId: { $in: idsObjUnicos } });
+    }
+
+    const items = await Avaliacao.find({ $or: queryOr })
       .populate('clienteId', 'name nome email')
       .sort({ createdAt: -1 })
       .lean();
@@ -92,10 +115,7 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
 
     const media =
       total > 0
-        ? items.reduce(
-            (acc, item) => acc + Number(item.nota || 0),
-            0
-          ) / total
+        ? items.reduce((acc, item) => acc + Number(item.nota || 0), 0) / total
         : 0;
 
     return res.json({
@@ -143,20 +163,24 @@ exports.createAvaliacaoGeneric = async (req, res) => {
     }
 
     const nota = Math.round(notaInput);
-    const texto = (comentario ?? comment ?? '').trim();
+    const texto = String(comentario ?? comment ?? '').trim();
 
     const cliente =
       clienteId && isObjectId(clienteId)
-        ? clienteId
-        : authUserId;
+        ? toObjectId(clienteId)
+        : toObjectId(authUserId);
 
-    if (!cliente || !isObjectId(cliente)) {
+    if (!cliente) {
       return res.status(401).json({
         code: 'UNAUTHORIZED',
         message: 'Sessão inválida.',
       });
     }
 
+    /**
+     * Fluxo legado/motorista e também usado hoje para avaliações vindas de serviço.
+     * Mantido para não quebrar rotas existentes.
+     */
     if (motoristaId || motorista) {
       const id = motoristaId || motorista;
 
@@ -167,58 +191,84 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         });
       }
 
-      const existe = await Avaliacao.findOne({
-        motorista: id,
+      const motoristaObj = toObjectId(id);
+
+      const filtroDuplicidade = {
         clienteId: cliente,
-      });
+      };
+
+      if (pedidoId && isObjectId(pedidoId)) {
+        filtroDuplicidade.pedido = toObjectId(pedidoId);
+      } else {
+        filtroDuplicidade.motorista = motoristaObj;
+      }
+
+      const existe = await Avaliacao.findOne(filtroDuplicidade).lean();
 
       if (existe) {
         return res.status(409).json({
           code: 'ALREADY_RATED',
-          message: 'Você já avaliou este motorista.',
+          message: 'Você já avaliou este serviço.',
         });
       }
 
-      const servico = await Servico.findById(pedidoId).lean();
+      let servico = null;
 
-const profissionalId =
-  servico?.profissional?.id ||
-  servico?.profissional?._id ||
-  servico?.profissionalId ||
-  servico?.prestadorId ||
-  null;
+      if (pedidoId && isObjectId(pedidoId)) {
+        servico = await Servico.findById(toObjectId(pedidoId)).lean();
+      }
 
-const profissionalUserId =
-  servico?.profissional?.userId ||
-  servico?.profissionalUserId ||
-  null;
+      const profissionalIdRaw =
+        servico?.profissional?.id ||
+        servico?.profissional?._id ||
+        servico?.profissionalId ||
+        servico?.prestadorId ||
+        null;
 
-console.log('⭐ VINCULANDO AVALIAÇÃO:', {
-  pedidoId,
-  profissionalId,
-  profissionalUserId,
-});
+      const profissionalUserIdRaw =
+        servico?.profissional?.userId ||
+        servico?.profissionalUserId ||
+        null;
 
-const doc = await Avaliacao.create({
-  pedido: pedidoId,
+      const profissionalId = toObjectId(profissionalIdRaw);
+      const profissionalUserId = toObjectId(profissionalUserIdRaw);
 
-  // 🔥 ESSA É A CORREÇÃO PRINCIPAL
-  profissionalId: profissionalId && isObjectId(profissionalId)
-    ? profissionalId
-    : undefined,
+      console.log('⭐ VINCULANDO AVALIAÇÃO:', {
+        pedidoId,
+        motoristaId: String(motoristaObj),
+        profissionalId: profissionalId ? String(profissionalId) : null,
+        profissionalUserId: profissionalUserId ? String(profissionalUserId) : null,
+      });
 
-  profissionalUserId: profissionalUserId && isObjectId(profissionalUserId)
-    ? profissionalUserId
-    : undefined,
+      const payload = {
+        motorista: motoristaObj,
+        clienteId: cliente,
+        nota,
+        comentario: texto,
+        origem: servico ? 'servico' : 'motorista',
+      };
 
-  prestadorId: profissionalId,
+      if (pedidoId && isObjectId(pedidoId)) {
+        payload.pedido = toObjectId(pedidoId);
+      }
 
-  clienteId: cliente,
-  nota,
-  comentario: texto,
+      if (profissionalId) {
+        payload.profissionalId = profissionalId;
 
-  origem: 'servico',
-});
+        /**
+         * Mantido apenas por compatibilidade.
+         * Recebe sempre ObjectId válido, nunca string suja nem objeto.
+         */
+        if (Avaliacao.schema.path('prestadorId')) {
+          payload.prestadorId = profissionalId;
+        }
+      }
+
+      if (profissionalUserId) {
+        payload.profissionalUserId = profissionalUserId;
+      }
+
+      const doc = await Avaliacao.create(payload);
 
       return res.status(201).json({
         message: 'Avaliação registrada',
@@ -234,16 +284,18 @@ const doc = await Avaliacao.create({
         });
       }
 
+      const companyObj = toObjectId(companyId);
+
       const filtroDuplicidade = {
-        empresa: companyId,
+        empresa: companyObj,
         clienteId: cliente,
       };
 
       if (productId && isObjectId(productId)) {
-        filtroDuplicidade.produto = productId;
+        filtroDuplicidade.produto = toObjectId(productId);
       }
 
-      const existe = await Avaliacao.findOne(filtroDuplicidade);
+      const existe = await Avaliacao.findOne(filtroDuplicidade).lean();
 
       if (existe) {
         return res.status(409).json({
@@ -253,11 +305,12 @@ const doc = await Avaliacao.create({
       }
 
       const doc = await Avaliacao.create({
-        empresa: companyId,
-        produto: productId && isObjectId(productId) ? productId : undefined,
+        empresa: companyObj,
+        produto: productId && isObjectId(productId) ? toObjectId(productId) : undefined,
         clienteId: cliente,
         nota,
         comentario: texto,
+        origem: 'empresa',
       });
 
       return res.status(201).json({
@@ -274,10 +327,12 @@ const doc = await Avaliacao.create({
         });
       }
 
+      const pedidoObj = toObjectId(pedidoId);
+
       const existe = await Avaliacao.findOne({
-        pedido: pedidoId,
+        pedido: pedidoObj,
         clienteId: cliente,
-      });
+      }).lean();
 
       if (existe) {
         return res.status(409).json({
@@ -286,12 +341,44 @@ const doc = await Avaliacao.create({
         });
       }
 
-      const doc = await Avaliacao.create({
-        pedido: pedidoId,
+      const servico = await Servico.findById(pedidoObj).lean();
+
+      const profissionalIdRaw =
+        servico?.profissional?.id ||
+        servico?.profissional?._id ||
+        servico?.profissionalId ||
+        servico?.prestadorId ||
+        null;
+
+      const profissionalUserIdRaw =
+        servico?.profissional?.userId ||
+        servico?.profissionalUserId ||
+        null;
+
+      const profissionalId = toObjectId(profissionalIdRaw);
+      const profissionalUserId = toObjectId(profissionalUserIdRaw);
+
+      const payload = {
+        pedido: pedidoObj,
         clienteId: cliente,
         nota,
         comentario: texto,
-      });
+        origem: servico ? 'servico' : 'pedido',
+      };
+
+      if (profissionalId) {
+        payload.profissionalId = profissionalId;
+
+        if (Avaliacao.schema.path('prestadorId')) {
+          payload.prestadorId = profissionalId;
+        }
+      }
+
+      if (profissionalUserId) {
+        payload.profissionalUserId = profissionalUserId;
+      }
+
+      const doc = await Avaliacao.create(payload);
 
       return res.status(201).json({
         message: 'Avaliação registrada',
