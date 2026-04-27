@@ -90,21 +90,12 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
       ids: idsObjUnicos.map(String),
     });
 
-    const queryOr = [
-      { profissionalId: { $in: idsObjUnicos } },
-      { profissionalUserId: { $in: idsObjUnicos } },
-    ];
-
-    /**
-     * Mantido por compatibilidade com avaliações antigas.
-     * Importante: só entra na query se o schema carregado reconhecer prestadorId.
-     * Isso evita CastError caso exista divergência de model/cache/deploy.
-     */
-    if (Avaliacao.schema.path('prestadorId')) {
-      queryOr.push({ prestadorId: { $in: idsObjUnicos } });
-    }
-
-    const items = await Avaliacao.find({ $or: queryOr })
+    const items = await Avaliacao.find({
+      $or: [
+        { profissionalId: { $in: idsObjUnicos } },
+        { profissionalUserId: { $in: idsObjUnicos } },
+      ],
+    })
       .populate('clienteId', 'name nome email')
       .sort({ createdAt: -1 })
       .lean();
@@ -177,10 +168,6 @@ exports.createAvaliacaoGeneric = async (req, res) => {
       });
     }
 
-    /**
-     * Fluxo legado/motorista e também usado hoje para avaliações vindas de serviço.
-     * Mantido para não quebrar rotas existentes.
-     */
     if (motoristaId || motorista) {
       const id = motoristaId || motorista;
 
@@ -254,14 +241,6 @@ exports.createAvaliacaoGeneric = async (req, res) => {
 
       if (profissionalId) {
         payload.profissionalId = profissionalId;
-
-        /**
-         * Mantido apenas por compatibilidade.
-         * Recebe sempre ObjectId válido, nunca string suja nem objeto.
-         */
-        if (Avaliacao.schema.path('prestadorId')) {
-          payload.prestadorId = profissionalId;
-        }
       }
 
       if (profissionalUserId) {
@@ -306,7 +285,10 @@ exports.createAvaliacaoGeneric = async (req, res) => {
 
       const doc = await Avaliacao.create({
         empresa: companyObj,
-        produto: productId && isObjectId(productId) ? toObjectId(productId) : undefined,
+        produto:
+          productId && isObjectId(productId)
+            ? toObjectId(productId)
+            : undefined,
         clienteId: cliente,
         nota,
         comentario: texto,
@@ -368,10 +350,6 @@ exports.createAvaliacaoGeneric = async (req, res) => {
 
       if (profissionalId) {
         payload.profissionalId = profissionalId;
-
-        if (Avaliacao.schema.path('prestadorId')) {
-          payload.prestadorId = profissionalId;
-        }
       }
 
       if (profissionalUserId) {
