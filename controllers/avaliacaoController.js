@@ -132,19 +132,22 @@ exports.createAvaliacaoGeneric = async (req, res) => {
   try {
     const authUserId = req.userId || req.user?._id || req.user?.id || null;
 
-    const {
-      motoristaId,
-      motorista,
-      companyId,
-      pedidoId,
-      productId,
-      estrelas,
-      rating,
-      nota: notaBody,
-      comentario,
-      comment,
-      clienteId,
-    } = req.body || {};
+   const {
+  motoristaId,
+  motorista,
+  companyId,
+  pedidoId,
+  productId,
+  estrelas,
+  rating,
+  nota: notaBody,
+  comentario,
+  comment,
+  clienteId,
+  profissionalId: profissionalIdBody,
+  profissionalUserId: profissionalUserIdBody,
+
+} = req.body || {};
 
     const notaInput = Number(estrelas ?? rating ?? notaBody);
 
@@ -208,16 +211,20 @@ exports.createAvaliacaoGeneric = async (req, res) => {
       }
 
       const profissionalIdRaw =
-        servico?.profissional?.id ||
-        servico?.profissional?._id ||
-        servico?.profissionalId ||
-        servico?.prestadorId ||
-        null;
+  profissionalIdBody ||
+  servico?.profissional?.id ||
+  servico?.profissional?._id ||
+  servico?.profissionalId ||
+  servico?.prestadorId ||
+  null;
 
-      const profissionalUserIdRaw =
-        servico?.profissional?.userId ||
-        servico?.profissionalUserId ||
-        null;
+const profissionalUserIdRaw =
+  profissionalUserIdBody ||
+  servico?.profissional?.userId ||
+  servico?.profissional?.user?._id ||
+  servico?.profissional?.user?.id ||
+  servico?.profissionalUserId ||
+  null;
 
       const profissionalId = toObjectId(profissionalIdRaw);
       const profissionalUserId = toObjectId(profissionalUserIdRaw);
