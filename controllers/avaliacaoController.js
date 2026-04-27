@@ -181,12 +181,46 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         });
       }
 
-      const doc = await Avaliacao.create({
-        motorista: id,
-        clienteId: cliente,
-        nota,
-        comentario: texto,
-      });
+      const servico = await Servico.findById(pedidoId).lean();
+
+const profissionalId =
+  servico?.profissional?.id ||
+  servico?.profissional?._id ||
+  servico?.profissionalId ||
+  servico?.prestadorId ||
+  null;
+
+const profissionalUserId =
+  servico?.profissional?.userId ||
+  servico?.profissionalUserId ||
+  null;
+
+console.log('⭐ VINCULANDO AVALIAÇÃO:', {
+  pedidoId,
+  profissionalId,
+  profissionalUserId,
+});
+
+const doc = await Avaliacao.create({
+  pedido: pedidoId,
+
+  // 🔥 ESSA É A CORREÇÃO PRINCIPAL
+  profissionalId: profissionalId && isObjectId(profissionalId)
+    ? profissionalId
+    : undefined,
+
+  profissionalUserId: profissionalUserId && isObjectId(profissionalUserId)
+    ? profissionalUserId
+    : undefined,
+
+  prestadorId: profissionalId,
+
+  clienteId: cliente,
+  nota,
+  comentario: texto,
+
+  origem: 'servico',
+});
 
       return res.status(201).json({
         message: 'Avaliação registrada',
