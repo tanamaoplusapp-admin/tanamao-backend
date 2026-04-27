@@ -3,7 +3,7 @@ const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const router = express.Router();
 
-const verifyToken = require('../middlewares/verifyToken');
+const verifyToken = require('../middleware/verifyToken');
 
 const {
   getAvaliacoesPorMotorista,
