@@ -84,31 +84,56 @@ exports.getAvaliacoesPorProfissional = async (req, res) => {
       });
     }
 
+    const idObj = new mongoose.Types.ObjectId(id);
+
     const servicos = await Servico.find({
       $or: [
+        { profissional: idObj },
         { profissional: id },
+        { profissionalId: idObj },
         { profissionalId: id },
+        { prestador: idObj },
         { prestador: id },
+        { prestadorId: idObj },
         { prestadorId: id },
+        { 'profissional.id': id },
+        { 'profissional._id': idObj },
+        { 'profissional.userId': id },
       ],
     })
-      .select('_id descricao categoria createdAt')
+      .select('_id descricao categoria profissional profissionalId prestador prestadorId createdAt')
       .lean();
 
     const servicoIds = servicos.map((s) => s._id);
 
+    console.log('🔎 PROFISSIONAL ID:', id);
+    console.log('🔎 SERVIÇOS DO PROFISSIONAL:', servicoIds);
+
     const items = await Avaliacao.find({
-      pedido: { $in: servicoIds },
+      $or: [
+        { pedido: { $in: servicoIds } },
+        { pedidoId: { $in: servicoIds } },
+        { profissional: idObj },
+        { profissional: id },
+        { profissionalId: idObj },
+        { profissionalId: id },
+        { prestador: idObj },
+        { prestador: id },
+        { prestadorId: idObj },
+        { prestadorId: id },
+      ],
     })
       .populate('cliente', 'name nome email')
       .sort({ createdAt: -1 })
       .lean();
 
+    console.log('⭐ AVALIAÇÕES ENCONTRADAS:', items.length);
+
     const total = items.length;
 
     const media =
       total > 0
-        ? items.reduce((acc, item) => acc + Number(item.nota || 0), 0) / total
+        ? items.reduce((acc, item) => acc + Number(item.nota || item.rating || item.estrelas || 0), 0) / total
         : 0;
 
     return res.json({
