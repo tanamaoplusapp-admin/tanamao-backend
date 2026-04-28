@@ -254,29 +254,24 @@ exports.abrirChatCliente = async (req, res) => {
     const agenda = await Agenda.findById(id);
 
     if (!agenda) {
-      return res.status(404).json({ erro: 'Agendamento não encontrado' });
+      return res.status(404).json({
+        erro: 'Agendamento não encontrado',
+      });
     }
 
-    const profissionalId = String(agenda.profissionalId);
+    const profissionalId = String(agenda.profissionalId || '');
+    const clienteIdAgenda = agenda.clienteId ? String(agenda.clienteId) : '';
 
-    const usuarioLogado = await User.findById(usuarioLogadoId);
+    console.log('ABRIR CHAT AGENDA:', {
+      agendaId: String(agenda._id),
+      usuarioLogadoId,
+      clienteIdAgenda,
+      profissionalId,
+      clienteTelefone: agenda.clienteTelefone,
+    });
 
-    const telefoneBase =
-      usuarioLogado?.telefone ||
-      usuarioLogado?.phone ||
-      usuarioLogado?.celular ||
-      usuarioLogado?.whatsapp ||
-      '';
-
-    const telefones = gerarVariacoesTelefone(telefoneBase);
-    const agendaTelefone = String(agenda.clienteTelefone || '').replace(/\D/g, '');
-
-    const pertenceAoCliente =
-      String(agenda.clienteId || '') === usuarioLogadoId ||
-      telefones.includes(agendaTelefone);
-
-    const pertenceAoProfissional =
-      profissionalId === usuarioLogadoId;
+    const pertenceAoProfissional = profissionalId === usuarioLogadoId;
+    const pertenceAoCliente = clienteIdAgenda === usuarioLogadoId;
 
     if (!pertenceAoCliente && !pertenceAoProfissional) {
       return res.status(403).json({
@@ -284,33 +279,46 @@ exports.abrirChatCliente = async (req, res) => {
       });
     }
 
-    // 🔥 O chat do app só pode abrir se existir clienteId real.
-    if (!agenda.clienteId) {
+    // 🔥 Sem clienteId real, NÃO cria chat no app.
+    if (!clienteIdAgenda) {
       return res.status(400).json({
-        erro: 'Este agendamento não está vinculado a um cliente do app. Confirme via WhatsApp ou peça para o cliente salvar o telefone no perfil igual ao número do agendamento.',
+        erro: 'Este agendamento não está vinculado a um cliente do app. Use WhatsApp ou vincule o cliente antes de abrir o chat.',
       });
     }
 
-    const clienteIdStr = String(agenda.clienteId);
-
-    // 🔥 Proteção contra chat do prestador com ele mesmo
-    if (clienteIdStr === profissionalId) {
+    // 🔥 Trava absoluta contra chat consigo mesmo.
+    if (clienteIdAgenda === profissionalId) {
       return res.status(400).json({
         erro: 'Agendamento inválido: cliente e prestador são o mesmo usuário.',
       });
     }
 
     let chat = await Chat.findOne({
-      $and: [
-        { participantes: clienteIdStr },
-        { participantes: profissionalId },
-        { $expr: { $eq: [{ $size: '$participantes' }, 2] } },
-      ],
+      participantes: {
+        $all: [clienteIdAgenda, profissionalId],
+      },
     });
+
+    // 🔥 Se achou chat inválido antigo, bloqueia.
+    if (chat) {
+      const participantes = (chat.participantes || []).map((p) => String(p));
+      const unicos = [...new Set(participantes)];
+
+      if (
+        participantes.length !== 2 ||
+        unicos.length !== 2 ||
+        !participantes.includes(clienteIdAgenda) ||
+        !participantes.includes(profissionalId)
+      ) {
+        return res.status(400).json({
+          erro: 'Chat antigo inválido encontrado. Apague este chat do banco e tente novamente.',
+        });
+      }
+    }
 
     if (!chat) {
       chat = await Chat.create({
-        participantes: [clienteIdStr, profissionalId],
+        participantes: [clienteIdAgenda, profissionalId],
         ultimoTexto: '',
         atualizadoEm: new Date(),
       });
@@ -318,7 +326,7 @@ exports.abrirChatCliente = async (req, res) => {
 
     return res.json({
       chatId: chat._id,
-      clienteId: clienteIdStr,
+      clienteId: clienteIdAgenda,
       profissionalId,
       agendaId: agenda._id,
     });
