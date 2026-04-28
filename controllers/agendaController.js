@@ -69,24 +69,24 @@ async function buscarClientePorTelefone(clienteTelefone, excluirUserId = null) {
 
   if (variacoes.length === 0) return null;
 
-  const filtro = {
+  const usuarios = await User.find({
     $or: [
       { telefone: { $in: variacoes } },
       { celular: { $in: variacoes } },
       { whatsapp: { $in: variacoes } },
       { phone: { $in: variacoes } },
     ],
-  };
+  });
 
-  if (excluirUserId) {
-    filtro._id = { $ne: excluirUserId };
-  }
+  const cliente = usuarios.find((u) => {
+    const mesmoUsuario =
+      excluirUserId && String(u._id) === String(excluirUserId);
 
-  const cliente = await User.findOne(filtro);
+    return !mesmoUsuario;
+  });
 
   return cliente || null;
 }
-
 // ✅ CRIAR AGENDAMENTO
 exports.criar = async (req, res) => {
   try {
