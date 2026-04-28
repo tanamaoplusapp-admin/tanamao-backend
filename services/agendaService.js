@@ -57,9 +57,11 @@ exports.criar = async ({
 exports.listarPorCliente = async (clienteId, telefones = []) => {
   console.log('BUSCANDO POR:', { clienteId, telefones });
 
-  const todos = await Agenda.find({
-    status: 'ativo',
-  }).sort({ data: 1, horaInicio: 1 });
+ const todos = await Agenda.find({
+  status: 'ativo',
+})
+  .populate('profissionalId', 'name nome telefone celular whatsapp phone')
+  .sort({ data: 1, horaInicio: 1 });
 
   return todos.filter((ag) => {
     const mesmoClienteId =
