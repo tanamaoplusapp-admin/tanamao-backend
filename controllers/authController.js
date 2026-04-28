@@ -133,16 +133,47 @@ console.log("HEADERS:", req.headers.authorization)
     const user = await User.findById(req.userId).lean();
 
     if (user) {
+  const role = normRole(user.role);
+  const companyId = deriveCompanyId(user);
 
-      const role = normRole(user.role);
-      const companyId = deriveCompanyId(user);
+  let safeUser = safeUserResponse(user, { role, companyId });
 
-      return res.json({
-        ok:true,
-        user: safeUserResponse(user,{ role, companyId })
-      });
+  if (role === 'profissional' && Profissional) {
+    const prof = await Profissional.findOne({
+      userId: user._id,
+    }).lean();
 
+    if (prof) {
+      safeUser = {
+        ...safeUser,
+        categoria:
+          prof.categoria ||
+          prof.profissao ||
+          prof.profissaoNome ||
+          prof.categoriaProfissional ||
+          prof.especialidade ||
+          safeUser.categoria,
+        profissao:
+          prof.profissao ||
+          prof.categoria ||
+          safeUser.profissao,
+        profissaoNome:
+          prof.profissaoNome ||
+          prof.profissao ||
+          prof.categoria ||
+          safeUser.profissaoNome,
+        especialidade:
+          prof.especialidade ||
+          safeUser.especialidade,
+      };
     }
+  }
+
+  return res.json({
+    ok: true,
+    user: safeUser,
+  });
+}
 
     /* ======================
        PROFISSIONAL
