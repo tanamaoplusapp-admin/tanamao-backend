@@ -132,7 +132,7 @@ console.log("HEADERS:", req.headers.authorization)
 
     const user = await User.findById(req.userId).lean();
 
-    if (user) {
+   if (user) {
   const role = normRole(user.role);
   const companyId = deriveCompanyId(user);
 
@@ -140,31 +140,34 @@ console.log("HEADERS:", req.headers.authorization)
 
   if (role === 'profissional' && Profissional) {
     const prof = await Profissional.findOne({
-      userId: user._id,
+      $or: [
+        { userId: user._id },
+        { usuarioId: user._id },
+        { user: user._id },
+        { email: user.email },
+      ],
     }).lean();
 
+    console.log('PROFISSIONAL DO AUTH/ME:', prof);
+
     if (prof) {
+      const categoriaProfissional =
+        prof.categoria ||
+        prof.profissao ||
+        prof.profissaoNome ||
+        prof.categoriaProfissional ||
+        prof.especialidade ||
+        prof.tipoProfissional ||
+        prof.areaAtuacao ||
+        prof.servicoPrincipal ||
+        null;
+
       safeUser = {
         ...safeUser,
-        categoria:
-          prof.categoria ||
-          prof.profissao ||
-          prof.profissaoNome ||
-          prof.categoriaProfissional ||
-          prof.especialidade ||
-          safeUser.categoria,
-        profissao:
-          prof.profissao ||
-          prof.categoria ||
-          safeUser.profissao,
-        profissaoNome:
-          prof.profissaoNome ||
-          prof.profissao ||
-          prof.categoria ||
-          safeUser.profissaoNome,
-        especialidade:
-          prof.especialidade ||
-          safeUser.especialidade,
+        categoria: categoriaProfissional,
+        profissao: categoriaProfissional,
+        profissaoNome: categoriaProfissional,
+        especialidade: prof.especialidade || categoriaProfissional,
       };
     }
   }
@@ -174,7 +177,6 @@ console.log("HEADERS:", req.headers.authorization)
     user: safeUser,
   });
 }
-
     /* ======================
        PROFISSIONAL
     ====================== */
