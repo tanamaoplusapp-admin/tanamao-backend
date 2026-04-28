@@ -271,17 +271,23 @@ exports.abrirChatCliente = async (req, res) => {
     const agendaTelefone = String(agenda.clienteTelefone || '').replace(/\D/g, '');
 
     const pertenceAoCliente =
-      String(agenda.clienteId || '') === String(clienteId) ||
-      telefones.includes(agendaTelefone);
+  String(agenda.clienteId || '') === String(clienteId) ||
+  telefones.includes(agendaTelefone);
 
-    if (!pertenceAoCliente) {
-      return res.status(403).json({
-        erro: 'Sem permissão para abrir este chat',
-      });
-    }
+const pertenceAoProfissional =
+  String(agenda.profissionalId || '') === String(clienteId);
+
+if (!pertenceAoCliente && !pertenceAoProfissional) {
+  return res.status(403).json({
+    erro: 'Sem permissão para abrir este chat',
+  });
+}
 
     const profissionalId = String(agenda.profissionalId);
-    const clienteIdStr = String(clienteId);
+
+const clienteIdStr = agenda.clienteId
+  ? String(agenda.clienteId)
+  : String(clienteId);
 
     let chat = await Chat.findOne({
       $and: [
