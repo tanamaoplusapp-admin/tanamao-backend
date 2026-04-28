@@ -170,10 +170,13 @@ exports.listar = async (req, res) => {
     return res.json(agendamentos);
 
   } catch (error) {
-    return res.status(500).json({
-      erro: 'Erro ao buscar agendamentos',
-    });
-  }
+  console.log('ERRO REAL AO BUSCAR AGENDA:', error);
+  console.log('MENSAGEM:', error.message);
+
+  return res.status(500).json({
+    erro: error.message,
+  });
+}
 };
 
 // ✏️ EDITAR
