@@ -67,6 +67,12 @@ function gerarVariacoesTelefone(telefone = '') {
 async function buscarClientePorTelefone(clienteTelefone, excluirUserId = null) {
   const variacoes = gerarVariacoesTelefone(clienteTelefone);
 
+  console.log('BUSCAR CLIENTE POR TELEFONE:', {
+    telefoneOriginal: clienteTelefone,
+    variacoes,
+    excluirUserId: excluirUserId ? String(excluirUserId) : null,
+  });
+
   if (variacoes.length === 0) return null;
 
   const usuarios = await User.find({
@@ -76,14 +82,41 @@ async function buscarClientePorTelefone(clienteTelefone, excluirUserId = null) {
       { whatsapp: { $in: variacoes } },
       { phone: { $in: variacoes } },
     ],
-  });
+  }).select('_id name nome telefone celular whatsapp phone tipo role perfil');
+
+  console.log('USUÁRIOS ENCONTRADOS PELO TELEFONE:', usuarios.map((u) => ({
+    id: String(u._id),
+    name: u.name,
+    nome: u.nome,
+    telefone: u.telefone,
+    celular: u.celular,
+    whatsapp: u.whatsapp,
+    phone: u.phone,
+    tipo: u.tipo,
+    role: u.role,
+    perfil: u.perfil,
+    ehProfissionalLogado: excluirUserId
+      ? String(u._id) === String(excluirUserId)
+      : false,
+  })));
 
   const cliente = usuarios.find((u) => {
-    const mesmoUsuario =
-      excluirUserId && String(u._id) === String(excluirUserId);
+    if (excluirUserId && String(u._id) === String(excluirUserId)) {
+      return false;
+    }
 
-    return !mesmoUsuario;
+    return true;
   });
+
+  console.log('CLIENTE ESCOLHIDO:', cliente ? {
+    id: String(cliente._id),
+    name: cliente.name,
+    nome: cliente.nome,
+    telefone: cliente.telefone,
+    celular: cliente.celular,
+    whatsapp: cliente.whatsapp,
+    phone: cliente.phone,
+  } : null);
 
   return cliente || null;
 }
@@ -116,7 +149,10 @@ exports.criar = async (req, res) => {
       });
     }
 
-   const cliente = await buscarClientePorTelefone(telefoneLimpo, profissionalId);
+   const cliente = await buscarClientePorTelefone(
+  telefoneLimpo,
+  profissionalId
+);
     const clienteId = cliente ? cliente._id : null;
 
     const agendamento = await agendaService.criar({
