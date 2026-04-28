@@ -248,7 +248,7 @@ exports.cancelar = async (req, res) => {
 };
 exports.abrirChatCliente = async (req, res) => {
   try {
-    const clienteId = req.user.id;
+    const usuarioLogadoId = String(req.user.id);
     const { id } = req.params;
 
     const agenda = await Agenda.findById(id);
@@ -257,37 +257,43 @@ exports.abrirChatCliente = async (req, res) => {
       return res.status(404).json({ erro: 'Agendamento não encontrado' });
     }
 
-    const user = await User.findById(clienteId);
+    const profissionalId = String(agenda.profissionalId);
+
+    const usuarioLogado = await User.findById(usuarioLogadoId);
 
     const telefoneBase =
-      user?.telefone ||
-      user?.phone ||
-      user?.celular ||
-      user?.whatsapp ||
+      usuarioLogado?.telefone ||
+      usuarioLogado?.phone ||
+      usuarioLogado?.celular ||
+      usuarioLogado?.whatsapp ||
       '';
 
     const telefones = gerarVariacoesTelefone(telefoneBase);
-
     const agendaTelefone = String(agenda.clienteTelefone || '').replace(/\D/g, '');
 
     const pertenceAoCliente =
-  String(agenda.clienteId || '') === String(clienteId) ||
-  telefones.includes(agendaTelefone);
+      String(agenda.clienteId || '') === usuarioLogadoId ||
+      telefones.includes(agendaTelefone);
 
-const pertenceAoProfissional =
-  String(agenda.profissionalId || '') === String(clienteId);
+    const pertenceAoProfissional =
+      profissionalId === usuarioLogadoId;
 
-if (!pertenceAoCliente && !pertenceAoProfissional) {
-  return res.status(403).json({
-    erro: 'Sem permissão para abrir este chat',
-  });
-}
+    if (!pertenceAoCliente && !pertenceAoProfissional) {
+      return res.status(403).json({
+        erro: 'Sem permissão para abrir este chat',
+      });
+    }
 
-    const profissionalId = String(agenda.profissionalId);
+    // 🔥 Regra central:
+    // chat do app só pode abrir se existir clienteId real.
+    // Se agenda foi criada só por telefone, não dá para saber qual usuário do app é o cliente.
+    if (!agenda.clienteId) {
+      return res.status(400).json({
+        erro: 'Este agendamento não está vinculado a um cliente do app. Confirme via WhatsApp ou peça para o cliente salvar o telefone no perfil igual ao número do agendamento.',
+      });
+    }
 
-const clienteIdStr = agenda.clienteId
-  ? String(agenda.clienteId)
-  : String(clienteId);
+    const clienteIdStr = String(agenda.clienteId);
 
     let chat = await Chat.findOne({
       $and: [
@@ -307,6 +313,7 @@ const clienteIdStr = agenda.clienteId
 
     return res.json({
       chatId: chat._id,
+      clienteId: clienteIdStr,
       profissionalId,
       agendaId: agenda._id,
     });
