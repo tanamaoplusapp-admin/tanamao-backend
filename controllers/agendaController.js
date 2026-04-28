@@ -148,6 +148,15 @@ exports.listarCliente = async (req, res) => {
       ''
     );
 
+    console.log('CLIENTE LOGADO ID:', clienteId);
+    console.log('USER ENCONTRADO:', {
+      telefone: user?.telefone,
+      celular: user?.celular,
+      whatsapp: user?.whatsapp,
+      phone: user?.phone,
+    });
+    console.log('VARIAÇÕES GERADAS:', telefones);
+
     const agendamentos = await agendaService.listarPorCliente(
       clienteId,
       telefones

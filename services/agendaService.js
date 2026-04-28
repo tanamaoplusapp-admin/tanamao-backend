@@ -55,6 +55,11 @@ exports.criar = async ({
 
 // 🔥 📥 LISTAR AGENDAMENTOS DO CLIENTE
 exports.listarPorCliente = async (clienteId, telefones = []) => {
+  console.log('BUSCANDO AGENDA DO CLIENTE COM:', {
+    clienteId,
+    telefones,
+  });
+
   return await Agenda.find({
     status: 'ativo',
     $or: [
@@ -62,7 +67,6 @@ exports.listarPorCliente = async (clienteId, telefones = []) => {
       { clienteTelefone: { $in: telefones } },
     ],
   })
-    .populate('profissionalId', 'nome telefone celular whatsapp phone')
     .sort({ data: 1, horaInicio: 1 });
 };
 
