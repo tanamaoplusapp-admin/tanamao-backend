@@ -279,46 +279,35 @@ exports.abrirChatCliente = async (req, res) => {
       });
     }
 
-    // 🔥 Sem clienteId real, NÃO cria chat no app.
     if (!clienteIdAgenda) {
       return res.status(400).json({
         erro: 'Este agendamento não está vinculado a um cliente do app. Use WhatsApp ou vincule o cliente antes de abrir o chat.',
       });
     }
 
-    // 🔥 Trava absoluta contra chat consigo mesmo.
     if (clienteIdAgenda === profissionalId) {
       return res.status(400).json({
         erro: 'Agendamento inválido: cliente e prestador são o mesmo usuário.',
       });
     }
 
+    // Sem $all / $in porque seu schema está dando cast errado nesses operadores
     const todosChats = await Chat.find({});
 
-let chat = todosChats.find((c) => {
-  const participantes = (c.participantes || []).map((p) => String(p));
-  const unicos = [...new Set(participantes)];
+    let chat = null;
 
-  return (
-    unicos.length === 2 &&
-    unicos.includes(clienteIdAgenda) &&
-    unicos.includes(profissionalId)
-  );
-});
-    // 🔥 Se achou chat inválido antigo, bloqueia.
-    if (chat) {
-      const participantes = (chat.participantes || []).map((p) => String(p));
+    for (const c of todosChats) {
+      const participantes = (c.participantes || []).map((p) => String(p));
       const unicos = [...new Set(participantes)];
 
-      if (
-        participantes.length !== 2 ||
-        unicos.length !== 2 ||
-        !participantes.includes(clienteIdAgenda) ||
-        !participantes.includes(profissionalId)
-      ) {
-        return res.status(400).json({
-          erro: 'Chat antigo inválido encontrado. Apague este chat do banco e tente novamente.',
-        });
+      const chatValidoEntreOsDois =
+        unicos.length === 2 &&
+        unicos.includes(clienteIdAgenda) &&
+        unicos.includes(profissionalId);
+
+      if (chatValidoEntreOsDois) {
+        chat = c;
+        break;
       }
     }
 
