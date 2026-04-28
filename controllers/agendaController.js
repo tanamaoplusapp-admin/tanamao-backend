@@ -273,6 +273,7 @@ exports.abrirChatCliente = async (req, res) => {
       clienteIdAgenda: clienteIdFinal,
       profissionalId,
       clienteTelefone: agenda.clienteTelefone,
+      chatIdAgenda: agenda.chatId ? String(agenda.chatId) : null,
     });
 
     const pertenceAoProfissional = profissionalId === usuarioLogadoId;
@@ -284,16 +285,15 @@ exports.abrirChatCliente = async (req, res) => {
       });
     }
 
-    // 🔥 TENTAR VINCULAR CLIENTE PELO TELEFONE (caso não tenha clienteId)
+    // 🔥 Se não tem clienteId, tenta vincular pelo telefone
     if (!clienteIdFinal) {
       const cliente = await buscarClientePorTelefone(
-  agenda.clienteTelefone,
-  profissionalId
-);
+        agenda.clienteTelefone,
+        profissionalId
+      );
 
       if (cliente?._id) {
         clienteIdFinal = String(cliente._id);
-
         agenda.clienteId = cliente._id;
         await agenda.save();
 
@@ -301,39 +301,81 @@ exports.abrirChatCliente = async (req, res) => {
       }
     }
 
-    // 🔥 SE AINDA NÃO TEM CLIENTE → BLOQUEIA
     if (!clienteIdFinal) {
       return res.status(400).json({
         erro: 'Este cliente ainda não tem conta no app vinculada a este telefone. Use WhatsApp ou peça para ele se cadastrar com o mesmo número.',
       });
     }
 
-    if (clienteIdFinal === profissionalId) {
+    if (String(clienteIdFinal) === String(profissionalId)) {
       return res.status(400).json({
         erro: 'Agendamento inválido: cliente e prestador são o mesmo usuário.',
       });
     }
 
-    // 🔥 TENTA REUTILIZAR CHAT EXISTENTE
-    const todosChats = await Chat.find({});
+    // 🔥 Se agenda já tem chatId, só reaproveita se o chat for realmente cliente + prestador
+    if (agenda.chatId) {
+      const chatDaAgenda = await Chat.findById(agenda.chatId);
+
+      if (chatDaAgenda) {
+        const participantes = (chatDaAgenda.participantes || []).map((p) =>
+          String(p)
+        );
+
+        const unicos = [...new Set(participantes)];
+
+        const chatDaAgendaValido =
+          unicos.length === 2 &&
+          unicos.includes(String(clienteIdFinal)) &&
+          unicos.includes(String(profissionalId));
+
+        if (chatDaAgendaValido) {
+          return res.json({
+            chatId: chatDaAgenda._id,
+            clienteId: clienteIdFinal,
+            profissionalId,
+            agendaId: agenda._id,
+            participantes: chatDaAgenda.participantes,
+          });
+        }
+
+        // 🔥 chatId contaminado/errado: limpa para recriar corretamente
+        agenda.chatId = null;
+        await agenda.save();
+
+        console.log('CHAT DA AGENDA ERA INVÁLIDO E FOI LIMPO:', {
+          agendaId: String(agenda._id),
+          chatIdAntigo: String(chatDaAgenda._id),
+          participantes,
+          clienteIdFinal,
+          profissionalId,
+        });
+      }
+    }
+
+    // 🔥 Busca somente chats onde o cliente participa
+    const chatsPossiveis = await Chat.find({
+      participantes: clienteIdFinal,
+    });
+
     let chat = null;
 
-    for (const c of todosChats) {
+    for (const c of chatsPossiveis) {
       const participantes = (c.participantes || []).map((p) => String(p));
       const unicos = [...new Set(participantes)];
 
-      const chatValidoEntreOsDois =
+      const chatCorreto =
         unicos.length === 2 &&
-        unicos.includes(clienteIdFinal) &&
-        unicos.includes(profissionalId);
+        unicos.includes(String(clienteIdFinal)) &&
+        unicos.includes(String(profissionalId));
 
-      if (chatValidoEntreOsDois) {
+      if (chatCorreto) {
         chat = c;
         break;
       }
     }
 
-    // 🔥 SE NÃO EXISTE, CRIA
+    // 🔥 Se não existe chat correto, cria
     if (!chat) {
       chat = await Chat.create({
         participantes: [clienteIdFinal, profissionalId],
@@ -342,19 +384,24 @@ exports.abrirChatCliente = async (req, res) => {
       });
     }
 
-    // 🔥 SALVA VÍNCULO NO AGENDAMENTO (OPCIONAL MAS RECOMENDADO)
-    if (!agenda.chatId) {
-      agenda.chatId = chat._id;
-      await agenda.save();
-    }
+    agenda.clienteId = clienteIdFinal;
+    agenda.chatId = chat._id;
+    await agenda.save();
+
+    console.log('CHAT ABERTO PELA AGENDA:', {
+      chatId: String(chat._id),
+      clienteId: String(clienteIdFinal),
+      profissionalId: String(profissionalId),
+      participantes: chat.participantes.map((p) => String(p)),
+    });
 
     return res.json({
       chatId: chat._id,
       clienteId: clienteIdFinal,
       profissionalId,
       agendaId: agenda._id,
+      participantes: chat.participantes,
     });
-
   } catch (error) {
     console.log('ERRO AO ABRIR CHAT DA AGENDA:', error.message);
 
