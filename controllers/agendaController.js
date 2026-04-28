@@ -140,13 +140,12 @@ exports.listarCliente = async (req, res) => {
 
     const user = await User.findById(clienteId);
 
-    const telefoneBase =
-      user?.telefone ||
-      user?.celular ||
-      user?.whatsapp ||
-      user?.phone ||
-      '';
-
+   const telefoneBase =
+  user?.telefone ||
+  user?.phone ||
+  user?.celular ||
+  user?.whatsapp ||
+  '';
     const telefones = gerarVariacoesTelefone(telefoneBase);
 
     console.log('CLIENTE ID:', clienteId);
