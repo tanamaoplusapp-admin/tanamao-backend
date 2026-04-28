@@ -55,16 +55,14 @@ exports.criar = async ({
 
 // 🔥 📥 LISTAR AGENDAMENTOS DO CLIENTE
 exports.listarPorCliente = async (clienteId, telefones = []) => {
-  console.log('BUSCANDO AGENDA DO CLIENTE COM:', {
-    clienteId,
-    telefones,
-  });
+  console.log('BUSCANDO POR:', { clienteId, telefones });
 
   return await Agenda.find({
     status: 'ativo',
     $or: [
       { clienteId },
       { clienteTelefone: { $in: telefones } },
+      { clienteTelefoneOriginal: { $in: telefones } },
     ],
   })
     .sort({ data: 1, horaInicio: 1 });

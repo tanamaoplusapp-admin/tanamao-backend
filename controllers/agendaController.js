@@ -140,22 +140,18 @@ exports.listarCliente = async (req, res) => {
 
     const user = await User.findById(clienteId);
 
-    const telefones = gerarVariacoesTelefone(
+    const telefoneBase =
       user?.telefone ||
       user?.celular ||
       user?.whatsapp ||
       user?.phone ||
-      ''
-    );
+      '';
 
-    console.log('CLIENTE LOGADO ID:', clienteId);
-    console.log('USER ENCONTRADO:', {
-      telefone: user?.telefone,
-      celular: user?.celular,
-      whatsapp: user?.whatsapp,
-      phone: user?.phone,
-    });
-    console.log('VARIAÇÕES GERADAS:', telefones);
+    const telefones = gerarVariacoesTelefone(telefoneBase);
+
+    console.log('CLIENTE ID:', clienteId);
+    console.log('TELEFONE BASE:', telefoneBase);
+    console.log('VARIAÇÕES:', telefones);
 
     const agendamentos = await agendaService.listarPorCliente(
       clienteId,
@@ -163,7 +159,6 @@ exports.listarCliente = async (req, res) => {
     );
 
     return res.json(agendamentos);
-
   } catch (error) {
     console.log('ERRO AO BUSCAR AGENDA DO CLIENTE:', error.message);
 
