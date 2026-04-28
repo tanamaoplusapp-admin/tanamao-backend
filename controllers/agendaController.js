@@ -1,6 +1,7 @@
 const agendaService = require('../services/agendaService');
 const User = require('../models/user');
-
+const Agenda = require('../models/Agenda');
+const Chat = require('../models/Chat');
 // Remove tudo que não for número
 function limparTelefone(telefone = '') {
   return String(telefone).replace(/\D/g, '');
@@ -236,6 +237,73 @@ exports.cancelar = async (req, res) => {
 
   } catch (error) {
     return res.status(400).json({
+      erro: error.message,
+    });
+  }
+
+};
+exports.abrirChatCliente = async (req, res) => {
+  try {
+    const clienteId = req.user.id;
+    const { id } = req.params;
+
+    const agenda = await Agenda.findById(id);
+
+    if (!agenda) {
+      return res.status(404).json({ erro: 'Agendamento não encontrado' });
+    }
+
+    const user = await User.findById(clienteId);
+
+    const telefoneBase =
+      user?.telefone ||
+      user?.phone ||
+      user?.celular ||
+      user?.whatsapp ||
+      '';
+
+    const telefones = gerarVariacoesTelefone(telefoneBase);
+
+    const agendaTelefone = String(agenda.clienteTelefone || '').replace(/\D/g, '');
+
+    const pertenceAoCliente =
+      String(agenda.clienteId || '') === String(clienteId) ||
+      telefones.includes(agendaTelefone);
+
+    if (!pertenceAoCliente) {
+      return res.status(403).json({
+        erro: 'Sem permissão para abrir este chat',
+      });
+    }
+
+    const profissionalId = String(agenda.profissionalId);
+    const clienteIdStr = String(clienteId);
+
+    let chat = await Chat.findOne({
+      $and: [
+        { participantes: clienteIdStr },
+        { participantes: profissionalId },
+        { $expr: { $eq: [{ $size: '$participantes' }, 2] } },
+      ],
+    });
+
+    if (!chat) {
+      chat = await Chat.create({
+        participantes: [clienteIdStr, profissionalId],
+        ultimoTexto: '',
+        atualizadoEm: new Date(),
+      });
+    }
+
+    return res.json({
+      chatId: chat._id,
+      profissionalId,
+      agendaId: agenda._id,
+    });
+  } catch (error) {
+    console.log('ERRO AO ABRIR CHAT DA AGENDA:', error.message);
+
+    return res.status(500).json({
       erro: error.message,
     });
   }
