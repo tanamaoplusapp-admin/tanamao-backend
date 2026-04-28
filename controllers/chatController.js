@@ -46,7 +46,7 @@ exports.criarChat = async (req, res) => {
       participantes: {
         $all: [remetenteId, destinatarioId],
       },
-    }).populate('participantes', 'name online');
+    }).populate('participantes', 'name nome telefone celular whatsapp phone online')
 
     if (chat) {
       return res.json(chat);
@@ -325,12 +325,10 @@ exports.marcarComoLido = async (req, res) => {
   }
 };
 
-/* =========================================================
-   BUSCAR CHAT POR ID
-========================================================= */
-
 exports.buscarChatPorId = async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store');
+
     const userId =
       req.userId ||
       req.user?.id ||
@@ -347,7 +345,7 @@ exports.buscarChatPorId = async (req, res) => {
     }
 
     const chat = await Chat.findById(chatId)
-      .populate('participantes', 'name online')
+      .populate('participantes', 'name nome telefone celular whatsapp phone online')
       .lean();
 
     if (!chat) {
@@ -357,6 +355,17 @@ exports.buscarChatPorId = async (req, res) => {
     const participa = chat.participantes.some(
       (p) => String(p._id) === String(userId)
     );
+
+    console.log('CHAT POR ID:', {
+      chatId,
+      userId: String(userId),
+      participantes: chat.participantes.map((p) => ({
+        id: String(p._id),
+        name: p.name,
+        nome: p.nome,
+        telefone: p.telefone || p.celular || p.whatsapp || p.phone,
+      })),
+    });
 
     if (!participa) {
       return res.status(403).json({
