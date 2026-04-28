@@ -186,6 +186,9 @@ app.use(
 app.use('/api/categorias-prestador', categoriaPrestadorRoutes);
 
 app.use('/api/notifications', notificationRoutes.router || notificationRoutes);
+const agendaRoutes = require('./routes/agendaRoutes');
+app.use('/api/agenda', agendaRoutes.router || agendaRoutes);
+console.log('🟢 Rota de agenda registrada: /api/agenda');
 /* ================= ADMIN ================= */
 
 // IMPORTS DAS ROTAS ADMIN
@@ -241,7 +244,7 @@ console.log('🟢 Rota de avaliações registrada: /api/avaliacoes');
 const routes = {
   users: { path: '/api/users', module: './routes/userRoutes' },
   finance: { path: '/api/finance', module: './routes/financeRoutes' },
-agenda: { path: '/api/agenda', module: './routes/agendaRoutes' },
+
   public: { path: '/api/public', module: './routes/publicRoutes' },
   products: { path: '/api/products', module: './routes/productRoutes' },
   orders: { path: '/api/orders', module: './routes/orderRoutes' },
