@@ -92,18 +92,23 @@ function safeUserResponse(u, options = {}) {
     companyId: companyId || null,
     isVerified: u?.isVerified,
 
-    // 🔥 CAMPOS DE VISIBILIDADE DO PERFIL
     perfilAtivo: u?.perfilAtivo,
     acessoLiberado: u?.acessoLiberado,
     planoAtivo: u?.planoAtivo,
     acessoExpiraEm: u?.acessoExpiraEm,
 
-    // extras úteis
+    // profissão/categoria do prestador
+    categoria: u?.categoria,
+    profissao: u?.profissao,
+    profissaoNome: u?.profissaoNome,
+    categoriaProfissional: u?.categoriaProfissional,
+    especialidade: u?.especialidade,
+    tipoProfissional: u?.tipoProfissional,
+
     status: u?.status,
     plano: u?.plano,
     tipoPlano: u?.tipoPlano
   };
-
 }
 
 
