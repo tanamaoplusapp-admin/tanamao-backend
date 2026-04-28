@@ -75,22 +75,18 @@ exports.listar = async (profissionalId) => {
 
 // 🔥 📥 LISTAR COM FILTRO
 exports.listarComFiltro = async (profissionalId, inicio, fim) => {
-  const filtro = {
+  const agendamentos = await Agenda.find({
     profissionalId,
     status: 'ativo',
-  };
+  }).sort({ data: 1, horaInicio: 1 });
 
-  // Como "data" está em String no formato YYYY-MM-DD,
-  // filtra como string para manter compatibilidade
-  if (inicio && fim) {
-    filtro.data = {
-      $gte: inicio,
-      $lte: fim,
-    };
+  if (!inicio || !fim) {
+    return agendamentos;
   }
 
-return await Agenda.find(filtro)
-  .sort({ data: 1, horaInicio: 1 });
+  return agendamentos.filter((item) => {
+    return item.data >= inicio && item.data <= fim;
+  });
 };
 
 
