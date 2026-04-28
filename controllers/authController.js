@@ -172,11 +172,47 @@ console.log("HEADERS:", req.headers.authorization)
     }
   }
 
-  return res.json({
-    ok: true,
-    user: safeUser,
-  });
+ let safeUser = safeUserResponse(user, { role, companyId });
+
+if (role === 'profissional' && Profissional) {
+  const prof = await Profissional.findOne({
+    $or: [
+      { userId: user._id },
+      { usuarioId: user._id },
+      { user: user._id },
+      { email: user.email },
+    ],
+  }).lean();
+
+  console.log('PROFISSIONAL NO LOGIN:', prof);
+
+  if (prof) {
+    const categoriaProfissional =
+      prof.categoria ||
+      prof.profissao ||
+      prof.profissaoNome ||
+      prof.categoriaProfissional ||
+      prof.especialidade ||
+      prof.tipoProfissional ||
+      prof.areaAtuacao ||
+      prof.servicoPrincipal ||
+      null;
+
+    safeUser = {
+      ...safeUser,
+      categoria: categoriaProfissional,
+      profissao: categoriaProfissional,
+      profissaoNome: categoriaProfissional,
+      especialidade: prof.especialidade || categoriaProfissional,
+    };
+  }
 }
+
+return res.json({
+  ok: true,
+  token,
+  user: safeUser,
+});
     /* ======================
        PROFISSIONAL
     ====================== */
