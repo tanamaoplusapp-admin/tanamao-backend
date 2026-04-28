@@ -57,14 +57,20 @@ exports.criar = async ({
 exports.listarPorCliente = async (clienteId, telefones = []) => {
   console.log('BUSCANDO POR:', { clienteId, telefones });
 
-  return await Agenda.find({
+  const todos = await Agenda.find({
     status: 'ativo',
-    $or: [
-  { clienteId },
-  { clienteTelefone: { $in: telefones } },
-]
-  })
-    .sort({ data: 1, horaInicio: 1 });
+  }).sort({ data: 1, horaInicio: 1 });
+
+  return todos.filter((ag) => {
+    const mesmoClienteId =
+      ag.clienteId && String(ag.clienteId) === String(clienteId);
+
+    const telefoneAgendamento = String(ag.clienteTelefone || '').replace(/\D/g, '');
+
+    const mesmoTelefone = telefones.includes(telefoneAgendamento);
+
+    return mesmoClienteId || mesmoTelefone;
+  });
 };
 
 // 📥 LISTAR AGENDAMENTOS DO PROFISSIONAL
