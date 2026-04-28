@@ -75,22 +75,15 @@ async function buscarClientePorTelefone(clienteTelefone, excluirUserId = null) {
 
   if (variacoes.length === 0) return null;
 
+  // 🔥 BUSCA SEM FILTRO DE ROLE NO MONGO (evita erro de cast)
   const usuarios = await User.find({
-  $and: [
-    {
-      $or: [
-        { telefone: { $in: variacoes } },
-        { celular: { $in: variacoes } },
-        { whatsapp: { $in: variacoes } },
-        { phone: { $in: variacoes } },
-      ],
-    },
-    {
-      // 🔥 GARANTE QUE NÃO É PROFISSIONAL
-      role: { $ne: 'profissional' },
-    },
-  ],
-}).select('_id name nome telefone celular whatsapp phone tipo role perfil');
+    $or: [
+      { telefone: { $in: variacoes } },
+      { celular: { $in: variacoes } },
+      { whatsapp: { $in: variacoes } },
+      { phone: { $in: variacoes } },
+    ],
+  }).select('_id name nome telefone celular whatsapp phone tipo role perfil');
 
   console.log('USUÁRIOS ENCONTRADOS PELO TELEFONE:', usuarios.map((u) => ({
     id: String(u._id),
@@ -108,23 +101,43 @@ async function buscarClientePorTelefone(clienteTelefone, excluirUserId = null) {
       : false,
   })));
 
+  // 🔥 FILTRO INTELIGENTE NO JS (REMOVE PROFISSIONAL)
   const cliente = usuarios.find((u) => {
     if (excluirUserId && String(u._id) === String(excluirUserId)) {
+      return false;
+    }
+
+    const tipo = String(u.tipo || '').toLowerCase();
+    const role = String(u.role || '').toLowerCase();
+    const perfil = String(u.perfil || '').toLowerCase();
+
+    const pareceProfissional =
+      tipo.includes('profissional') ||
+      role.includes('profissional') ||
+      perfil.includes('profissional') ||
+      tipo.includes('prestador') ||
+      role.includes('prestador') ||
+      perfil.includes('prestador');
+
+    if (pareceProfissional) {
       return false;
     }
 
     return true;
   });
 
-  console.log('CLIENTE ESCOLHIDO:', cliente ? {
-    id: String(cliente._id),
-    name: cliente.name,
-    nome: cliente.nome,
-    telefone: cliente.telefone,
-    celular: cliente.celular,
-    whatsapp: cliente.whatsapp,
-    phone: cliente.phone,
-  } : null);
+  console.log('CLIENTE ESCOLHIDO:', cliente
+    ? {
+        id: String(cliente._id),
+        name: cliente.name,
+        nome: cliente.nome,
+        telefone: cliente.telefone,
+        celular: cliente.celular,
+        whatsapp: cliente.whatsapp,
+        phone: cliente.phone,
+      }
+    : null
+  );
 
   return cliente || null;
 }
