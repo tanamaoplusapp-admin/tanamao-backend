@@ -138,13 +138,28 @@ exports.listarCliente = async (req, res) => {
   try {
     const clienteId = req.user.id;
 
-    const agendamentos = await agendaService.listarPorCliente(clienteId);
+    const user = await User.findById(clienteId);
+
+    const telefones = gerarVariacoesTelefone(
+      user?.telefone ||
+      user?.celular ||
+      user?.whatsapp ||
+      user?.phone ||
+      ''
+    );
+
+    const agendamentos = await agendaService.listarPorCliente(
+      clienteId,
+      telefones
+    );
 
     return res.json(agendamentos);
 
   } catch (error) {
+    console.log('ERRO AO BUSCAR AGENDA DO CLIENTE:', error.message);
+
     return res.status(500).json({
-      erro: 'Erro ao buscar agendamentos do cliente',
+      erro: error.message,
     });
   }
 };
