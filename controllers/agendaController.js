@@ -284,9 +284,7 @@ exports.abrirChatCliente = async (req, res) => {
       });
     }
 
-    // 🔥 Regra central:
-    // chat do app só pode abrir se existir clienteId real.
-    // Se agenda foi criada só por telefone, não dá para saber qual usuário do app é o cliente.
+    // 🔥 O chat do app só pode abrir se existir clienteId real.
     if (!agenda.clienteId) {
       return res.status(400).json({
         erro: 'Este agendamento não está vinculado a um cliente do app. Confirme via WhatsApp ou peça para o cliente salvar o telefone no perfil igual ao número do agendamento.',
@@ -294,6 +292,13 @@ exports.abrirChatCliente = async (req, res) => {
     }
 
     const clienteIdStr = String(agenda.clienteId);
+
+    // 🔥 Proteção contra chat do prestador com ele mesmo
+    if (clienteIdStr === profissionalId) {
+      return res.status(400).json({
+        erro: 'Agendamento inválido: cliente e prestador são o mesmo usuário.',
+      });
+    }
 
     let chat = await Chat.findOne({
       $and: [
