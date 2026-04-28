@@ -112,17 +112,15 @@ function safeUserResponse(u, options = {}) {
 }
 
 
-/* ===================== GET /auth/me ===================== */
-
 exports.me = async (req, res) => {
-
   try {
-console.log("USER ID:", req.userId)
-console.log("HEADERS:", req.headers.authorization)
+    console.log("USER ID:", req.userId);
+    console.log("HEADERS:", req.headers.authorization);
+
     if (!req.userId) {
       return res.status(401).json({
-        ok:false,
-        message:'Não autenticado'
+        ok: false,
+        message: 'Não autenticado',
       });
     }
 
@@ -132,124 +130,104 @@ console.log("HEADERS:", req.headers.authorization)
 
     const user = await User.findById(req.userId).lean();
 
-   if (user) {
-  const role = normRole(user.role);
-  const companyId = deriveCompanyId(user);
+    if (user) {
+      const role = normRole(user.role);
+      const companyId = deriveCompanyId(user);
 
-  let safeUser = safeUserResponse(user, { role, companyId });
+      let safeUser = safeUserResponse(user, { role, companyId });
 
-  if (role === 'profissional' && Profissional) {
-    const prof = await Profissional.findOne({
-      $or: [
-        { userId: user._id },
-        { usuarioId: user._id },
-        { user: user._id },
-        { email: user.email },
-      ],
-    }).lean();
+      if (role === 'profissional' && Profissional) {
+        const prof = await Profissional.findOne({
+          $or: [
+            { userId: user._id },
+            { usuarioId: user._id },
+            { user: user._id },
+            { email: user.email },
+          ],
+        }).lean();
 
-    console.log('PROFISSIONAL DO AUTH/ME:', prof);
+        console.log('PROFISSIONAL DO AUTH/ME:', prof);
 
-    if (prof) {
-      const categoriaProfissional =
-        prof.categoria ||
-        prof.profissao ||
-        prof.profissaoNome ||
-        prof.categoriaProfissional ||
-        prof.especialidade ||
-        prof.tipoProfissional ||
-        prof.areaAtuacao ||
-        prof.servicoPrincipal ||
-        null;
+        if (prof) {
+          const categoriaProfissional =
+            prof.categoria ||
+            prof.profissao ||
+            prof.profissaoNome ||
+            prof.categoriaProfissional ||
+            prof.especialidade ||
+            prof.tipoProfissional ||
+            prof.areaAtuacao ||
+            prof.servicoPrincipal ||
+            null;
 
-      safeUser = {
-        ...safeUser,
-        categoria: categoriaProfissional,
-        profissao: categoriaProfissional,
-        profissaoNome: categoriaProfissional,
-        especialidade: prof.especialidade || categoriaProfissional,
-      };
+          safeUser = {
+            ...safeUser,
+            categoria: categoriaProfissional,
+            profissao: categoriaProfissional,
+            profissaoNome: categoriaProfissional,
+            especialidade: prof.especialidade || categoriaProfissional,
+          };
+        }
+      }
+
+      return res.json({
+        ok: true,
+        user: safeUser,
+      });
     }
-  }
 
- let safeUser = safeUserResponse(user, { role, companyId });
-
-if (role === 'profissional' && Profissional) {
-  const prof = await Profissional.findOne({
-    $or: [
-      { userId: user._id },
-      { usuarioId: user._id },
-      { user: user._id },
-      { email: user.email },
-    ],
-  }).lean();
-
-  console.log('PROFISSIONAL NO LOGIN:', prof);
-
-  if (prof) {
-    const categoriaProfissional =
-      prof.categoria ||
-      prof.profissao ||
-      prof.profissaoNome ||
-      prof.categoriaProfissional ||
-      prof.especialidade ||
-      prof.tipoProfissional ||
-      prof.areaAtuacao ||
-      prof.servicoPrincipal ||
-      null;
-
-    safeUser = {
-      ...safeUser,
-      categoria: categoriaProfissional,
-      profissao: categoriaProfissional,
-      profissaoNome: categoriaProfissional,
-      especialidade: prof.especialidade || categoriaProfissional,
-    };
-  }
-}
-
-return res.json({
-  ok: true,
-  token,
-  user: safeUser,
-});
     /* ======================
        PROFISSIONAL
     ====================== */
 
     if (Profissional) {
-
       const prof = await Profissional.findOne({
-        $or:[
-          { _id:req.userId },
-          { userId:req.userId }
-        ]
+        $or: [
+          { _id: req.userId },
+          { userId: req.userId },
+        ],
       }).lean();
 
       if (prof) {
-  return res.json({
-    ok:true,
-    user:{
-      id: prof.userId || prof._id,
-      name: prof.nome || prof.name,
-      email: prof.email,
-      role: 'profissional',
-      companyId: null,
-      isVerified: !!prof.isVerified,
-// 🔥 ADICIONAR ISSO
-      fotoPerfil: prof.photoUrl,
-      photoUrl: prof.photoUrl,
-      perfilAtivo: prof.perfilAtivo,
-      acessoLiberado: prof.acessoLiberado,
-      planoAtivo: prof.planoAtivo,
-      acessoExpiraEm: prof.acessoExpiraEm,
+        const categoriaProfissional =
+          prof.categoria ||
+          prof.profissao ||
+          prof.profissaoNome ||
+          prof.categoriaProfissional ||
+          prof.especialidade ||
+          prof.tipoProfissional ||
+          prof.areaAtuacao ||
+          prof.servicoPrincipal ||
+          null;
 
-      status: prof.status,
-      plano: prof.plano
-    }
-  });
-}
+        return res.json({
+          ok: true,
+          user: {
+            id: prof.userId || prof._id,
+            name: prof.nome || prof.name,
+            email: prof.email,
+            role: 'profissional',
+            companyId: null,
+            isVerified: !!prof.isVerified,
 
+            fotoPerfil: prof.photoUrl,
+            photoUrl: prof.photoUrl,
+
+            perfilAtivo: prof.perfilAtivo,
+            acessoLiberado: prof.acessoLiberado,
+            planoAtivo: prof.planoAtivo,
+            acessoExpiraEm: prof.acessoExpiraEm,
+
+            categoria: categoriaProfissional,
+            profissao: categoriaProfissional,
+            profissaoNome: categoriaProfissional,
+            especialidade: prof.especialidade || categoriaProfissional,
+
+            status: prof.status,
+            plano: prof.plano,
+          },
+        });
+      }
     }
 
     /* ======================
@@ -257,46 +235,37 @@ return res.json({
     ====================== */
 
     if (EmpresaModel) {
-
       const empresa = await EmpresaModel.findById(req.userId).lean();
 
       if (empresa) {
-
         return res.json({
-          ok:true,
-          user:{
+          ok: true,
+          user: {
             id: empresa._id,
             name: empresa.nome,
             email: empresa.email,
-            role:'empresa',
-            companyId:empresa._id,
-            isVerified:!!empresa.isVerified
-          }
+            role: 'empresa',
+            companyId: empresa._id,
+            isVerified: !!empresa.isVerified,
+          },
         });
-
       }
-
     }
 
     return res.status(404).json({
-      ok:false,
-      message:'Usuário não encontrado'
+      ok: false,
+      message: 'Usuário não encontrado',
     });
 
-  }
-  catch(err){
-
-    console.error('[auth.me] erro:',err);
+  } catch (err) {
+    console.error('[auth.me] erro:', err);
 
     return res.status(500).json({
-      ok:false,
-      message:'Erro interno'
+      ok: false,
+      message: 'Erro interno',
     });
-
   }
-
 };
-
 
 /* ===================== LOGIN ===================== */
 
@@ -361,6 +330,7 @@ exports.login = async (req, res) => {
   }
 
 };
+
 
 exports.loginGoogle = async (req,res)=>{
 
