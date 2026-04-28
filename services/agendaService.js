@@ -60,10 +60,9 @@ exports.listarPorCliente = async (clienteId, telefones = []) => {
   return await Agenda.find({
     status: 'ativo',
     $or: [
-      { clienteId },
-      { clienteTelefone: { $in: telefones } },
-      { clienteTelefoneOriginal: { $in: telefones } },
-    ],
+  { clienteId },
+  { clienteTelefone: { $in: telefones } },
+]
   })
     .sort({ data: 1, horaInicio: 1 });
 };
