@@ -293,12 +293,18 @@ exports.abrirChatCliente = async (req, res) => {
       });
     }
 
-    let chat = await Chat.findOne({
-      participantes: {
-        $all: [clienteIdAgenda, profissionalId],
-      },
-    });
+    const todosChats = await Chat.find({});
 
+let chat = todosChats.find((c) => {
+  const participantes = (c.participantes || []).map((p) => String(p));
+  const unicos = [...new Set(participantes)];
+
+  return (
+    unicos.length === 2 &&
+    unicos.includes(clienteIdAgenda) &&
+    unicos.includes(profissionalId)
+  );
+});
     // 🔥 Se achou chat inválido antigo, bloqueia.
     if (chat) {
       const participantes = (chat.participantes || []).map((p) => String(p));
