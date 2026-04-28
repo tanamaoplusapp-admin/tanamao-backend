@@ -56,11 +56,10 @@ exports.criar = async ({
 // 🔥 📥 LISTAR AGENDAMENTOS DO CLIENTE
 exports.listarPorCliente = async (clienteId) => {
   return await Agenda.find({
-    clienteId,
-    status: 'ativo',
-  })
-    .populate('profissionalId')
-    .sort({ data: 1, horaInicio: 1 });
+  clienteId,
+  status: 'ativo',
+})
+  .sort({ data: 1, horaInicio: 1 });
 };
 
 
@@ -90,9 +89,8 @@ exports.listarComFiltro = async (profissionalId, inicio, fim) => {
     };
   }
 
-  return await Agenda.find(filtro)
-    .populate('profissionalId')
-    .sort({ data: 1, horaInicio: 1 });
+return await Agenda.find(filtro)
+  .sort({ data: 1, horaInicio: 1 });
 };
 
 
