@@ -1,5 +1,5 @@
 const agendaService = require('../services/agendaService');
-const User = require('../models/User');
+const User = require('../models/user');
 
 // Remove tudo que não for número
 function limparTelefone(telefone = '') {
