@@ -170,15 +170,11 @@ exports.criar = async (req, res) => {
       });
     }
 
-   const cliente = await buscarClientePorTelefone(
-  telefoneLimpo,
-  profissionalId
-);
-    const clienteId = cliente ? cliente._id : null;
+   const clienteId = null;
 
     const agendamento = await agendaService.criar({
   profissionalId,
-  clienteId,
+  
   clienteNome,
   clienteTelefone: telefoneLimpo,
   clienteTelefoneOriginal: clienteTelefone,

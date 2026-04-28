@@ -1,14 +1,11 @@
 const Agenda = require('../models/Agenda');
 
-// 🔥 FUNÇÃO AUXILIAR (comparar horários)
 function isConflito(h1Inicio, h1Fim, h2Inicio, h2Fim) {
   return h1Inicio < h2Fim && h2Inicio < h1Fim;
 }
 
-// ✅ CRIAR AGENDAMENTO
 exports.criar = async ({
   profissionalId,
-  clienteId,
   clienteNome,
   clienteTelefone,
   clienteTelefoneOriginal,
@@ -32,12 +29,16 @@ exports.criar = async ({
 
   const novo = await Agenda.create({
     profissionalId,
-    clienteId: clienteId || null,
+
+    // 🔥 IMPORTANTE:
+    // agenda manual NÃO vincula cliente automaticamente
+    clienteId: null,
+    chatId: null,
+
     clienteNome,
     clienteTelefone,
     clienteTelefoneOriginal: clienteTelefoneOriginal || clienteTelefone,
 
-    // 🔥 categoria/profissão exibida para o cliente
     categoria: categoria || servicoNome || 'Agendamento',
     servicoNome: servicoNome || categoria || 'Agendamento',
 
@@ -50,7 +51,6 @@ exports.criar = async ({
   return novo;
 };
 
-// 🔥 📥 LISTAR AGENDAMENTOS DO CLIENTE
 exports.listarPorCliente = async (clienteId, telefones = []) => {
   console.log('BUSCANDO POR:', { clienteId, telefones });
 
@@ -68,14 +68,12 @@ exports.listarPorCliente = async (clienteId, telefones = []) => {
       ag.clienteId && String(ag.clienteId) === String(clienteId);
 
     const telefoneAgendamento = String(ag.clienteTelefone || '').replace(/\D/g, '');
-
     const mesmoTelefone = telefones.includes(telefoneAgendamento);
 
     return mesmoClienteId || mesmoTelefone;
   });
 };
 
-// 📥 LISTAR AGENDAMENTOS DO PROFISSIONAL
 exports.listar = async (profissionalId) => {
   return await Agenda.find({
     profissionalId,
@@ -83,23 +81,19 @@ exports.listar = async (profissionalId) => {
   }).sort({ data: 1, horaInicio: 1 });
 };
 
-// 🔥 📥 LISTAR COM FILTRO
 exports.listarComFiltro = async (profissionalId, inicio, fim) => {
   const agendamentos = await Agenda.find({
     profissionalId,
     status: 'ativo',
   }).sort({ data: 1, horaInicio: 1 });
 
-  if (!inicio || !fim) {
-    return agendamentos;
-  }
+  if (!inicio || !fim) return agendamentos;
 
   return agendamentos.filter((item) => {
     return item.data >= inicio && item.data <= fim;
   });
 };
 
-// ✏️ EDITAR
 exports.editar = async (id, profissionalId, dados) => {
   const agendamento = await Agenda.findOne({
     _id: id,
@@ -129,6 +123,15 @@ exports.editar = async (id, profissionalId, dados) => {
 
   Object.assign(agendamento, dados);
 
+  // 🔥 Segurança: não deixa edição manual contaminar cliente/chat
+  if ('clienteId' in dados) {
+    agendamento.clienteId = agendamento.clienteId || null;
+  }
+
+  if ('chatId' in dados) {
+    agendamento.chatId = agendamento.chatId || null;
+  }
+
   if (dados.clienteTelefoneOriginal && !dados.clienteTelefone) {
     agendamento.clienteTelefoneOriginal = dados.clienteTelefoneOriginal;
   }
@@ -146,7 +149,6 @@ exports.editar = async (id, profissionalId, dados) => {
   return agendamento;
 };
 
-// ❌ CANCELAR
 exports.cancelar = async (id, profissionalId) => {
   const agendamento = await Agenda.findOne({
     _id: id,
