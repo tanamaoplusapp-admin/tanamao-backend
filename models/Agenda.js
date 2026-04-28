@@ -15,7 +15,12 @@ const AgendaSchema = new mongoose.Schema({
     required: false,
     index: true,
   },
-
+chatId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Chat',
+  default: null,
+  index: true,
+},
   clienteNome: {
     type: String,
     required: true,

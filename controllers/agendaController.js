@@ -64,20 +64,25 @@ function gerarVariacoesTelefone(telefone = '') {
   return Array.from(variacoes);
 }
 
-async function buscarClientePorTelefone(clienteTelefone) {
+async function buscarClientePorTelefone(clienteTelefone, excluirUserId = null) {
   const variacoes = gerarVariacoesTelefone(clienteTelefone);
 
   if (variacoes.length === 0) return null;
 
-  // Ajuste os campos se no seu User eles tiverem nomes diferentes
-  const cliente = await User.findOne({
+  const filtro = {
     $or: [
       { telefone: { $in: variacoes } },
       { celular: { $in: variacoes } },
       { whatsapp: { $in: variacoes } },
       { phone: { $in: variacoes } },
     ],
-  });
+  };
+
+  if (excluirUserId) {
+    filtro._id = { $ne: excluirUserId };
+  }
+
+  const cliente = await User.findOne(filtro);
 
   return cliente || null;
 }
@@ -111,7 +116,7 @@ exports.criar = async (req, res) => {
       });
     }
 
-    const cliente = await buscarClientePorTelefone(telefoneLimpo);
+   const cliente = await buscarClientePorTelefone(telefoneLimpo, profissionalId);
     const clienteId = cliente ? cliente._id : null;
 
     const agendamento = await agendaService.criar({
@@ -260,18 +265,18 @@ exports.abrirChatCliente = async (req, res) => {
     }
 
     const profissionalId = String(agenda.profissionalId || '');
-    const clienteIdAgenda = agenda.clienteId ? String(agenda.clienteId) : '';
+    let clienteIdFinal = agenda.clienteId ? String(agenda.clienteId) : '';
 
     console.log('ABRIR CHAT AGENDA:', {
       agendaId: String(agenda._id),
       usuarioLogadoId,
-      clienteIdAgenda,
+      clienteIdAgenda: clienteIdFinal,
       profissionalId,
       clienteTelefone: agenda.clienteTelefone,
     });
 
     const pertenceAoProfissional = profissionalId === usuarioLogadoId;
-    const pertenceAoCliente = clienteIdAgenda === usuarioLogadoId;
+    const pertenceAoCliente = clienteIdFinal === usuarioLogadoId;
 
     if (!pertenceAoCliente && !pertenceAoProfissional) {
       return res.status(403).json({
@@ -279,21 +284,38 @@ exports.abrirChatCliente = async (req, res) => {
       });
     }
 
-    if (!clienteIdAgenda) {
+    // 🔥 TENTAR VINCULAR CLIENTE PELO TELEFONE (caso não tenha clienteId)
+    if (!clienteIdFinal) {
+      const cliente = await buscarClientePorTelefone(
+  agenda.clienteTelefone,
+  profissionalId
+);
+
+      if (cliente?._id) {
+        clienteIdFinal = String(cliente._id);
+
+        agenda.clienteId = cliente._id;
+        await agenda.save();
+
+        console.log('CLIENTE VINCULADO PELO TELEFONE:', clienteIdFinal);
+      }
+    }
+
+    // 🔥 SE AINDA NÃO TEM CLIENTE → BLOQUEIA
+    if (!clienteIdFinal) {
       return res.status(400).json({
-        erro: 'Este agendamento não está vinculado a um cliente do app. Use WhatsApp ou vincule o cliente antes de abrir o chat.',
+        erro: 'Este cliente ainda não tem conta no app vinculada a este telefone. Use WhatsApp ou peça para ele se cadastrar com o mesmo número.',
       });
     }
 
-    if (clienteIdAgenda === profissionalId) {
+    if (clienteIdFinal === profissionalId) {
       return res.status(400).json({
         erro: 'Agendamento inválido: cliente e prestador são o mesmo usuário.',
       });
     }
 
-    // Sem $all / $in porque seu schema está dando cast errado nesses operadores
+    // 🔥 TENTA REUTILIZAR CHAT EXISTENTE
     const todosChats = await Chat.find({});
-
     let chat = null;
 
     for (const c of todosChats) {
@@ -302,7 +324,7 @@ exports.abrirChatCliente = async (req, res) => {
 
       const chatValidoEntreOsDois =
         unicos.length === 2 &&
-        unicos.includes(clienteIdAgenda) &&
+        unicos.includes(clienteIdFinal) &&
         unicos.includes(profissionalId);
 
       if (chatValidoEntreOsDois) {
@@ -311,20 +333,28 @@ exports.abrirChatCliente = async (req, res) => {
       }
     }
 
+    // 🔥 SE NÃO EXISTE, CRIA
     if (!chat) {
       chat = await Chat.create({
-        participantes: [clienteIdAgenda, profissionalId],
+        participantes: [clienteIdFinal, profissionalId],
         ultimoTexto: '',
         atualizadoEm: new Date(),
       });
     }
 
+    // 🔥 SALVA VÍNCULO NO AGENDAMENTO (OPCIONAL MAS RECOMENDADO)
+    if (!agenda.chatId) {
+      agenda.chatId = chat._id;
+      await agenda.save();
+    }
+
     return res.json({
       chatId: chat._id,
-      clienteId: clienteIdAgenda,
+      clienteId: clienteIdFinal,
       profissionalId,
       agendaId: agenda._id,
     });
+
   } catch (error) {
     console.log('ERRO AO ABRIR CHAT DA AGENDA:', error.message);
 
