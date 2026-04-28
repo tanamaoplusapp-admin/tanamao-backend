@@ -88,12 +88,14 @@ exports.criar = async (req, res) => {
     const profissionalId = req.user.id;
 
     const {
-      clienteNome,
-      clienteTelefone,
-      data,
-      horaInicio,
-      horaFim,
-    } = req.body;
+  clienteNome,
+  clienteTelefone,
+  data,
+  horaInicio,
+  horaFim,
+  categoria,
+  servicoNome,
+} = req.body;
 
     if (!clienteNome || !clienteTelefone || !data || !horaInicio || !horaFim) {
       return res.status(400).json({
@@ -113,15 +115,17 @@ exports.criar = async (req, res) => {
     const clienteId = cliente ? cliente._id : null;
 
     const agendamento = await agendaService.criar({
-      profissionalId,
-      clienteId,
-      clienteNome,
-      clienteTelefone: telefoneLimpo,
-      clienteTelefoneOriginal: clienteTelefone,
-      data,
-      horaInicio,
-      horaFim,
-    });
+  profissionalId,
+  clienteId,
+  clienteNome,
+  clienteTelefone: telefoneLimpo,
+  clienteTelefoneOriginal: clienteTelefone,
+  data,
+  horaInicio,
+  horaFim,
+  categoria,
+  servicoNome,
+});
 
     return res.status(201).json({
       ...agendamento.toObject(),

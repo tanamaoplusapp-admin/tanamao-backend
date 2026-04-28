@@ -9,7 +9,6 @@ const AgendaSchema = new mongoose.Schema({
     index: true,
   },
 
-  // 🔥 CLIENTE VINCULADO (quando existir conta no app)
   clienteId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -23,20 +22,31 @@ const AgendaSchema = new mongoose.Schema({
     trim: true,
   },
 
-  // 🔥 TELEFONE NORMALIZADO (chave de busca)
   clienteTelefone: {
     type: String,
     trim: true,
-    index: true, // 🔥 importante para busca rápida
+    index: true,
   },
 
-  // 🔥 NOVO: TELEFONE ORIGINAL (opcional, só UX)
   clienteTelefoneOriginal: {
     type: String,
     trim: true,
   },
 
-  // 🔥 manter compatibilidade (SEM QUEBRAR)
+  // 🔥 profissão/categoria exibida para o cliente
+  categoria: {
+    type: String,
+    trim: true,
+    default: 'Agendamento',
+    index: true,
+  },
+
+  // 🔥 opcional: nome do serviço, caso queira diferenciar no futuro
+  servicoNome: {
+    type: String,
+    trim: true,
+  },
+
   data: {
     type: String,
     required: true,
@@ -53,7 +63,6 @@ const AgendaSchema = new mongoose.Schema({
     required: true,
   },
 
-  // 🔥 PREPARAÇÃO FUTURA (NÃO QUEBRA NADA)
   dataHoraInicio: {
     type: Date,
     index: true,
@@ -63,7 +72,6 @@ const AgendaSchema = new mongoose.Schema({
     type: Date,
   },
 
-  // 🔥 status mais preparado
   status: {
     type: String,
     enum: ['ativo', 'cancelado', 'finalizado'],
@@ -75,24 +83,24 @@ const AgendaSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-
-// 🔥 ÍNDICE PRINCIPAL (consulta padrão)
 AgendaSchema.index({
   profissionalId: 1,
   data: 1,
   horaInicio: 1,
 });
 
-// 🔥 CLIENTE (para agenda do cliente)
 AgendaSchema.index({
   clienteId: 1,
   data: 1,
   horaInicio: 1,
 });
 
-// 🔥 BUSCA POR TELEFONE (importante pra fronteira)
 AgendaSchema.index({
   clienteTelefone: 1,
+});
+
+AgendaSchema.index({
+  categoria: 1,
 });
 
 module.exports = mongoose.model('Agenda', AgendaSchema);

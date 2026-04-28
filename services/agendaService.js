@@ -5,7 +5,6 @@ function isConflito(h1Inicio, h1Fim, h2Inicio, h2Fim) {
   return h1Inicio < h2Fim && h2Inicio < h1Fim;
 }
 
-
 // ✅ CRIAR AGENDAMENTO
 exports.criar = async ({
   profissionalId,
@@ -16,8 +15,9 @@ exports.criar = async ({
   data,
   horaInicio,
   horaFim,
+  categoria,
+  servicoNome,
 }) => {
-
   const agendamentos = await Agenda.find({
     profissionalId,
     data,
@@ -25,14 +25,7 @@ exports.criar = async ({
   });
 
   for (let ag of agendamentos) {
-    if (
-      isConflito(
-        horaInicio,
-        horaFim,
-        ag.horaInicio,
-        ag.horaFim
-      )
-    ) {
+    if (isConflito(horaInicio, horaFim, ag.horaInicio, ag.horaFim)) {
       throw new Error('Horário já ocupado');
     }
   }
@@ -43,6 +36,11 @@ exports.criar = async ({
     clienteNome,
     clienteTelefone,
     clienteTelefoneOriginal: clienteTelefoneOriginal || clienteTelefone,
+
+    // 🔥 categoria/profissão exibida para o cliente
+    categoria: categoria || servicoNome || 'Agendamento',
+    servicoNome: servicoNome || categoria || 'Agendamento',
+
     data,
     horaInicio,
     horaFim,
@@ -52,16 +50,18 @@ exports.criar = async ({
   return novo;
 };
 
-
 // 🔥 📥 LISTAR AGENDAMENTOS DO CLIENTE
 exports.listarPorCliente = async (clienteId, telefones = []) => {
   console.log('BUSCANDO POR:', { clienteId, telefones });
 
- const todos = await Agenda.find({
-  status: 'ativo',
-})
-  .populate('profissionalId', 'name nome telefone celular whatsapp phone')
-  .sort({ data: 1, horaInicio: 1 });
+  const todos = await Agenda.find({
+    status: 'ativo',
+  })
+    .populate(
+      'profissionalId',
+      'name nome telefone celular whatsapp phone profissao profissaoNome categoria especialidade'
+    )
+    .sort({ data: 1, horaInicio: 1 });
 
   return todos.filter((ag) => {
     const mesmoClienteId =
@@ -80,10 +80,8 @@ exports.listar = async (profissionalId) => {
   return await Agenda.find({
     profissionalId,
     status: 'ativo',
-  })
-    .sort({ data: 1, horaInicio: 1 });
+  }).sort({ data: 1, horaInicio: 1 });
 };
-
 
 // 🔥 📥 LISTAR COM FILTRO
 exports.listarComFiltro = async (profissionalId, inicio, fim) => {
@@ -100,7 +98,6 @@ exports.listarComFiltro = async (profissionalId, inicio, fim) => {
     return item.data >= inicio && item.data <= fim;
   });
 };
-
 
 // ✏️ EDITAR
 exports.editar = async (id, profissionalId, dados) => {
@@ -125,14 +122,7 @@ exports.editar = async (id, profissionalId, dados) => {
   });
 
   for (let ag of agendamentos) {
-    if (
-      isConflito(
-        novaHoraInicio,
-        novaHoraFim,
-        ag.horaInicio,
-        ag.horaFim
-      )
-    ) {
+    if (isConflito(novaHoraInicio, novaHoraFim, ag.horaInicio, ag.horaFim)) {
       throw new Error('Horário já ocupado');
     }
   }
@@ -143,11 +133,18 @@ exports.editar = async (id, profissionalId, dados) => {
     agendamento.clienteTelefoneOriginal = dados.clienteTelefoneOriginal;
   }
 
+  if (dados.categoria) {
+    agendamento.categoria = dados.categoria;
+  }
+
+  if (dados.servicoNome) {
+    agendamento.servicoNome = dados.servicoNome;
+  }
+
   await agendamento.save();
 
   return agendamento;
 };
-
 
 // ❌ CANCELAR
 exports.cancelar = async (id, profissionalId) => {
