@@ -76,13 +76,21 @@ async function buscarClientePorTelefone(clienteTelefone, excluirUserId = null) {
   if (variacoes.length === 0) return null;
 
   const usuarios = await User.find({
-    $or: [
-      { telefone: { $in: variacoes } },
-      { celular: { $in: variacoes } },
-      { whatsapp: { $in: variacoes } },
-      { phone: { $in: variacoes } },
-    ],
-  }).select('_id name nome telefone celular whatsapp phone tipo role perfil');
+  $and: [
+    {
+      $or: [
+        { telefone: { $in: variacoes } },
+        { celular: { $in: variacoes } },
+        { whatsapp: { $in: variacoes } },
+        { phone: { $in: variacoes } },
+      ],
+    },
+    {
+      // 🔥 GARANTE QUE NÃO É PROFISSIONAL
+      role: { $ne: 'profissional' },
+    },
+  ],
+}).select('_id name nome telefone celular whatsapp phone tipo role perfil');
 
   console.log('USUÁRIOS ENCONTRADOS PELO TELEFONE:', usuarios.map((u) => ({
     id: String(u._id),
