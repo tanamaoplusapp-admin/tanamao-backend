@@ -373,9 +373,9 @@ exports.savePushToken = asyncHandler(async (req, res) => {
   const { pushToken } = req.body || {};
 
   if (!pushToken) {
-    res.status(400);
-    throw new Error('pushToken é obrigatório');
-  }
+  console.log('⚠️ pushToken não enviado');
+  return res.status(200).json({ ok: true });
+}
 
   const user = await User.findByIdAndUpdate(
     userId,
