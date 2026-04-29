@@ -276,12 +276,17 @@ ATUALIZAR PERFIL
 ===================================================== */
 
 exports.updateMe = asyncHandler(async (req, res) => {
-
   const allow = [
     'name',
     'phone',
     'avatar',
-    'photoUrl'
+    'photoUrl',
+    'enderecos',
+    'enderecoSelecionado',
+    'cidade',
+    'estado',
+    'geo',
+    'notificacoesAtivas'
   ];
 
   const patch = {};
@@ -292,21 +297,38 @@ exports.updateMe = asyncHandler(async (req, res) => {
     }
   }
 
-  // manter compatibilidade
   if (patch.photoUrl) {
     patch.avatar = patch.photoUrl;
+    delete patch.photoUrl;
+  }
+
+  if (patch.enderecoSelecionado) {
+    const e = patch.enderecoSelecionado;
+
+    if (e.cidade) patch.cidade = e.cidade;
+    if (e.estado) patch.estado = e.estado;
+
+    if (e.latitude && e.longitude) {
+      patch.geo = {
+        type: 'Point',
+        coordinates: [e.longitude, e.latitude],
+      };
+    }
   }
 
   const me = await User.findByIdAndUpdate(
     req.user._id,
     { $set: patch },
-    { new: true }
+    { new: true, runValidators: true }
   ).select('-password');
 
+  if (!me) {
+    res.status(404);
+    throw new Error('Usuário não encontrado');
+  }
+
   res.json(me);
-
 });
-
 /* =====================================================
 ATUALIZAR STATUS ONLINE + PAGAMENTOS
 ===================================================== */

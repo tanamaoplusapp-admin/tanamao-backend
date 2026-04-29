@@ -106,6 +106,31 @@ const userSchema = new Schema(
       index:'2dsphere'
     }
   },
+  enderecos: [
+  {
+    label: String,
+    rua: String,
+    cidade: String,
+    estado: String,
+    cep: String,
+    numero: String,
+
+    latitude: Number,
+    longitude: Number,
+  }
+],
+
+enderecoSelecionado: {
+  label: String,
+  rua: String,
+  cidade: String,
+  estado: String,
+  cep: String,
+  numero: String,
+
+  latitude: Number,
+  longitude: Number,
+},
 
   /* ============================
    * EMPRESA
@@ -184,6 +209,10 @@ const userSchema = new Schema(
     default:0,
     index:true
   },
+  notificacoesAtivas: {
+  type: Boolean,
+  default: true,
+},
 
   /* ============================
    * FINANCEIRO NOVO
