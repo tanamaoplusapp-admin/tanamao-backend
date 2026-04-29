@@ -1,6 +1,7 @@
 // backend/controllers/profissionaisController.js
 
 const mongoose = require('mongoose');
+const Avaliacao = require('../models/Avaliacao');
 const Profissional = require('../models/Profissional');
 const User = require('../models/user');
 const Order = require('../models/order');
@@ -83,22 +84,22 @@ exports.getResumoProfissionalLogado = async (req, res) => {
 exports.list = async (req, res) => {
   try {
     const {
-  categoriaId,
-  profissaoId,
-  cidade,
-  tipoAtendimento,
-  servicoEmergencial,
-} = req.query;
+      categoriaId,
+      profissaoId,
+      cidade,
+      tipoAtendimento,
+      servicoEmergencial,
+    } = req.query;
 
     const filtro = {};
 
     if (req.query.socorristaAutomotivo === 'true') {
-  filtro.socorristaAutomotivo = true;
+      filtro.socorristaAutomotivo = true;
 
-  if (servicoEmergencial) {
-    filtro.servicosSocorroAutomotivo = servicoEmergencial;
-  }
-} else {
+      if (servicoEmergencial) {
+        filtro.servicosSocorroAutomotivo = servicoEmergencial;
+      }
+    } else {
       if (categoriaId) {
         if (!mongoose.Types.ObjectId.isValid(categoriaId)) {
           return res.status(400).json({
@@ -131,7 +132,7 @@ exports.list = async (req, res) => {
     const profs = await Profissional.find(filtro)
       .populate({
         path: 'userId',
-        select: 'acessoExpiraEm online'
+        select: 'acessoExpiraEm online',
       })
       .lean();
 
@@ -147,8 +148,77 @@ exports.list = async (req, res) => {
       return true;
     });
 
-    return res.json({ ok: true, data: filtrados });
+    const idsProfissional = filtrados.map((p) => p._id);
+    const idsUser = filtrados
+      .map((p) => p.userId?._id || p.userId)
+      .filter(Boolean);
 
+    const metricas = await Avaliacao.aggregate([
+      {
+        $match: {
+          origem: { $in: ['profissional', 'servico', 'pedido'] },
+          $or: [
+            { profissionalId: { $in: idsProfissional } },
+            { profissionalUserId: { $in: idsUser } },
+            { profissional: { $in: idsUser } },
+            { prestadorId: { $in: idsProfissional } },
+          ],
+        },
+      },
+      {
+        $project: {
+          nota: 1,
+          chave: {
+            $ifNull: [
+              '$profissionalId',
+              {
+                $ifNull: [
+                  '$prestadorId',
+                  {
+                    $ifNull: ['$profissionalUserId', '$profissional'],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: '$chave',
+          mediaAvaliacoes: { $avg: '$nota' },
+          totalAvaliacoes: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const mapaMetricas = new Map(
+      metricas.map((m) => [
+        String(m._id),
+        {
+          mediaAvaliacoes: Number(m.mediaAvaliacoes || 0),
+          totalAvaliacoes: m.totalAvaliacoes || 0,
+        },
+      ])
+    );
+
+    const comMetricas = filtrados.map((p) => {
+      const profId = String(p._id);
+      const userId = String(p.userId?._id || p.userId || '');
+
+      return {
+        ...p,
+        metrics:
+          mapaMetricas.get(profId) ||
+          mapaMetricas.get(userId) ||
+          {
+            mediaAvaliacoes: 0,
+            totalAvaliacoes: 0,
+          },
+      };
+    });
+
+    return res.json({ ok: true, data: comMetricas });
   } catch (e) {
     console.error('profissionais.list:', e);
     return res.status(500).json({
