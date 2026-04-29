@@ -360,16 +360,18 @@ for (const prof of profissionaisAlvo) {
 
   try {
 
-    await enviarPushParaUsuario(userId, {
-      title: '📢 Novo serviço para você!',
-      body: `Categoria: ${doc.categoria}`,
-      data: {
-        serviceId: doc._id.toString(),
-        type: 'nova_solicitacao',
-      },
-    });
+  await enviarPushParaUsuario(userId, {
+    title: 'Novo serviço para você',
+    body: doc.urgente
+      ? '🔥 Serviço urgente disponível agora.'
+      : 'Um cliente acabou de solicitar atendimento.',
+    data: {
+      serviceId: doc._id.toString(),
+      type: 'NOVO_SERVICO',
+    },
+  });
 
-  } catch (e) {
+} catch (e) {
     console.log('Erro push:', e.message);
   }
 

@@ -44,8 +44,8 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
     }
 
     const normalizedData = normalizeDataPayload(payload.data || {});
-    const title = payload.title || 'Notificação';
-    const body = payload.body || '';
+    const title = payload.title || 'Tanamão+';
+    const body = payload.body || 'Você tem uma nova notificação.';
 
     const message = {
       token: user.fcmToken,
@@ -63,6 +63,8 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
           channelId: 'default',
           sound: 'default',
           priority: 'high',
+          icon: 'ic_notification',
+          color: '#FF9900',
         },
       },
 

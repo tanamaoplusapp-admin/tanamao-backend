@@ -1,92 +1,130 @@
 const mongoose = require('mongoose');
 
-const AgendaSchema = new mongoose.Schema({
+const AgendaSchema = new mongoose.Schema(
+  {
+    profissionalId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
 
-  profissionalId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    index: true,
-  },
+    clienteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false,
+      default: null,
+      index: true,
+    },
 
-  clienteId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: false,
-    index: true,
-  },
-chatId: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'Chat',
-  default: null,
-  index: true,
-},
-  clienteNome: {
-    type: String,
-    required: true,
-    trim: true,
-  },
+    chatId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Chat',
+      default: null,
+      index: true,
+    },
 
-  clienteTelefone: {
-    type: String,
-    trim: true,
-    index: true,
-  },
+    clienteNome: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-  clienteTelefoneOriginal: {
-    type: String,
-    trim: true,
-  },
+    clienteTelefone: {
+      type: String,
+      trim: true,
+      index: true,
+    },
 
-  // 🔥 profissão/categoria exibida para o cliente
-  categoria: {
-    type: String,
-    trim: true,
-    default: 'Agendamento',
-    index: true,
-  },
+    clienteTelefoneOriginal: {
+      type: String,
+      trim: true,
+    },
 
-  // 🔥 opcional: nome do serviço, caso queira diferenciar no futuro
-  servicoNome: {
-    type: String,
-    trim: true,
-  },
+    categoria: {
+      type: String,
+      trim: true,
+      default: 'Agendamento',
+      index: true,
+    },
 
-  data: {
-    type: String,
-    required: true,
-    index: true,
-  },
+    servicoNome: {
+      type: String,
+      trim: true,
+    },
 
-  horaInicio: {
-    type: String,
-    required: true,
-  },
+    data: {
+      type: String,
+      required: true,
+      index: true,
+    },
 
-  horaFim: {
-    type: String,
-    required: true,
-  },
+    horaInicio: {
+      type: String,
+      required: true,
+    },
 
-  dataHoraInicio: {
-    type: Date,
-    index: true,
-  },
+    horaFim: {
+      type: String,
+      required: true,
+    },
 
-  dataHoraFim: {
-    type: Date,
-  },
+    dataHoraInicio: {
+      type: Date,
+      index: true,
+    },
 
-  status: {
-    type: String,
-    enum: ['ativo', 'cancelado', 'finalizado'],
-    default: 'ativo',
-    index: true,
-  },
+    dataHoraFim: {
+      type: Date,
+    },
 
-}, {
-  timestamps: true,
-});
+    status: {
+      type: String,
+      enum: ['ativo', 'cancelado', 'finalizado'],
+      default: 'ativo',
+      index: true,
+    },
+
+    conviteToken: {
+      type: String,
+      default: null,
+      index: true,
+    },
+
+    conviteExpiraEm: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+
+    conviteStatus: {
+      type: String,
+      enum: ['pendente', 'aceito', 'expirado', 'cancelado'],
+      default: 'pendente',
+      index: true,
+    },
+
+    conviteAceitoEm: {
+      type: Date,
+      default: null,
+    },
+
+    conviteEnviadoEm: {
+      type: Date,
+      default: null,
+    },
+
+    origem: {
+      type: String,
+      enum: ['manual', 'contato_telefone', 'service', 'cliente_app'],
+      default: 'manual',
+      index: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
 
 AgendaSchema.index({
   profissionalId: 1,
@@ -108,4 +146,28 @@ AgendaSchema.index({
   categoria: 1,
 });
 
-module.exports = mongoose.model('Agenda', AgendaSchema);
+AgendaSchema.index(
+  { conviteToken: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      conviteToken: { $type: 'string' },
+    },
+  }
+);
+
+AgendaSchema.index({
+  profissionalId: 1,
+  conviteStatus: 1,
+  createdAt: -1,
+});
+
+AgendaSchema.index({
+  clienteId: 1,
+  conviteStatus: 1,
+  createdAt: -1,
+});
+
+module.exports =
+  mongoose.models.Agenda ||
+  mongoose.model('Agenda', AgendaSchema);

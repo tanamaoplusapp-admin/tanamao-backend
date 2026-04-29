@@ -142,19 +142,21 @@ async function buscarClientePorTelefone(clienteTelefone, excluirUserId = null) {
   return cliente || null;
 }
 // ✅ CRIAR AGENDAMENTO
+const crypto = require('crypto');
+
 exports.criar = async (req, res) => {
   try {
     const profissionalId = req.user.id;
 
     const {
-  clienteNome,
-  clienteTelefone,
-  data,
-  horaInicio,
-  horaFim,
-  categoria,
-  servicoNome,
-} = req.body;
+      clienteNome,
+      clienteTelefone,
+      data,
+      horaInicio,
+      horaFim,
+      categoria,
+      servicoNome,
+    } = req.body;
 
     if (!clienteNome || !clienteTelefone || !data || !horaInicio || !horaFim) {
       return res.status(400).json({
@@ -162,40 +164,151 @@ exports.criar = async (req, res) => {
       });
     }
 
-    const telefoneLimpo = limparTelefone(clienteTelefone);
+    // 🔥 limpa telefone
+    const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
 
     if (!telefoneLimpo) {
       return res.status(400).json({
-        erro: 'Telefone do cliente inválido',
+        erro: 'Telefone inválido',
       });
     }
 
-   const clienteId = null;
+    // 🔥 GERA TOKEN ÚNICO
+    const conviteToken = crypto.randomBytes(32).toString('hex');
 
+    // 🔥 EXPIRA EM 24H (ajustável depois)
+    const conviteExpiraEm = new Date(Date.now() + 1000 * 60 * 60 * 24);
+
+    // 🔥 CRIA AGENDAMENTO
     const agendamento = await agendaService.criar({
-  profissionalId,
-  
-  clienteNome,
-  clienteTelefone: telefoneLimpo,
-  clienteTelefoneOriginal: clienteTelefone,
-  data,
-  horaInicio,
-  horaFim,
-  categoria,
-  servicoNome,
-});
+      profissionalId,
+      clienteId: null, // 🔥 NUNCA tenta adivinhar mais
+      clienteNome,
+      clienteTelefone: telefoneLimpo,
+      clienteTelefoneOriginal: clienteTelefone,
+      data,
+      horaInicio,
+      horaFim,
+      categoria,
+      servicoNome,
+
+      conviteToken,
+      conviteExpiraEm,
+      conviteStatus: 'pendente',
+      conviteEnviadoEm: new Date(),
+    });
+
+    // 🔥 LINK DE CONVITE (DEEP LINK + WEB)
+    const deepLink = `tanamao://agenda/confirmar/${conviteToken}`;
+    const webLink = `https://tanamao.com.br/agenda/confirmar/${conviteToken}`;
 
     return res.status(201).json({
       ...agendamento.toObject(),
-      clienteEncontrado: !!clienteId,
+
+      convite: {
+        token: conviteToken,
+        expiraEm: conviteExpiraEm,
+        deepLink,
+        webLink,
+      },
+
+      mensagemSugestao: `Olá ${clienteNome}! Seu horário foi agendado para ${data} às ${horaInicio}. Acompanhe pelo app: ${webLink}`,
     });
+
   } catch (error) {
     return res.status(400).json({
       erro: error.message,
     });
   }
 };
+exports.aceitarConvite = async (req, res) => {
+  try {
+    const clienteId = req.user.id;
+    const { token } = req.params;
 
+    const agenda = await Agenda.findOne({ conviteToken: token });
+
+    if (!agenda) {
+      return res.status(404).json({
+        erro: 'Convite inválido ou não encontrado',
+      });
+    }
+
+    if (agenda.status !== 'ativo') {
+      return res.status(400).json({
+        erro: 'Este agendamento não está ativo',
+      });
+    }
+
+    if (agenda.conviteStatus === 'aceito' && agenda.clienteId) {
+      return res.json({
+        mensagem: 'Convite já aceito',
+        agendaId: agenda._id,
+        chatId: agenda.chatId,
+        clienteId: agenda.clienteId,
+        profissionalId: agenda.profissionalId,
+      });
+    }
+
+    if (agenda.conviteExpiraEm && agenda.conviteExpiraEm < new Date()) {
+      agenda.conviteStatus = 'expirado';
+      await agenda.save();
+
+      return res.status(400).json({
+        erro: 'Convite expirado',
+      });
+    }
+
+    if (String(clienteId) === String(agenda.profissionalId)) {
+      return res.status(400).json({
+        erro: 'O prestador não pode aceitar o próprio convite como cliente',
+      });
+    }
+
+    let chat = null;
+
+    if (agenda.chatId) {
+      chat = await Chat.findById(agenda.chatId);
+    }
+
+    if (!chat) {
+      chat = await Chat.findOne({
+        participantes: {
+          $all: [clienteId, agenda.profissionalId],
+        },
+      });
+    }
+
+    if (!chat) {
+      chat = await Chat.create({
+        participantes: [clienteId, agenda.profissionalId],
+        ultimoTexto: '',
+        atualizadoEm: new Date(),
+      });
+    }
+
+    agenda.clienteId = clienteId;
+    agenda.chatId = chat._id;
+    agenda.conviteStatus = 'aceito';
+    agenda.conviteAceitoEm = new Date();
+
+    await agenda.save();
+
+    return res.json({
+      mensagem: 'Convite aceito com sucesso',
+      agendaId: agenda._id,
+      chatId: chat._id,
+      clienteId,
+      profissionalId: agenda.profissionalId,
+    });
+  } catch (error) {
+    console.log('ERRO AO ACEITAR CONVITE DA AGENDA:', error.message);
+
+    return res.status(500).json({
+      erro: error.message,
+    });
+  }
+};
 // 📥 LISTAR DO CLIENTE
 exports.listarCliente = async (req, res) => {
   try {
