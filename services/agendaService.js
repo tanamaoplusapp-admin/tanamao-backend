@@ -70,23 +70,40 @@ exports.criar = async ({
 };
 
 exports.listarPorCliente = async (clienteId, telefones = []) => {
-  console.log('BUSCANDO POR:', { clienteId, telefones });
+  const telefonesValidos = Array.isArray(telefones)
+    ? telefones
+        .map((telefone) => String(telefone || '').replace(/\D/g, ''))
+        .filter(Boolean)
+    : [];
 
-  const agendamentos = await Agenda.find({
+  const telefonesUnicos = [...new Set(telefonesValidos)];
+
+  const filtrosCliente = [];
+
+  if (clienteId) {
+    filtrosCliente.push({ clienteId });
+  }
+
+  telefonesUnicos.forEach((telefone) => {
+    filtrosCliente.push({
+      clienteTelefone: telefone,
+    });
+  });
+
+  const query = {
     status: 'ativo',
-    $or: [
-      { clienteId },
-      {
-        clienteTelefone: {
-          $in: telefones,
-        },
-      },
-    ],
-  })
+    ...(filtrosCliente.length > 0
+      ? { $or: filtrosCliente }
+      : {}),
+  };
+
+  console.log('BUSCANDO POR:', query);
+
+  const agendamentos = await Agenda.find(query)
     .populate(
-  'profissionalId',
-  'name nome photoUrl avatar foto imagem telefone celular whatsapp phone profissao profissaoNome categoria especialidade'
-)
+      'profissionalId',
+      'name nome photoUrl avatar foto imagem telefone celular whatsapp phone profissao profissaoNome categoria especialidade'
+    )
     .sort({ data: 1, horaInicio: 1 });
 
   return agendamentos;
