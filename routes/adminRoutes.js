@@ -418,4 +418,102 @@ router.patch(
     }
   }
 );
+/* ================= SERVIÇOS ================= */
+
+// GET /api/admin/servicos
+router.get('/servicos', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const status = req.query.status;
+    const q = req.query.q;
+
+    const filter = {};
+
+    if (status && status !== 'all' && status !== 'abertos') {
+      filter.status = status;
+    }
+
+    if (status === 'abertos') {
+      filter.status = {
+        $in: ['pendente', 'aceito', 'em_rota', 'pago'],
+      };
+    }
+
+    let query = Servico.find(filter)
+      .populate('cliente', 'name nome email telefone phone celular')
+      .populate('profissional', 'name nome email telefone phone celular plano rating cidade')
+      .populate('empresa', 'name nome')
+      .sort({ createdAt: -1 })
+      .limit(1000)
+      .lean();
+
+    let servicos = await query;
+
+    if (q) {
+      const term = String(q).toLowerCase().trim();
+
+      servicos = servicos.filter((servico) => {
+        const id = String(servico._id || '').toLowerCase();
+        const categoria = String(servico.categoria || '').toLowerCase();
+        const descricao = String(servico.descricao || '').toLowerCase();
+
+        const cliente = String(
+          servico.cliente?.name ||
+          servico.cliente?.nome ||
+          ''
+        ).toLowerCase();
+
+        const profissional = String(
+          servico.profissional?.name ||
+          servico.profissional?.nome ||
+          ''
+        ).toLowerCase();
+
+        return (
+          id.includes(term) ||
+          categoria.includes(term) ||
+          descricao.includes(term) ||
+          cliente.includes(term) ||
+          profissional.includes(term)
+        );
+      });
+    }
+
+    return res.json({
+      ok: true,
+      servicos,
+    });
+  } catch (err) {
+    console.error('[admin/servicos]', err);
+    return res.status(500).json({
+      error: 'Erro ao listar serviços',
+    });
+  }
+});
+
+// GET /api/admin/servicos/:id
+router.get('/servicos/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const servico = await Servico.findById(req.params.id)
+      .populate('cliente', 'name nome email telefone phone celular')
+      .populate('profissional', 'name nome email telefone phone celular plano rating cidade')
+      .populate('empresa', 'name nome')
+      .lean();
+
+    if (!servico) {
+      return res.status(404).json({
+        error: 'Serviço não encontrado',
+      });
+    }
+
+    return res.json({
+      ok: true,
+      service: servico,
+    });
+  } catch (err) {
+    console.error('[admin/servicos/:id]', err);
+    return res.status(500).json({
+      error: 'Erro ao buscar serviço',
+    });
+  }
+});
 module.exports = router;
