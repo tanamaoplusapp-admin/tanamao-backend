@@ -72,24 +72,33 @@ exports.criar = async ({
 exports.listarPorCliente = async (clienteId, telefones = []) => {
   console.log('BUSCANDO POR:', { clienteId, telefones });
 
-  const agendamentos = await Agenda.find({
+  const telefonesLimpos = telefones.map((t) =>
+    String(t || '').replace(/\D/g, '')
+  );
+
+  const todos = await Agenda.find({
     status: 'ativo',
-    $or: [
-      { clienteId },
-      {
-        clienteTelefone: {
-          $in: telefones,
-        },
-      },
-    ],
   })
     .populate(
-  'profissionalId',
-  'name nome photoUrl avatar foto imagem telefone celular whatsapp phone profissao profissaoNome categoria especialidade'
-)
+      'profissionalId',
+      'name nome telefone celular whatsapp phone profissao profissaoNome categoria especialidade'
+    )
     .sort({ data: 1, horaInicio: 1 });
 
-  return agendamentos;
+  return todos.filter((ag) => {
+    const mesmoClienteId =
+      ag.clienteId && String(ag.clienteId) === String(clienteId);
+
+    const telefoneAgendamento = String(
+      ag.clienteTelefone || ''
+    ).replace(/\D/g, '');
+
+    const mesmoTelefone =
+      telefoneAgendamento &&
+      telefonesLimpos.includes(telefoneAgendamento);
+
+    return mesmoClienteId || mesmoTelefone;
+  });
 };
 
 exports.listar = async (profissionalId) => {
