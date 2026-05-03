@@ -605,30 +605,46 @@ SERVIÇO ATIVO DO USUÁRIO
 GET /api/servicos/ativo
 ===================================================== */
 
-exports.getServicoAtivo = async (req, res, next) => {
-  try {
+/* =====================================================
+SERVIÇO ATIVO DO USUÁRIO
+GET /api/servicos/ativo
+===================================================== */
 
+exports.getServicoAtivo = async (req, res) => {
+  try {
     const userId = req.user?.id || req.user?._id;
 
     if (!userId) {
-      return res.status(400).json({ message: 'Usuário não identificado' });
+      return res.status(401).json({
+        message: 'Usuário não identificado',
+      });
     }
+
+    const statusAtivos = ['pendente', 'aceito', 'em_andamento'];
 
     const servico = await Servico.findOne({
       $or: [
         { cliente: userId },
-        { profissional: userId }
+        { profissional: userId },
       ],
-      status: { $in: ['pendente', 'aceito', 'em_andamento'] }
+
+      // Forma segura: o Mongoose interpreta array como $in,
+      // mas evita o CastError estranho que apareceu no Render.
+      status: statusAtivos,
     })
-    .sort({ createdAt: -1 })
-    .populate('cliente', 'name')
-    .populate('profissional', 'name');
+      .sort({ createdAt: -1 })
+      .populate('cliente', 'name')
+      .populate('profissional', 'name');
 
     return res.json({ servico });
 
   } catch (err) {
-    next(err);
+    console.error('ERRO getServicoAtivo:', err);
+
+    return res.status(500).json({
+      message: 'Erro ao buscar serviço ativo',
+      error: err.message,
+    });
   }
 };
 /* =====================================================
