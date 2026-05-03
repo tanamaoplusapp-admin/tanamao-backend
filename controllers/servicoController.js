@@ -735,66 +735,130 @@ ACEITAR SERVICE (AGENDAMENTO)
 PATCH /api/servicos/:id/aceitar
 ===================================================== */
 
-exports.aceitarService = async (req,res)=>{
+/* =====================================================
+ACEITAR SERVICE (AGENDAMENTO / NORMAL / ORÇAMENTO)
+PATCH /api/servicos/:id/aceitar
+===================================================== */
 
-  try{
-
-    const io = req.app.get('io')
-
-    const { id } = req.params
+exports.aceitarService = async (req, res) => {
+  try {
+    const io = req.app.get('io');
+    const { id } = req.params;
 
     const service = await Servico.findById(id)
-      .populate('cliente','name telefone')
-      .populate('profissional','name')
+      .populate('cliente', 'name telefone')
+      .populate('profissional', 'name');
 
-    if(!service){
-      return res.status(404).json({erro:'Serviço não encontrado'})
+    if (!service) {
+      return res.status(404).json({
+        erro: 'Serviço não encontrado',
+      });
     }
 
-    service.status = 'aceito'
-    await service.save()
-
-    // 🔥 EMITIR SOCKET PARA PRESTADOR
-    if(io && service.profissional){
-      io.to(service.profissional._id.toString()).emit(
-        'servico_aceito',
-        {
-          serviceId: service._id,
-          status:'aceito'
-        }
-      )
+    if (service.status === 'aceito') {
+      return res.json({ service });
     }
 
-    // 🔥 EMITIR SOCKET PARA CLIENTE
-    if(io && service.cliente){
-      io.to(service.cliente._id.toString()).emit(
-        'servico_aceito',
-        {
-          serviceId: service._id,
-          status:'aceito'
-        }
-      )
+    service.status = 'aceito';
+    service.respondidoEm = new Date();
+
+    if (service.createdAt) {
+      const diffMs = service.respondidoEm - service.createdAt;
+      service.tempoRespostaSegundos = Math.floor(diffMs / 1000);
     }
 
-    if(service.tipoServico === 'agendado'){
+    await service.save();
+
+    const clienteId = service.cliente?._id || service.cliente;
+    const profissionalId = service.profissional?._id || service.profissional;
+
+    const nomeProfissional =
+      service.profissional?.name ||
+      'O prestador';
+
+    const chatId = service.chatId || null;
+
+    /* =========================
+       SOCKET PARA PRESTADOR
+    ========================= */
+
+    if (io && profissionalId) {
+      io.to(profissionalId.toString()).emit('servico_aceito', {
+        serviceId: service._id,
+        servicoId: service._id,
+        status: 'aceito',
+        destinatarioTipo: 'profissional',
+      });
+    }
+
+    /* =========================
+       SOCKET PARA CLIENTE
+    ========================= */
+
+    if (io && clienteId) {
+      io.to(clienteId.toString()).emit('servico_aceito', {
+        serviceId: service._id,
+        servicoId: service._id,
+        profissionalId,
+        profissionalNome: nomeProfissional,
+        status: 'aceito',
+        destinatarioTipo: 'cliente',
+      });
+    }
+
+    /* =========================
+       NOTIFICAÇÃO + PUSH PARA CLIENTE
+       Cliente precisa saber que o prestador aceitou.
+    ========================= */
+
+    if (clienteId) {
+      try {
+        await sendNotification({
+          userId: clienteId,
+          type: 'SERVICO_ACEITO',
+          title: 'Serviço aceito',
+          message: `${nomeProfissional} aceitou o serviço que você solicitou.`,
+          relatedId: service._id,
+          payload: {
+            destinatarioTipo: 'cliente',
+            clienteId: clienteId.toString(),
+            profissionalId: profissionalId ? profissionalId.toString() : '',
+            profissionalNome: nomeProfissional,
+            serviceId: service._id.toString(),
+            servicoId: service._id.toString(),
+            chatId: chatId ? chatId.toString() : '',
+            status: 'aceito',
+            tipoServico: service.tipoServico || 'normal',
+          },
+        });
+      } catch (e) {
+        console.log('Erro notification cliente SERVICO_ACEITO:', e.message);
+      }
+    }
+
+    /* =========================
+       AGENDA
+    ========================= */
+
+    if (service.tipoServico === 'agendado') {
       await agendaService.criar({
-        profissionalId: service.profissional,
-        clienteId: service.cliente._id,
-        clienteNome: service.cliente.name,
-        clienteTelefone: service.cliente.telefone,
+        profissionalId,
+        clienteId,
+        clienteNome: service.cliente?.name,
+        clienteTelefone: service.cliente?.telefone,
         data: service.dataAgendada,
         horaInicio: service.horaAgendada,
-        horaFim: service.horaAgendada
-      })
+        horaFim: service.horaAgendada,
+      });
     }
 
-    res.json({service})
-
-   } catch(e){
-    res.status(500).json({erro:e.message})
+    return res.json({ service });
+  } catch (e) {
+    return res.status(500).json({
+      erro: e.message,
+    });
   }
-  
-  };
+};
   /* =====================================================
 CANCELAR SERVIÇO (CLIENTE)
 PATCH /api/servicos/:id/cancelar
