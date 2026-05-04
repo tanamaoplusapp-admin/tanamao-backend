@@ -43,9 +43,54 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
       return false;
     }
 
-    const normalizedData = normalizeDataPayload(payload.data || {});
     const title = payload.title || 'Tanamão+';
     const body = payload.body || 'Você tem uma nova notificação.';
+
+    const unreadNotifications = Number(payload.unreadNotifications || 1);
+    const badgeCount =
+      Number.isFinite(unreadNotifications) && unreadNotifications > 0
+        ? unreadNotifications
+        : 1;
+
+    const normalizedData = normalizeDataPayload({
+      ...(payload.data || {}),
+
+      // Mantém esses campos também no data para o app conseguir ler
+      title,
+      body,
+
+      // Mantém compatibilidade com navegação e leitura
+      type: payload.type || payload.data?.type || '',
+      notificationId:
+        payload.notificationId ||
+        payload.data?.notificationId ||
+        '',
+      chatId:
+        payload.chatId ||
+        payload.data?.chatId ||
+        '',
+      servicoId:
+        payload.servicoId ||
+        payload.serviceId ||
+        payload.data?.servicoId ||
+        payload.data?.serviceId ||
+        '',
+      serviceId:
+        payload.serviceId ||
+        payload.servicoId ||
+        payload.data?.serviceId ||
+        payload.data?.servicoId ||
+        '',
+      agendamentoId:
+        payload.agendamentoId ||
+        payload.data?.agendamentoId ||
+        '',
+      relatedId:
+        payload.relatedId ||
+        payload.data?.relatedId ||
+        '',
+      unreadNotifications: badgeCount,
+    });
 
     const message = {
       token: user.fcmToken,
@@ -79,7 +124,7 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
               body,
             },
             sound: 'default',
-            badge: 1,
+            badge: badgeCount,
           },
         },
       },
@@ -91,6 +136,8 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
       userId,
       messageId: response,
       type: normalizedData.type || null,
+      notificationId: normalizedData.notificationId || null,
+      badge: badgeCount,
     });
 
     return true;

@@ -1,6 +1,9 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { Types } = require('mongoose');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
 
@@ -75,6 +78,39 @@ const sendMessageLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/* ================= UPLOAD FOTO CHAT ================= */
+
+const uploadDir = path.resolve(process.cwd(), 'uploads', 'chat');
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const chatPhotoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '') || '.jpg';
+    const filename = `chat-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    cb(null, filename);
+  },
+});
+
+const uploadChatPhoto = multer({
+  storage: chatPhotoStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      return cb(new Error('Apenas imagens são permitidas'));
+    }
+
+    cb(null, true);
+  },
+});
+
 /* ================= VALIDAÇÃO PARAM ================= */
 
 router.param('chatId', (req, res, next, val) => {
@@ -99,6 +135,34 @@ router.post('/', verifyToken, createChatLimiter, criarChat);
  * GET /api/chat/meus
  */
 router.get('/meus', verifyToken, buscarChatsDoUsuario);
+
+/**
+ * Upload de foto do chat
+ * POST /api/chat/:chatId/upload-foto
+ */
+router.post(
+  '/:chatId/upload-foto',
+  verifyToken,
+  uploadChatPhoto.single('foto'),
+  (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'Nenhuma foto enviada' });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const url = `${baseUrl}/uploads/chat/${req.file.filename}`;
+
+      return res.status(201).json({
+        url,
+        fotoUrl: url,
+      });
+    } catch (error) {
+      console.error('[chatRoutes] Erro ao fazer upload da foto:', error);
+      return res.status(500).json({ error: 'Erro ao enviar foto' });
+    }
+  }
+);
 
 /**
  * Buscar chat por ID

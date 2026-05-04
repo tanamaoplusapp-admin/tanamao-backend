@@ -396,7 +396,33 @@ exports.sendNotification = async ({
       message,
       payload: enrichedPayload,
     });
+    const duplicateServiceTypes = ['NOVO_SERVICO', 'NOVA_SOLICITACAO'];
 
+    if (duplicateServiceTypes.includes(finalType) && finalServicoId) {
+      const existingNotification = await Notification.findOne({
+        userId: finalUserId,
+        type: { $in: duplicateServiceTypes },
+        $or: [
+          { servicoId: toObjectIdOrString(finalServicoId) },
+          { relatedId: toObjectIdOrString(finalServicoId) },
+          { 'payload.servicoId': stringifyId(finalServicoId) },
+          { 'payload.serviceId': stringifyId(finalServicoId) },
+        ],
+        createdAt: {
+          $gte: new Date(Date.now() - 5 * 60 * 1000),
+        },
+      }).sort({ createdAt: -1 });
+
+      if (existingNotification) {
+        console.log('[notificationService.sendNotification] duplicada ignorada', {
+          userId: stringifyId(finalUserId),
+          type: finalType,
+          servicoId: stringifyId(finalServicoId),
+        });
+
+        return existingNotification;
+      }
+    }
     const notification = await Notification.create({
       userId: finalUserId,
       type: finalType,
