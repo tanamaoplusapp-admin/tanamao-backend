@@ -525,15 +525,37 @@ exports.notifyProfissionalNovoServico = async ({
     return null;
   }
 
+  // Evita notificação duplicada para o mesmo serviço/prestador
+  const existente = await Notification.findOne({
+    userId: toObjectIdOrString(profissionalId),
+    type: { $in: ['NOVO_SERVICO', 'NOVA_SOLICITACAO'] },
+    $or: [
+      { servicoId: toObjectIdOrString(finalServicoId) },
+      { relatedId: toObjectIdOrString(finalServicoId) },
+      { 'payload.servicoId': stringifyId(finalServicoId) },
+      { 'payload.serviceId': stringifyId(finalServicoId) },
+    ],
+    createdAt: {
+      $gte: new Date(Date.now() - 2 * 60 * 1000),
+    },
+  }).sort({ createdAt: -1 });
+
+  if (existente) {
+    console.log('[notificationService.notifyProfissionalNovoServico] duplicada ignorada', {
+      profissionalId: stringifyId(profissionalId),
+      servicoId: stringifyId(finalServicoId),
+    });
+
+    return existente;
+  }
+
   return exports.sendNotification({
     userId: profissionalId,
     type: 'NOVO_SERVICO',
-    title: urgente
-      ? '🔥 Serviço urgente disponível'
-      : 'Novo serviço para você',
-    message: categoria
-      ? `Categoria: ${categoria}`
-      : 'Um cliente acabou de solicitar atendimento.',
+    title: 'Novo serviço para você',
+    message: clienteNome
+      ? `${clienteNome} solicitou o seu serviço.`
+      : 'Um cliente solicitou o seu serviço.',
     relatedId: finalServicoId,
     servicoId: finalServicoId,
     serviceId: finalServicoId,
@@ -557,7 +579,6 @@ exports.notifyProfissionalNovoServico = async ({
     },
   });
 };
-
 /* =========================================================
    SERVIÇO: CLIENTE RECEBE QUANDO PRESTADOR ACEITA
    Regra Tanamão+:
