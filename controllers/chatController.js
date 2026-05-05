@@ -216,6 +216,28 @@ try {
   );
 
   if (destinatarioId) {
+    const destinatario = await User.findById(destinatarioId)
+      .select('tipo role perfil userType tipoUsuario isProfissional profissional')
+      .lean();
+
+    const rawTipo =
+      destinatario?.tipo ||
+      destinatario?.role ||
+      destinatario?.perfil ||
+      destinatario?.userType ||
+      destinatario?.tipoUsuario ||
+      '';
+
+    const tipoNormalizado = String(rawTipo).toLowerCase();
+
+    const destinatarioTipo =
+      tipoNormalizado.includes('profissional') ||
+      tipoNormalizado.includes('prestador') ||
+      destinatario?.isProfissional === true ||
+      !!destinatario?.profissional
+        ? 'profissional'
+        : 'cliente';
+
     const nomeRemetente =
       novaMensagem?.remetente?.nome ||
       novaMensagem?.remetente?.name ||
@@ -225,11 +247,7 @@ try {
       textoLimpo ||
       (imagemUrl ? 'Enviou uma imagem.' : 'Você recebeu uma nova mensagem.');
 
-    const finalServicoId =
-      chat.servicoId ||
-      chat.serviceId ||
-      chat.servico ||
-      null;
+    const finalServicoId = chat.serviceId || null;
 
     await sendNotification({
       userId: destinatarioId,
@@ -243,6 +261,8 @@ try {
       payload: {
         notificationKind: 'chat',
         abrir: 'chat',
+
+        destinatarioTipo,
 
         chatId: String(chatId),
 
@@ -258,7 +278,10 @@ try {
     });
   }
 } catch (pushError) {
-  console.error('[chatController.enviarMensagem.push]', pushError?.message || pushError);
+  console.error(
+    '[chatController.enviarMensagem.push]',
+    pushError?.message || pushError
+  );
 }
 
 return res.status(201).json(novaMensagem || mensagemCriada);
