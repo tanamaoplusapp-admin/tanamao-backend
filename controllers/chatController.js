@@ -195,17 +195,73 @@ exports.enviarMensagem = async (req, res) => {
 
     const io = req.app.get('io');
 
-    if (io && novaMensagem) {
-      io.to(String(chatId)).emit('nova_mensagem', novaMensagem);
+   if (io && novaMensagem) {
+  io.to(String(chatId)).emit('nova_mensagem', novaMensagem);
 
-      chat.participantes.forEach((userId) => {
-        if (String(userId) !== String(remetenteId)) {
-          io.to(String(userId)).emit('nova_mensagem', novaMensagem);
-        }
-      });
+  chat.participantes.forEach((userId) => {
+    if (String(userId) !== String(remetenteId)) {
+      io.to(String(userId)).emit('nova_mensagem', novaMensagem);
     }
+  });
+}
 
-    return res.status(201).json(novaMensagem || mensagemCriada);
+/* =========================================================
+   PUSH DO CHAT
+   Quando um participante envia mensagem, o outro recebe push.
+========================================================= */
+
+try {
+  const destinatarioId = chat.participantes.find(
+    (userId) => String(userId) !== String(remetenteId)
+  );
+
+  if (destinatarioId) {
+    const nomeRemetente =
+      novaMensagem?.remetente?.nome ||
+      novaMensagem?.remetente?.name ||
+      'Alguém';
+
+    const mensagemPreview =
+      textoLimpo ||
+      (imagemUrl ? 'Enviou uma imagem.' : 'Você recebeu uma nova mensagem.');
+
+    const finalServicoId =
+      chat.servicoId ||
+      chat.serviceId ||
+      chat.servico ||
+      null;
+
+    await sendNotification({
+      userId: destinatarioId,
+      type: 'NOVA_MENSAGEM',
+      title: 'Nova mensagem',
+      message: `${nomeRemetente} enviou uma mensagem.`,
+      relatedId: chatId,
+      chatId,
+      servicoId: finalServicoId,
+      serviceId: finalServicoId,
+      payload: {
+        notificationKind: 'chat',
+        abrir: 'chat',
+
+        chatId: String(chatId),
+
+        servicoId: finalServicoId ? String(finalServicoId) : '',
+        serviceId: finalServicoId ? String(finalServicoId) : '',
+
+        remetenteId: String(remetenteId),
+        remetenteNome: nomeRemetente,
+
+        mensagemId: String(novaMensagem?._id || mensagemCriada?._id),
+        mensagemPreview: String(mensagemPreview).slice(0, 120),
+      },
+    });
+  }
+} catch (pushError) {
+  console.error('[chatController.enviarMensagem.push]', pushError?.message || pushError);
+}
+
+return res.status(201).json(novaMensagem || mensagemCriada);
   } catch (error) {
     console.error('enviarMensagem erro:', error);
 
