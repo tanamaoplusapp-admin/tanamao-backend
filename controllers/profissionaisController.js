@@ -372,29 +372,68 @@ exports.updateMe = async (req, res) => {
       updateData.endereco = req.body.endereco;
 
     /* ============================
-       PROFISSÕES
-    ============================ */
+   PROFISSÕES
+============================ */
 
-    if (Array.isArray(req.body.profissoes)) {
-      updateData.profissoes = req.body.profissoes;
-    } else if (Array.isArray(req.body.especialidades)) {
-      updateData.profissoes = req.body.especialidades;
-    } else if (req.body.profissaoNome) {
-      updateData.profissoes = [req.body.profissaoNome];
-    }
+if (Array.isArray(req.body.profissoesDetalhadas)) {
+  const detalhadas = req.body.profissoesDetalhadas
+    .slice(0, 3)
+    .filter((item) => item && item.nome)
+    .map((item) => ({
+      profissaoId: mongoose.Types.ObjectId.isValid(item.profissaoId)
+        ? item.profissaoId
+        : undefined,
 
-    if (req.body.profissaoNome !== undefined)
-      updateData.profissaoNome = req.body.profissaoNome;
+      nome: String(item.nome || '').trim(),
 
-    if (req.body.categoriaId !== undefined)
-      updateData.categoriaId = req.body.categoriaId;
+      categoriaId: mongoose.Types.ObjectId.isValid(item.categoriaId)
+        ? item.categoriaId
+        : undefined,
 
-    if (req.body.profissaoId !== undefined)
-      updateData.profissaoId = req.body.profissaoId;
+      categoriaNome: String(item.categoriaNome || '').trim(),
+    }));
 
-    if (req.body.tipoAtendimento !== undefined)
-      updateData.tipoAtendimento = req.body.tipoAtendimento;
+  updateData.profissoesDetalhadas = detalhadas;
 
+  updateData.profissoes = detalhadas
+    .map((item) => item.nome)
+    .filter(Boolean);
+
+} else if (Array.isArray(req.body.profissoes)) {
+  updateData.profissoes = req.body.profissoes
+    .slice(0, 3)
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+
+} else if (Array.isArray(req.body.especialidades)) {
+  updateData.profissoes = req.body.especialidades
+    .slice(0, 3)
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+
+} else if (req.body.profissaoNome) {
+  updateData.profissoes = [req.body.profissaoNome];
+}
+
+if (req.body.profissaoNome !== undefined)
+  updateData.profissaoNome = req.body.profissaoNome;
+
+if (
+  req.body.categoriaId !== undefined &&
+  mongoose.Types.ObjectId.isValid(req.body.categoriaId)
+) {
+  updateData.categoriaId = req.body.categoriaId;
+}
+
+if (
+  req.body.profissaoId !== undefined &&
+  mongoose.Types.ObjectId.isValid(req.body.profissaoId)
+) {
+  updateData.profissaoId = req.body.profissaoId;
+}
+
+if (req.body.tipoAtendimento !== undefined)
+  updateData.tipoAtendimento = req.body.tipoAtendimento;
     /* ============================
        FLAGS
     ============================ */

@@ -334,52 +334,50 @@ for (const prof of profissionaisAlvo) {
     });
   }
 
-  /* =========================
-     NOTIFICAÇÃO INTERNA
-  ========================= */
-
-  try {
-    await sendNotification({
-      userId,
-      type: 'NOVO_SERVICO',
-      title: '📢 Novo serviço disponível',
-      message: `Categoria: ${doc.categoria}`,
-      relatedId: doc._id,
-      payload: {
-        categoria: doc.categoria,
-        urgente: doc.urgente,
-      },
-    });
-  } catch (e) {
-    console.log('Erro notification:', e.message);
-  }
+  
 
   /* =========================
      PUSH
   ========================= */
 
-  try {
+    try {
+    await enviarPushParaUsuario(userId, {
+      title: 'Novo serviço para você',
+      body: doc.urgente
+        ? '🔥 Serviço urgente disponível agora.'
+        : 'Um cliente acabou de solicitar atendimento.',
 
-  await enviarPushParaUsuario(userId, {
-    title: 'Novo serviço para você',
-    body: doc.urgente
-      ? '🔥 Serviço urgente disponível agora.'
-      : 'Um cliente acabou de solicitar atendimento.',
-    data: {
-      serviceId: doc._id.toString(),
       type: 'NOVO_SERVICO',
-    },
-  });
+      serviceId: doc._id.toString(),
+      servicoId: doc._id.toString(),
+      relatedId: doc._id.toString(),
 
-} catch (e) {
+      data: {
+        serviceId: doc._id.toString(),
+        servicoId: doc._id.toString(),
+        relatedId: doc._id.toString(),
+
+        type: 'NOVO_SERVICO',
+
+        notificationKind: 'servico',
+        abrir: 'servico',
+        destinatarioTipo: 'profissional',
+
+        categoria: doc.categoria || '',
+        urgente: doc.urgente ? 'true' : 'false',
+        status: doc.status || 'pendente',
+
+        chatId: chat?._id ? chat._id.toString() : '',
+      },
+    });
+  } catch (e) {
     console.log('Erro push:', e.message);
   }
-
 }
 
 return res.status(201).json({
   service: doc,
-  chatId: chat?._id || null
+  chatId: chat?._id || null,
 });
 
 } catch (err) {

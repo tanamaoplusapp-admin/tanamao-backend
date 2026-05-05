@@ -108,11 +108,38 @@ trim:true,
 index:true
 },
 
-profissoes:[
-{
-type:String,
-trim:true
-}
+profissoes: [
+  {
+    type: String,
+    trim: true,
+  },
+],
+
+profissoesDetalhadas: [
+  {
+    profissaoId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Profissao',
+      index: true,
+    },
+
+    nome: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+
+    categoriaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Categoria',
+      index: true,
+    },
+
+    categoriaNome: {
+      type: String,
+      trim: true,
+    },
+  },
 ],
 /* =========================
 SERVIÇOS
