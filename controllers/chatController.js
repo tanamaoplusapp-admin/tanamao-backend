@@ -15,6 +15,13 @@ const isObjectId = (v) =>
 const getUserId = (req) =>
   req.userId || req.user?.id || req.user?._id;
 
+/**
+ * Campos públicos do usuário usados no chat.
+ * Mantém compatibilidade com Cliente, Profissional e telas antigas/novas.
+ */
+const USER_CHAT_FIELDS =
+  'name nome telefone celular whatsapp phone online fotoPerfil foto avatar imagemPerfil profileImage profilePhoto photoURL photoUrl';
+
 /* =========================================================
    CRIAR CHAT
 ========================================================= */
@@ -46,7 +53,7 @@ exports.criarChat = async (req, res) => {
       participantes: {
         $all: [remetenteId, destinatarioId],
       },
-    }).populate('participantes', 'name nome telefone celular whatsapp phone online')
+    }).populate('participantes', USER_CHAT_FIELDS);
 
     if (chat) {
       return res.json(chat);
@@ -59,7 +66,7 @@ exports.criarChat = async (req, res) => {
     });
 
     const chatCriado = await Chat.findById(chat._id)
-      .populate('participantes', 'name online')
+      .populate('participantes', USER_CHAT_FIELDS)
       .lean();
 
     return res.status(201).json(chatCriado);
@@ -87,7 +94,7 @@ exports.buscarChatsDoUsuario = async (req, res) => {
     const chats = await Chat.find({
       participantes: userId,
     })
-      .populate('participantes', 'name online')
+      .populate('participantes', USER_CHAT_FIELDS)
       .sort({ atualizadoEm: -1, updatedAt: -1 })
       .lean();
 
@@ -103,7 +110,7 @@ exports.buscarChatsDoUsuario = async (req, res) => {
           chatId: chat._id,
         })
           .sort({ enviadoEm: -1, createdAt: -1 })
-          .populate('remetente', 'name')
+          .populate('remetente', USER_CHAT_FIELDS)
           .select('texto remetente enviadoEm createdAt imagemUrl')
           .lean();
 
@@ -183,7 +190,7 @@ exports.enviarMensagem = async (req, res) => {
     });
 
     const novaMensagem = await Mensagem.findById(mensagemCriada._id)
-      .populate('remetente', 'name')
+      .populate('remetente', USER_CHAT_FIELDS)
       .lean();
 
     const io = req.app.get('io');
@@ -242,7 +249,7 @@ exports.listarMensagens = async (req, res) => {
     }
 
     const mensagens = await Mensagem.find({ chatId })
-      .populate('remetente', 'name')
+      .populate('remetente', USER_CHAT_FIELDS)
       .sort({ enviadoEm: 1, createdAt: 1 })
       .lean();
 
@@ -325,6 +332,10 @@ exports.marcarComoLido = async (req, res) => {
   }
 };
 
+/* =========================================================
+   BUSCAR CHAT POR ID
+========================================================= */
+
 exports.buscarChatPorId = async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store');
@@ -345,7 +356,7 @@ exports.buscarChatPorId = async (req, res) => {
     }
 
     const chat = await Chat.findById(chatId)
-      .populate('participantes', 'name nome telefone celular whatsapp phone online')
+      .populate('participantes', USER_CHAT_FIELDS)
       .lean();
 
     if (!chat) {
@@ -364,6 +375,16 @@ exports.buscarChatPorId = async (req, res) => {
         name: p.name,
         nome: p.nome,
         telefone: p.telefone || p.celular || p.whatsapp || p.phone,
+        fotoPerfil:
+          p.fotoPerfil ||
+          p.foto ||
+          p.avatar ||
+          p.imagemPerfil ||
+          p.profileImage ||
+          p.profilePhoto ||
+          p.photoURL ||
+          p.photoUrl ||
+          null,
       })),
     });
 
