@@ -187,7 +187,10 @@ function baseStatement() {
           }
 
         }
-
+console.log(
+  'WEBHOOK URL ENVIADA:',
+  body.notification_url
+)
         const payment =
           await new Payment(mp).create({
 
