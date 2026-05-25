@@ -339,7 +339,9 @@ CRIAR PAGAMENTO
 const payment = await new Payment(mp).create({
 
 body:{
+
 transaction_amount: valor,
+
 payment_method_id:'pix',
 
 description,
@@ -348,11 +350,19 @@ payer:{
 email:req.user.email
 },
 
+notification_url:
+`${process.env.API_URL}/api/payment/webhook`,
+
 metadata:{
+
 type,
+
 quantidade,
+
 dias,
+
 user_id:req.userId
+
 }
 
 }
@@ -399,7 +409,10 @@ try{
 
 const valor = 129.90
 const dias = 30
-
+console.log(
+'WEBHOOK URL:',
+`${process.env.API_URL}/api/payment/webhook`
+)
 const payment = await new Payment(mp).create({
 
 body:{
