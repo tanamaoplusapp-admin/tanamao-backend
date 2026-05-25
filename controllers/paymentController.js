@@ -14,473 +14,601 @@ HELPERS
 const asMoney = (n) => Number((Number(n) || 0).toFixed(2))
 
 const idemKey = (prefix) =>
-`${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 const getUserId = (req) =>
-(req.user?._id || req.userId || req.user?.id || '').toString()
+  (req.user?._id || req.userId || req.user?.id || '').toString()
 
 function getCollectorId(companyDoc) {
-return companyDoc?.collectorId || companyDoc?.collector_id || ''
+  return companyDoc?.collectorId || companyDoc?.collector_id || ''
 }
 
 function getCommissionRate(porte) {
 
-const p = String(porte || '').toLowerCase()
+  const p = String(porte || '').toLowerCase()
 
-const rates = config.payments?.commission?.empresa || {}
+  const rates = config.payments?.commission?.empresa || {}
 
-if (p === 'mei') return Number(rates.mei ?? 0.03)
-if (p === 'pequena') return Number(rates.pequeno ?? 0.05)
-if (p === 'media' || p === 'média') return Number(rates.medio ?? 0.07)
-if (p === 'grande') return Number(rates.grande ?? 0.10)
+  if (p === 'mei') return Number(rates.mei ?? 0.03)
+  if (p === 'pequena') return Number(rates.pequeno ?? 0.05)
+  if (p === 'media' || p === 'média') return Number(rates.medio ?? 0.07)
+  if (p === 'grande') return Number(rates.grande ?? 0.10)
 
-return Number(rates.pequeno ?? 0.05)
+  return Number(rates.pequeno ?? 0.05)
 
 }
 
 function baseStatement() {
-return (config.mercadoPago?.statementDescriptor || 'TANAMAO+').slice(0, 22)
+  return (config.mercadoPago?.statementDescriptor || 'TANAMAO+').slice(0, 22)
 }
 
-/* =========================================================
-PIX
-========================================================= */
+    /* =============================
+    PIX
+    ============================= */
 
-const processarPagamentoPix = async (req, res) => {
+    const processarPagamentoPix = async (req, res) => {
 
-try {
+      try {
 
-const userId = getUserId(req)
+        const userId = getUserId(req)
 
-const {
-value,
-payer = {},
-description,
-companyId,
-serviceId,
-motoristaId,
-plano,
-tipo = 'servico_profissional'
-} = req.body || {}
+        const {
+          value,
+          payer = {},
+          description,
+          companyId,
+          serviceId,
+          motoristaId,
+          plano,
+          tipo = 'servico_profissional'
+        } = req.body || {}
 
-const amount = Number(value)
+        const amount = Number(value)
 
-if (!Number.isFinite(amount) || amount <= 0) {
-return res.status(400).json({ error: 'Valor inválido' })
-}
+        if (!Number.isFinite(amount) || amount <= 0) {
+          return res.status(400).json({
+            error: 'Valor inválido'
+          })
+        }
 
-let applicationFee = 0
-let collectorId = null
-let porteEmpresa = null
+        let applicationFee = 0
+        let collectorId = null
+        let porteEmpresa = null
 
-/* =============================
-EMPRESAS (SPLIT AUTOMÁTICO)
-============================= */
+        /* =============================
+        EMPRESAS (SPLIT AUTOMÁTICO)
+        ============================= */
 
-if (tipo === 'servico_empresa' && companyId) {
+        if (tipo === 'servico_empresa' && companyId) {
 
-const company = await Company.findById(companyId).lean()
+          const company = await Company.findById(companyId).lean()
 
-if (!company)
-return res.status(404).json({ error: 'Empresa não encontrada' })
+          if (!company)
+            return res.status(404).json({
+              error: 'Empresa não encontrada'
+            })
 
-collectorId = getCollectorId(company)
+          collectorId = getCollectorId(company)
 
-if (!collectorId)
-return res.status(400).json({
-error: 'Empresa sem collectorId configurado'
-})
+          if (!collectorId)
+            return res.status(400).json({
+              error: 'Empresa sem collectorId configurado'
+            })
 
-const rate = getCommissionRate(
-company.porteEmpresa || company.porteOriginal
-)
+          const rate = getCommissionRate(
+            company.porteEmpresa || company.porteOriginal
+          )
 
-applicationFee = asMoney(amount * rate)
+          applicationFee = asMoney(amount * rate)
 
-porteEmpresa =
-company.porteEmpresa || company.porteOriginal || 'pequena'
+          porteEmpresa =
+            company.porteEmpresa ||
+            company.porteOriginal ||
+            'pequena'
 
-}
+        }
 
-/* =============================
-CRIAR PAGAMENTO
-============================= */
+        /* =============================
+        CRIAR PAGAMENTO PIX
+        ============================= */
 
-const body = {
+        const body = {
 
-  transaction_amount: amount,
+          transaction_amount: amount,
 
-  description: (description || 'Pagamento Tanamão').toString(),
+          description:
+            (description || 'Pagamento Tanamão')
+              .toString(),
 
-  payment_method_id: 'pix',
+          payment_method_id: 'pix',
 
-  payer: {
-    email: payer.email || 'comprador@email.com',
-    first_name: payer.nome || 'Usuário',
-    identification: payer.cpf
-      ? { type: 'CPF', number: String(payer.cpf) }
-      : undefined
-  },
+          payer: {
+            email:
+              payer.email ||
+              'comprador@email.com',
 
-  statement_descriptor: baseStatement(),
+            first_name:
+              payer.nome ||
+              'Usuário',
 
-  notification_url:
-    config.mercadoPago?.webhookUrl ||
-    process.env.MP_WEBHOOK_URL ||
-    undefined,
+            identification: payer.cpf
+              ? {
+                type: 'CPF',
+                number: String(payer.cpf)
+              }
+              : undefined
+          },
 
-  application_fee: applicationFee || undefined,
+          statement_descriptor: baseStatement(),
 
-  sponsor_id: collectorId || undefined,
+          notification_url:
+            config.mercadoPago?.webhookUrl ||
+            process.env.MP_WEBHOOK_URL ||
+            undefined,
 
-  metadata: {
+          application_fee:
+            applicationFee || undefined,
 
-    // COMPATIBILIDADE COM WEBHOOK
-    type:
-      tipo === 'credits'
-        ? 'access'
-        : tipo === 'subscription'
-        ? 'subscription'
-        : tipo,
+          sponsor_id:
+            collectorId || undefined,
 
-    origem: 'tanamao',
+          metadata: {
 
-    user_id: userId || null,
+            /* ==================================
+               COMPATIBILIDADE WEBHOOK
+            ================================== */
 
-    // webhook espera "dias"
-    dias: Number(req.body.quantidade || 0),
+            type:
+              tipo === 'credits'
+                ? 'access'
+                : tipo === 'subscription'
+                  ? 'subscription'
+                  : tipo,
 
-    // manter compatibilidade antiga
-    quantidade: req.body.quantidade || null,
+            origem: 'tanamao',
 
-    plano: plano || null,
+            user_id: userId || null,
 
-    service_id: serviceId || null,
+            dias: Number(
+              req.body.quantidade || 0
+            ),
 
-    meio: 'pix'
+            quantidade:
+              req.body.quantidade || null,
 
-  }
+            plano:
+              plano || null,
 
-}
+            service_id:
+              serviceId || null,
 
-const payment = await new Payment(mp).create({
-  body,
-  requestOptions: { idempotencyKey: idemKey('pix') }
-})
+            meio: 'pix'
 
-const tx = payment?.point_of_interaction?.transaction_data
+          }
 
-if (!tx?.qr_code || !tx?.qr_code_base64) {
-  return res
-    .status(502)
-    .json({ error: 'Não foi possível gerar o QR do Pix.' })
-}
+        }
 
-return res.json({
+        const payment =
+          await new Payment(mp).create({
 
-  id: payment.id,
+            body,
 
-  status: payment.status,
+            requestOptions: {
+              idempotencyKey: idemKey('pix')
+            }
 
-  amount: payment.transaction_amount,
+          })
 
-  qr_code_base64: tx.qr_code_base64,
+        const tx =
+          payment?.point_of_interaction
+            ?.transaction_data
 
-  qr_code: tx.qr_code,
+        if (!tx?.qr_code || !tx?.qr_code_base64) {
 
-  expiration_time: tx.expiration_time
+          return res
+            .status(502)
+            .json({
+              error:
+                'Não foi possível gerar o QR do Pix.'
+            })
 
-})
+        }
 
-} catch (error) {
+        return res.json({
 
-console.error('Erro ao processar Pix:', error)
+          id: payment.id,
 
-return res.status(500).json({
-  error: 'Erro ao processar pagamento Pix',
-  details: error?.message || error
-})
+          status: payment.status,
 
-}
+          amount: payment.transaction_amount,
 
-}
+          qr_code_base64:
+            tx.qr_code_base64,
 
-/* =========================================================
-CARTÃO
-========================================================= */
+          qr_code:
+            tx.qr_code,
 
-const processarPagamentoCartao = async (req, res) => {
+          // 🔥 PIX COPIA E COLA
+          copia_e_cola:
+            tx.qr_code,
 
-try {
+          expiration_time:
+            tx.expiration_time
 
-const userId = getUserId(req)
+        })
 
-const {
-  token,
-  value,
-  payer = {},
-  installments,
-  description,
-  payment_method_id,
-  companyId,
-  serviceId,
-  motoristaId,
-  plano,
-  tipo = 'servico_profissional'
-} = req.body || {}
+      } catch (error) {
 
-const amount = Number(value)
+        console.error(
+          'Erro ao processar Pix:',
+          error
+        )
 
-if (!token)
-  return res.status(400).json({
-    error: 'token do cartão é obrigatório'
-  })
+        return res.status(500).json({
 
-if (!Number.isFinite(amount) || amount <= 0)
-  return res.status(400).json({ error: 'Valor inválido' })
+          error:
+            'Erro ao processar pagamento Pix',
 
-let applicationFee = 0
-let collectorId = null
-let porteEmpresa = null
+          details:
+            error?.message || error
 
-if (tipo === 'servico_empresa' && companyId) {
+        })
 
-  const company = await Company.findById(companyId).lean()
+      }
 
-  if (!company)
-    return res.status(404).json({ error: 'Empresa não encontrada' })
+    }
 
-  collectorId = getCollectorId(company)
+    /* =========================================================
+    CARTÃO
+    ========================================================= */
 
-  const rate = getCommissionRate(
-    company.porteEmpresa || company.porteOriginal
-  )
+    const processarPagamentoCartao = async (req, res) => {
 
-  applicationFee = asMoney(amount * rate)
+      try {
 
-  porteEmpresa =
-    company.porteEmpresa || company.porteOriginal || 'pequena'
+        const userId = getUserId(req)
 
-}
+        const {
+          token,
+          value,
+          payer = {},
+          installments,
+          description,
+          payment_method_id,
+          companyId,
+          serviceId,
+          motoristaId,
+          plano,
+          tipo = 'servico_profissional'
+        } = req.body || {}
 
-const body = {
+        const amount = Number(value)
 
-  token,
+        if (!token) {
+          return res.status(400).json({
+            error:
+              'token do cartão é obrigatório'
+          })
+        }
 
-  binary_mode: true,
+        if (
+          !Number.isFinite(amount) ||
+          amount <= 0
+        ) {
+          return res.status(400).json({
+            error: 'Valor inválido'
+          })
+        }
 
-  transaction_amount: amount,
+        let applicationFee = 0
+        let collectorId = null
+        let porteEmpresa = null
 
-  description: (description || 'Pagamento Tanamão').toString(),
+        /* =============================
+        EMPRESA
+        ============================= */
 
-  installments: Number(installments || 1),
+        if (
+          tipo === 'servico_empresa' &&
+          companyId
+        ) {
 
-  payment_method_id: payment_method_id || undefined,
+          const company =
+            await Company.findById(companyId)
+              .lean()
 
-  payer: {
-    email: payer.email || 'comprador@email.com',
-    identification: payer.cpf
-      ? { type: 'CPF', number: String(payer.cpf) }
-      : undefined
-  },
+          if (!company)
+            return res.status(404).json({
+              error:
+                'Empresa não encontrada'
+            })
 
-  statement_descriptor: baseStatement(),
+          collectorId =
+            getCollectorId(company)
 
-  notification_url:
-    config.mercadoPago?.webhookUrl ||
-    process.env.MP_WEBHOOK_URL ||
-    undefined,
+          const rate =
+            getCommissionRate(
+              company.porteEmpresa ||
+              company.porteOriginal
+            )
 
-  application_fee: applicationFee || undefined,
+          applicationFee =
+            asMoney(amount * rate)
 
-  sponsor_id: collectorId || undefined,
+          porteEmpresa =
+            company.porteEmpresa ||
+            company.porteOriginal ||
+            'pequena'
 
-  metadata: {
+        }
 
-    // COMPATIBILIDADE COM WEBHOOK
-    type:
-      tipo === 'credits'
-        ? 'access'
-        : tipo === 'subscription'
-        ? 'subscription'
-        : tipo,
+        /* =============================
+        CRIAR PAGAMENTO CARTÃO
+        ============================= */
 
-    origem: 'tanamao',
+        const body = {
 
-    user_id: userId || null,
+          token,
 
-    // webhook espera "dias"
-    dias: Number(req.body.quantidade || 0),
+          binary_mode: true,
 
-    // manter compatibilidade antiga
-    quantidade: req.body.quantidade || null,
+          transaction_amount: amount,
 
-    plano: plano || null,
+          description:
+            (description || 'Pagamento Tanamão')
+              .toString(),
 
-    service_id: serviceId || null,
+          installments:
+            Number(installments || 1),
 
-    meio: 'card'
+          payment_method_id:
+            payment_method_id || undefined,
 
-  }
+          payer: {
 
-}
+            email:
+              payer.email ||
+              'comprador@email.com',
 
-const payment = await new Payment(mp).create({
-  body,
-  requestOptions: { idempotencyKey: idemKey('card') }
-})
+            identification:
+              payer.cpf
+                ? {
+                  type: 'CPF',
+                  number: String(
+                    payer.cpf
+                  )
+                }
+                : undefined
 
-return res.json({
-  id: payment.id,
-  status: payment.status,
-  amount: payment.transaction_amount
-})
+          },
 
-} catch (error) {
+          statement_descriptor:
+            baseStatement(),
 
-console.error('Erro pagamento cartão:', error)
+          notification_url:
+            config.mercadoPago?.webhookUrl ||
+            process.env.MP_WEBHOOK_URL ||
+            undefined,
 
-return res.status(500).json({
-  error: 'Erro ao processar cartão',
-  details: error?.message || error
-})
+          application_fee:
+            applicationFee || undefined,
 
-}
+          sponsor_id:
+            collectorId || undefined,
 
-}
+          metadata: {
 
-/* =========================================================
-CONSULTAR STATUS
-========================================================= */
+            /* ==================================
+               COMPATIBILIDADE WEBHOOK
+            ================================== */
 
-const getPaymentStatus = async (req, res) => {
+            type:
+              tipo === 'credits'
+                ? 'access'
+                : tipo === 'subscription'
+                  ? 'subscription'
+                  : tipo,
 
-try {
+            origem: 'tanamao',
 
-const { paymentId } = req.params
+            user_id:
+              userId || null,
 
-if (!paymentId)
-return res.status(400).json({
-error: 'paymentId é obrigatório'
-})
+            dias: Number(
+              req.body.quantidade || 0
+            ),
 
-const payment = await new Payment(mp).get({ id: paymentId })
+            quantidade:
+              req.body.quantidade || null,
 
-const tipo = payment?.metadata?.type
-const userId = payment?.metadata?.user_id
+            plano:
+              plano || null,
 
-/* =============================
-PAGAMENTO CONFIRMADO
-============================= */
+            service_id:
+              serviceId || null,
 
-if (payment.status === 'approved') {
+            meio: 'card'
 
-if (userId) {
+          }
 
-await sendNotification({
+        }
 
-userId,
+        const payment =
+          await new Payment(mp).create({
 
-type: 'PAGAMENTO_CONFIRMADO',
+            body,
 
-title: '💰 Pagamento confirmado',
+            requestOptions: {
+              idempotencyKey:
+                idemKey('card')
+            }
 
-message: 'Seu pagamento foi aprovado com sucesso.',
+          })
 
-relatedId: paymentId
+        return res.json({
 
-})
+          id: payment.id,
 
-}
+          status: payment.status,
 
-/* =============================
-AÇÕES POR TIPO
-============================= */
+          amount:
+            payment.transaction_amount
 
-switch (tipo) {
+        })
 
-case 'mensalidade_profissional':
-// ativar plano prestador
-break
+      } catch (error) {
 
-case 'mensalidade_empresa':
-// ativar plano empresa
-break
+        console.error(
+          'Erro pagamento cartão:',
+          error
+        )
 
-case 'mensalidade_motorista':
-// ativar plano motorista
-break
+        return res.status(500).json({
 
-switch (tipo) {
+          error:
+            'Erro ao processar cartão',
 
-case 'credits':
-break
+          details:
+            error?.message || error
 
-case 'subscription':
-break
+        })
 
-case 'bonus':
-break
+      }
 
-}
+    }
 
-case 'comissao_motorista':
-// baixar comissão motorista
-break
+    /* =========================================================
+    CONSULTAR STATUS
+    ========================================================= */
 
-case 'servico_empresa':
-// serviço pago empresa
-break
+    const getPaymentStatus = async (req, res) => {
 
-case 'servico_profissional':
-// serviço pago prestador
-break
+      try {
 
-case 'servico_motorista':
-// corrida paga
-break
+        const { paymentId } = req.params
 
-}
+        if (!paymentId)
+          return res.status(400).json({
+            error: 'paymentId é obrigatório'
+          })
 
-}
+        const payment = await new Payment(mp).get({ id: paymentId })
 
-return res.json({
+        const tipo = payment?.metadata?.type
+        const userId = payment?.metadata?.user_id
 
-id: payment.id,
+        /* =============================
+        PAGAMENTO CONFIRMADO
+        ============================= */
 
-status: payment.status,
+        if (payment.status === 'approved') {
 
-status_detail: payment.status_detail,
+          if (userId) {
 
-amount: payment.transaction_amount,
+            await sendNotification({
 
-metadata: payment?.metadata
+              userId,
 
-})
+              type: 'PAGAMENTO_CONFIRMADO',
 
-} catch (err) {
+              title: '💰 Pagamento confirmado',
 
-console.error('Erro ao consultar pagamento:', err)
+              message: 'Seu pagamento foi aprovado com sucesso.',
 
-return res.status(500).json({
-error: 'Erro ao consultar status',
-details: err?.message || err
-})
+              relatedId: paymentId
 
-}
+            })
 
-}
+          }
 
-/* =========================================================
-EXPORT
-========================================================= */
+          /* =============================
+          AÇÕES POR TIPO
+          ============================= */
 
-module.exports = {
+          switch (tipo) {
 
-processarPagamentoPix,
+            case 'mensalidade_profissional':
+              // ativar plano prestador
+              break
 
-processarPagamentoCartao,
+            case 'mensalidade_empresa':
+              // ativar plano empresa
+              break
 
-getPaymentStatus
+            case 'mensalidade_motorista':
+              // ativar plano motorista
+              break
 
-}
+              switch (tipo) {
+
+                case 'credits':
+                  break
+
+                case 'subscription':
+                  break
+
+                case 'bonus':
+                  break
+
+              }
+
+            case 'comissao_motorista':
+              // baixar comissão motorista
+              break
+
+            case 'servico_empresa':
+              // serviço pago empresa
+              break
+
+            case 'servico_profissional':
+              // serviço pago prestador
+              break
+
+            case 'servico_motorista':
+              // corrida paga
+              break
+
+          }
+
+        }
+
+        return res.json({
+
+          id: payment.id,
+
+          status: payment.status,
+
+          status_detail: payment.status_detail,
+
+          amount: payment.transaction_amount,
+
+          metadata: payment?.metadata
+
+        })
+
+      } catch (err) {
+
+        console.error('Erro ao consultar pagamento:', err)
+
+        return res.status(500).json({
+          error: 'Erro ao consultar status',
+          details: err?.message || err
+        })
+
+      }
+
+    }
+
+    /* =========================================================
+    EXPORT
+    ========================================================= */
+
+    module.exports = {
+
+      processarPagamentoPix,
+
+      processarPagamentoCartao,
+
+      getPaymentStatus
+
+    }
