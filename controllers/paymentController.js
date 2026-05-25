@@ -257,7 +257,215 @@ function baseStatement() {
       }
 
     }
+/* =========================================================
+CHECKOUT CARTÃO (MERCADO PAGO)
+========================================================= */
 
+const { Preference } = require('mercadopago')
+
+const criarCheckoutCartao = async (req, res) => {
+
+  try {
+
+    const userId = getUserId(req)
+
+    const {
+      plano,
+      quantidade,
+      value,
+      description
+    } = req.body || {}
+
+    /* =============================
+    VALIDAÇÕES
+    ============================= */
+
+    const amount = Number(value)
+    const dias = Number(quantidade)
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Usuário não autenticado'
+      })
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({
+        error: 'Valor inválido'
+      })
+    }
+
+    if (!Number.isFinite(dias) || dias <= 0) {
+      return res.status(400).json({
+        error: 'Quantidade de dias inválida'
+      })
+    }
+
+    /* =============================
+    NORMALIZAÇÃO PLANO
+    ============================= */
+
+    let tipoFinal = 'access'
+
+    if (
+      plano === '30_dias' ||
+      dias === 30
+    ) {
+      tipoFinal = 'subscription'
+    }
+
+    /* =============================
+    PREFERENCE
+    ============================= */
+
+    const preferenceBody = {
+
+      items: [
+        {
+
+          id: plano || `plano_${dias}`,
+
+          title:
+            description ||
+            `Plano ${dias} dias Tanamão+`,
+
+          quantity: 1,
+
+          currency_id: 'BRL',
+
+          unit_price: amount
+
+        }
+      ],
+
+      payer: {
+        email:
+          req.user?.email ||
+          'comprador@email.com'
+      },
+
+      payment_methods: {
+
+        excluded_payment_types: [
+          { id: 'ticket' }
+        ],
+
+        installments: 12
+
+      },
+
+      back_urls: {
+
+        success:
+          'tanamao://payment/success',
+
+        failure:
+          'tanamao://payment/failure',
+
+        pending:
+          'tanamao://payment/pending'
+
+      },
+
+      auto_return: 'approved',
+
+      binary_mode: true,
+
+      statement_descriptor:
+        baseStatement(),
+
+      notification_url:
+        config.mercadoPago?.webhookUrl ||
+        process.env.MP_WEBHOOK_URL,
+
+      external_reference:
+        `${userId}_${Date.now()}`,
+
+      metadata: {
+
+        /* ==================================
+           COMPATIBILIDADE WEBHOOK
+        ================================== */
+
+        type: tipoFinal,
+
+        origem: 'tanamao',
+
+        user_id: userId,
+
+        dias,
+
+        quantidade: dias,
+
+        plano:
+          plano || `${dias}_dias`,
+
+        meio: 'checkout_card'
+
+      }
+
+    }
+
+    /* =============================
+    CRIAR CHECKOUT
+    ============================= */
+
+    const preference =
+      await new Preference(mp).create({
+        body: preferenceBody
+      })
+
+    if (
+      !preference ||
+      !preference.init_point
+    ) {
+
+      return res.status(502).json({
+        error:
+          'Não foi possível gerar checkout'
+      })
+
+    }
+
+    /* =============================
+    RESPONSE
+    ============================= */
+
+    return res.json({
+
+      ok: true,
+
+      id:
+        preference.id,
+
+      init_point:
+        preference.init_point,
+
+      sandbox_init_point:
+        preference.sandbox_init_point || null
+
+    })
+
+  } catch (error) {
+
+    console.error(
+      'Erro checkout cartão:',
+      error
+    )
+
+    return res.status(500).json({
+
+      error:
+        'Erro ao gerar checkout cartão',
+
+      details:
+        error?.message || error
+
+    })
+
+  }
+
+}
     /* =========================================================
     CARTÃO
     ========================================================= */
@@ -605,10 +813,12 @@ function baseStatement() {
 
     module.exports = {
 
-      processarPagamentoPix,
+  processarPagamentoPix,
 
-      processarPagamentoCartao,
+  processarPagamentoCartao,
 
-      getPaymentStatus
+  criarCheckoutCartao,
 
-    }
+  getPaymentStatus
+
+}

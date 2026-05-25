@@ -707,19 +707,203 @@ error:true
 
 });
 /* =====================================================
-   CARTÃO (FUTURO)
+   CHECKOUT CARTÃO
 ===================================================== */
 
+const { Preference } = require('mercadopago')
+
 router.post(
-  '/card',
+  '/checkout/card',
+
   verifyToken,
+
   requireVerified,
-  requireRoles('empresa', 'profissional'),
-  async (_req, res) => {
-    return res.status(501).json({
-      message: 'Pagamento cartão ainda não implementado'
-    });
+
+  requireRoles('profissional'),
+
+  async (req, res) => {
+
+    try {
+
+      const {
+        plano,
+        quantidade,
+        value
+      } = req.body || {}
+
+      const amount = Number(value)
+      const dias = Number(quantidade)
+
+      /* =========================
+      VALIDAÇÕES
+      ========================= */
+
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+
+        return res.status(400).json({
+          error: 'Valor inválido'
+        })
+
+      }
+
+      if (
+        !Number.isFinite(dias) ||
+        dias <= 0
+      ) {
+
+        return res.status(400).json({
+          error: 'Dias inválidos'
+        })
+
+      }
+
+      /* =========================
+      TIPO PLANO
+      ========================= */
+
+      let type = 'access'
+
+      if (
+        plano === '30_dias' ||
+        dias === 30
+      ) {
+
+        type = 'subscription'
+
+      }
+
+      /* =========================
+      CHECKOUT MP
+      ========================= */
+
+      const preference =
+        await new Preference(mp).create({
+
+          body: {
+
+            items: [
+              {
+
+                id:
+                  plano ||
+
+                  `${dias}_dias`,
+
+                title:
+                  `Plano ${dias} dias Tanamão+`,
+
+                quantity: 1,
+
+                currency_id: 'BRL',
+
+                unit_price: amount
+
+              }
+            ],
+
+            payer: {
+
+              email:
+                req.user?.email
+
+            },
+
+            payment_methods: {
+
+              excluded_payment_types: [
+                { id: 'ticket' }
+              ],
+
+              installments: 12
+
+            },
+
+            binary_mode: true,
+
+            auto_return: 'approved',
+
+            notification_url:
+              `${process.env.API_URL}/api/payment/webhook`,
+
+            external_reference:
+              `${req.userId}_${Date.now()}`,
+
+            back_urls: {
+
+              success:
+                'tanamao://payment/success',
+
+              pending:
+                'tanamao://payment/pending',
+
+              failure:
+                'tanamao://payment/failure'
+
+            },
+
+            metadata: {
+
+              type,
+
+              origem: 'tanamao',
+
+              user_id:
+                req.userId,
+
+              dias,
+
+              quantidade: dias,
+
+              plano,
+
+              meio:
+                'checkout_card'
+
+            }
+
+          }
+
+        })
+
+      /* =========================
+      RESPONSE
+      ========================= */
+
+      return res.json({
+
+        ok: true,
+
+        id:
+          preference.id,
+
+        init_point:
+          preference.init_point,
+
+        sandbox_init_point:
+          preference.sandbox_init_point || null
+
+      })
+
+    } catch (e) {
+
+      console.error(
+        'CHECKOUT CARD ERROR:',
+        e
+      )
+
+      return res.status(500).json({
+
+        error:
+          'Erro ao criar checkout cartão'
+
+      })
+
+    }
+
   }
-);
+)
 
 module.exports = router;
