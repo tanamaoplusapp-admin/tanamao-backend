@@ -3,6 +3,5 @@ const router = express.Router();
 const controller = require('../controllers/mercadoPagoWebhookController');
 
 // Mercado Pago exige POST público
-router.post('/mercadopago/webhook', controller.webhook);
-
+router.post('/', controller.webhook);
 module.exports = router;
