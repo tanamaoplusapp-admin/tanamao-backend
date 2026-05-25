@@ -1,3 +1,4 @@
+console.log('🔥 PAYMENT ROUTES NOVO')
 const express = require('express');
 const router = express.Router();
 
