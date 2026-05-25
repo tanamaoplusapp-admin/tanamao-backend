@@ -1,5 +1,5 @@
 // controllers/paymentController.js
-
+console.log('🔥 PAYMENT CONTROLLER NOVO')
 const { mp, Payment } = require('../services/mercadoPago')
 const Company = require('../models/company')
 const User = require('../models/user')
