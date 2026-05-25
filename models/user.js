@@ -237,7 +237,13 @@ acessoExpiraEm:{
 
 planoAtivo:{
   type:String,
-  enum:['1dia','7dias','15dias','30dias'],
+  enum:[
+  'trial_45_dias',
+  '1_dia',
+  '7_dias',
+  '15_dias',
+  '30_dias'
+],
   default:null
 },
   /* ============================
