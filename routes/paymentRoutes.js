@@ -717,10 +717,6 @@ router.post(
 
   verifyToken,
 
-  requireVerified,
-
-  requireRoles('profissional'),
-
   async (req, res) => {
 
     try {
