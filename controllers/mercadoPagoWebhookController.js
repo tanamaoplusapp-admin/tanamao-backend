@@ -163,6 +163,8 @@ WEBHOOK
 
 exports.webhook = async (req, res) => {
   try {
+     console.log('🔥 WEBHOOK RECEBIDO')
+  console.log(req.body)
     const body = req.body || {};
     const eventType = body.type || body.topic;
     const paymentId = body.data?.id || body.id;
@@ -173,7 +175,8 @@ exports.webhook = async (req, res) => {
     }
 
     const payment = await new Payment(mp).get({ id: paymentId });
-
+console.log('PAYMENT STATUS:', payment.status)
+console.log('PAYMENT METADATA:', payment.metadata)
     if (!payment || !payment.id) {
       return res.sendStatus(200);
     }
@@ -181,6 +184,7 @@ exports.webhook = async (req, res) => {
     const status = String(payment.status || '').toLowerCase();
     const metadata = payment.metadata || {};
     const planInfo = inferPlanFromMetadata(metadata);
+    console.log('PLAN INFO:', planInfo)
 
     const tx = await upsertTransaction(payment, metadata, planInfo);
 
