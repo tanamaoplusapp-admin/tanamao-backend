@@ -165,7 +165,9 @@ exports.webhook = async (req, res) => {
   try {
      console.log('🔥 WEBHOOK RECEBIDO')
   console.log(req.body)
-    const body = req.body || {};
+  const body = Buffer.isBuffer(req.body)
+  ? JSON.parse(req.body.toString())
+  : (req.body || {});
     const eventType = body.type || body.topic;
     const paymentId = body.data?.id || body.id;
 
