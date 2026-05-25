@@ -108,77 +108,87 @@ CRIAR PAGAMENTO
 
 const body = {
 
-transaction_amount: amount,
+  transaction_amount: amount,
 
-description: (description || 'Pagamento Tanamão').toString(),
+  description: (description || 'Pagamento Tanamão').toString(),
 
-payment_method_id: 'pix',
+  payment_method_id: 'pix',
 
-payer: {
-email: payer.email || 'comprador@email.com',
-first_name: payer.nome || 'Usuário',
-identification: payer.cpf
-? { type: 'CPF', number: String(payer.cpf) }
-: undefined
-},
+  payer: {
+    email: payer.email || 'comprador@email.com',
+    first_name: payer.nome || 'Usuário',
+    identification: payer.cpf
+      ? { type: 'CPF', number: String(payer.cpf) }
+      : undefined
+  },
 
-statement_descriptor: baseStatement(),
+  statement_descriptor: baseStatement(),
 
-notification_url:
-config.mercadoPago?.webhookUrl ||
-process.env.MP_WEBHOOK_URL ||
-undefined,
+  notification_url:
+    config.mercadoPago?.webhookUrl ||
+    process.env.MP_WEBHOOK_URL ||
+    undefined,
 
-application_fee: applicationFee || undefined,
+  application_fee: applicationFee || undefined,
 
-sponsor_id: collectorId || undefined,
+  sponsor_id: collectorId || undefined,
 
-metadata: {
+  metadata: {
 
-type: tipo,
+    // COMPATIBILIDADE COM WEBHOOK
+    type:
+      tipo === 'credits'
+        ? 'access'
+        : tipo === 'subscription'
+        ? 'subscription'
+        : tipo,
 
-origem: 'tanamao',
+    origem: 'tanamao',
 
-user_id: userId || null,
+    user_id: userId || null,
 
-quantidade: req.body.quantidade || null,
+    // webhook espera "dias"
+    dias: Number(req.body.quantidade || 0),
 
-plano: plano || null,
+    // manter compatibilidade antiga
+    quantidade: req.body.quantidade || null,
 
-service_id: serviceId || null,
+    plano: plano || null,
 
-meio: 'pix'
+    service_id: serviceId || null,
 
-}
+    meio: 'pix'
+
+  }
 
 }
 
 const payment = await new Payment(mp).create({
-body,
-requestOptions: { idempotencyKey: idemKey('pix') }
+  body,
+  requestOptions: { idempotencyKey: idemKey('pix') }
 })
 
 const tx = payment?.point_of_interaction?.transaction_data
 
 if (!tx?.qr_code || !tx?.qr_code_base64) {
-return res
-.status(502)
-.json({ error: 'Não foi possível gerar o QR do Pix.' })
+  return res
+    .status(502)
+    .json({ error: 'Não foi possível gerar o QR do Pix.' })
 }
 
 return res.json({
 
-id: payment.id,
+  id: payment.id,
 
-status: payment.status,
+  status: payment.status,
 
-amount: payment.transaction_amount,
+  amount: payment.transaction_amount,
 
-qr_code_base64: tx.qr_code_base64,
+  qr_code_base64: tx.qr_code_base64,
 
-qr_code: tx.qr_code,
+  qr_code: tx.qr_code,
 
-expiration_time: tx.expiration_time
+  expiration_time: tx.expiration_time
 
 })
 
@@ -187,8 +197,8 @@ expiration_time: tx.expiration_time
 console.error('Erro ao processar Pix:', error)
 
 return res.status(500).json({
-error: 'Erro ao processar pagamento Pix',
-details: error?.message || error
+  error: 'Erro ao processar pagamento Pix',
+  details: error?.message || error
 })
 
 }
@@ -206,28 +216,28 @@ try {
 const userId = getUserId(req)
 
 const {
-token,
-value,
-payer = {},
-installments,
-description,
-payment_method_id,
-companyId,
-serviceId,
-motoristaId,
-plano,
-tipo = 'servico_profissional'
+  token,
+  value,
+  payer = {},
+  installments,
+  description,
+  payment_method_id,
+  companyId,
+  serviceId,
+  motoristaId,
+  plano,
+  tipo = 'servico_profissional'
 } = req.body || {}
 
 const amount = Number(value)
 
 if (!token)
-return res.status(400).json({
-error: 'token do cartão é obrigatório'
-})
+  return res.status(400).json({
+    error: 'token do cartão é obrigatório'
+  })
 
 if (!Number.isFinite(amount) || amount <= 0)
-return res.status(400).json({ error: 'Valor inválido' })
+  return res.status(400).json({ error: 'Valor inválido' })
 
 let applicationFee = 0
 let collectorId = null
@@ -235,85 +245,95 @@ let porteEmpresa = null
 
 if (tipo === 'servico_empresa' && companyId) {
 
-const company = await Company.findById(companyId).lean()
+  const company = await Company.findById(companyId).lean()
 
-if (!company)
-return res.status(404).json({ error: 'Empresa não encontrada' })
+  if (!company)
+    return res.status(404).json({ error: 'Empresa não encontrada' })
 
-collectorId = getCollectorId(company)
+  collectorId = getCollectorId(company)
 
-const rate = getCommissionRate(
-company.porteEmpresa || company.porteOriginal
-)
+  const rate = getCommissionRate(
+    company.porteEmpresa || company.porteOriginal
+  )
 
-applicationFee = asMoney(amount * rate)
+  applicationFee = asMoney(amount * rate)
 
-porteEmpresa =
-company.porteEmpresa || company.porteOriginal || 'pequena'
+  porteEmpresa =
+    company.porteEmpresa || company.porteOriginal || 'pequena'
 
 }
 
 const body = {
 
-token,
+  token,
 
-binary_mode: true,
+  binary_mode: true,
 
-transaction_amount: amount,
+  transaction_amount: amount,
 
-description: (description || 'Pagamento Tanamão').toString(),
+  description: (description || 'Pagamento Tanamão').toString(),
 
-installments: Number(installments || 1),
+  installments: Number(installments || 1),
 
-payment_method_id: payment_method_id || undefined,
+  payment_method_id: payment_method_id || undefined,
 
-payer: {
-email: payer.email || 'comprador@email.com',
-identification: payer.cpf
-? { type: 'CPF', number: String(payer.cpf) }
-: undefined
-},
+  payer: {
+    email: payer.email || 'comprador@email.com',
+    identification: payer.cpf
+      ? { type: 'CPF', number: String(payer.cpf) }
+      : undefined
+  },
 
-statement_descriptor: baseStatement(),
+  statement_descriptor: baseStatement(),
 
-notification_url:
-config.mercadoPago?.webhookUrl ||
-process.env.MP_WEBHOOK_URL ||
-undefined,
+  notification_url:
+    config.mercadoPago?.webhookUrl ||
+    process.env.MP_WEBHOOK_URL ||
+    undefined,
 
-application_fee: applicationFee || undefined,
+  application_fee: applicationFee || undefined,
 
-sponsor_id: collectorId || undefined,
+  sponsor_id: collectorId || undefined,
 
-metadata: {
+  metadata: {
 
-type: tipo,
+    // COMPATIBILIDADE COM WEBHOOK
+    type:
+      tipo === 'credits'
+        ? 'access'
+        : tipo === 'subscription'
+        ? 'subscription'
+        : tipo,
 
-origem: 'tanamao',
+    origem: 'tanamao',
 
-user_id: userId || null,
+    user_id: userId || null,
 
-quantidade: req.body.quantidade || null,
+    // webhook espera "dias"
+    dias: Number(req.body.quantidade || 0),
 
-plano: plano || null,
+    // manter compatibilidade antiga
+    quantidade: req.body.quantidade || null,
 
-service_id: serviceId || null,
+    plano: plano || null,
 
-meio: 'card'
+    service_id: serviceId || null,
 
-}
+    meio: 'card'
+
+  }
 
 }
 
 const payment = await new Payment(mp).create({
-body,
-requestOptions: { idempotencyKey: idemKey('card') }
+  body,
+  requestOptions: { idempotencyKey: idemKey('card') }
 })
 
 return res.json({
-id: payment.id,
-status: payment.status,
-amount: payment.transaction_amount
+  id: payment.id,
+  status: payment.status,
+  amount: payment.transaction_amount
 })
 
 } catch (error) {
@@ -321,8 +341,8 @@ amount: payment.transaction_amount
 console.error('Erro pagamento cartão:', error)
 
 return res.status(500).json({
-error: 'Erro ao processar cartão',
-details: error?.message || error
+  error: 'Erro ao processar cartão',
+  details: error?.message || error
 })
 
 }
