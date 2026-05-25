@@ -104,9 +104,12 @@ app.options('*', cors(corsOptions));
 app.use(cookieParser());
 app.use(compression());
 
-app.post(
+app.use(
   PAYMENT_WEBHOOK_PATH,
-  express.raw({ type: 'application/json', limit: '2mb' })
+  express.raw({
+    type: 'application/json',
+    limit: '2mb'
+  })
 );
 
 app.use(express.json({ limit: '10mb' }));
