@@ -39,6 +39,7 @@ const data = [
       'Montador de móveis',
       'Marceneiro',
       'Mecânico',
+      'Limpa-fossa',
       'Gesseiro',
       'Vidraceiro',
       'Serralheiro',
@@ -97,6 +98,7 @@ const data = [
     'Contador',
     'Projetista',
     'Despachante',
+    'Dedetizador',
     'Corretor de imóveis',
     'Consultor',
     
