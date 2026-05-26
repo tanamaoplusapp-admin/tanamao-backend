@@ -112,7 +112,8 @@ const data = [
       'Professor de idiomas',
       'Instrutor de informática',
       'Instrutor de direção',
-      'Professor de música'
+      'Professor de música',
+      'Professor'
     ]
   },
 
@@ -128,6 +129,7 @@ const data = [
       'Gestor de tráfego',
       'Criador de sites',
       'Desenvolvedor',
+      'Programador',
       'Web designer',
       'Copywriter'
     ]
@@ -140,12 +142,11 @@ const data = [
     nome: 'Saúde',
     profissões: [
       'Psicólogo',
-      'Dentista',
       'Fisioterapeuta',
       'Massoterapeuta',
       'Nutricionista',
       'Terapeuta holístico',
-      'Fonoaudiólogo',
+      'Podólogo',
       'Personal trainer'
     ]
   }
