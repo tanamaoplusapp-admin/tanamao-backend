@@ -228,7 +228,7 @@ exports.list = async (req, res) => {
     });
   }
 };
-/* ============================================================================ 
+/* ============================================================================
  * DETALHE
  * ========================================================================== */
 
@@ -237,7 +237,10 @@ exports.getById = async (req, res) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id))
-      return res.status(400).json({ ok: false, message: 'ID inválido' });
+      return res.status(400).json({
+        ok: false,
+        message: 'ID inválido'
+      });
 
     const prof = await Profissional.findById(id)
       .populate({
@@ -251,51 +254,67 @@ exports.getById = async (req, res) => {
         ok: false,
         message: 'Profissional não encontrado',
       });
-/* =========================
-   MÉTRICAS REAIS
-========================= */
 
-const profId = prof._id;
-const userId = prof.userId?._id || prof.userId;
+    /* =========================
+       MÉTRICAS REAIS
+    ========================= */
 
-const metricas = await Avaliacao.aggregate([
-  {
-    $match: {
-      origem: { $in: ['profissional', 'servico', 'pedido'] },
-      $or: [
-        { profissionalId: profId },
-        { profissionalUserId: userId },
-        { profissional: userId },
-        { prestadorId: profId },
-      ],
-    },
-  },
-  {
-    $group: {
-      _id: null,
-      mediaAvaliacoes: { $avg: '$nota' },
-      totalAvaliacoes: { $sum: 1 },
-    },
-  },
-]);
+    const profId = prof._id;
+    const userId = prof.userId?._id || prof.userId;
 
-const servicos = await Servico.find({
-  profissional: String(userId),
-}).select('status');
+    console.log('==============================');
+    console.log('PERFIL PUBLICO');
+    console.log('PROF ID:', String(profId));
+    console.log('USER ID:', String(userId));
 
-const servicosFinalizados = servicos.filter(
-  s => s.status === 'finalizado'
-).length;
+    const metricas = await Avaliacao.aggregate([
+      {
+        $match: {
+          origem: { $in: ['profissional', 'servico', 'pedido'] },
+          $or: [
+            { profissionalId: profId },
+            { profissionalUserId: userId },
+            { profissional: userId },
+            { prestadorId: profId },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          mediaAvaliacoes: { $avg: '$nota' },
+          totalAvaliacoes: { $sum: 1 },
+        },
+      },
+    ]);
 
-prof.metrics = {
-  mediaAvaliacoes:
-    Number(metricas?.[0]?.mediaAvaliacoes || 0),
+    const servicos = await Servico.find({
+      profissional: userId,
+    }).select('status profissional');
 
-  totalAvaliacoes:
-    Number(metricas?.[0]?.totalAvaliacoes || 0),
+    console.log('SERVICOS ENCONTRADOS:', servicos.length);
 
-  servicosFinalizados,
-};
+    const servicosFinalizados = servicos.filter(
+      s => s.status === 'finalizado'
+    ).length;
+
+    console.log('FINALIZADOS:', servicosFinalizados);
+
+    prof.metrics = {
+      mediaAvaliacoes: Number(
+        metricas?.[0]?.mediaAvaliacoes || 0
+      ),
+
+      totalAvaliacoes: Number(
+        metricas?.[0]?.totalAvaliacoes || 0
+      ),
+
+      servicosFinalizados,
+    };
+
+    console.log('METRICS FINAL:', prof.metrics);
+
+    
     /* =========================
        BLOQUEIO PLANO EXPIRADO
     ========================= */
