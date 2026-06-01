@@ -279,11 +279,13 @@ const metricas = await Avaliacao.aggregate([
   },
 ]);
 
-const servicosFinalizados =
-  await Servico.countDocuments({
-    profissional: userId,
-    status: 'finalizado',
-  });
+const servicos = await Servico.find({
+  profissional: String(userId),
+}).select('status');
+
+const servicosFinalizados = servicos.filter(
+  s => s.status === 'finalizado'
+).length;
 
 prof.metrics = {
   mediaAvaliacoes:
