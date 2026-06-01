@@ -5,6 +5,7 @@ const Avaliacao = require('../models/Avaliacao');
 const Profissional = require('../models/Profissional');
 const User = require('../models/user');
 const Order = require('../models/order');
+const Servico = require('../models/Servico');
 const SERVICOS_SOCORRO_VALIDOS = [
   'pneu_furado',
   'bateria_descarregada',
@@ -250,7 +251,49 @@ exports.getById = async (req, res) => {
         ok: false,
         message: 'Profissional não encontrado',
       });
+/* =========================
+   MÉTRICAS REAIS
+========================= */
 
+const profId = prof._id;
+const userId = prof.userId?._id || prof.userId;
+
+const metricas = await Avaliacao.aggregate([
+  {
+    $match: {
+      origem: { $in: ['profissional', 'servico', 'pedido'] },
+      $or: [
+        { profissionalId: profId },
+        { profissionalUserId: userId },
+        { profissional: userId },
+        { prestadorId: profId },
+      ],
+    },
+  },
+  {
+    $group: {
+      _id: null,
+      mediaAvaliacoes: { $avg: '$nota' },
+      totalAvaliacoes: { $sum: 1 },
+    },
+  },
+]);
+
+const servicosFinalizados =
+  await Servico.countDocuments({
+    profissional: userId,
+    status: 'finalizado',
+  });
+
+prof.metrics = {
+  mediaAvaliacoes:
+    Number(metricas?.[0]?.mediaAvaliacoes || 0),
+
+  totalAvaliacoes:
+    Number(metricas?.[0]?.totalAvaliacoes || 0),
+
+  servicosFinalizados,
+};
     /* =========================
        BLOQUEIO PLANO EXPIRADO
     ========================= */
