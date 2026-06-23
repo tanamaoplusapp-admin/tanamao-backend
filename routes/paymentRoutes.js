@@ -375,9 +375,12 @@ payment?.point_of_interaction?.transaction_data
 
 return res.json({
 
-id:payment.id,
-qr_code:tx.qr_code,
-qr_code_base64:tx.qr_code_base64
+  id: payment.id,
+  qr_code: tx.qr_code,
+  copia_e_cola: tx.qr_code,
+  qr_code_base64: tx.qr_code_base64
+
+
 
 })
 
