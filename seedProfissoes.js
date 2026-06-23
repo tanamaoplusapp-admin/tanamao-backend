@@ -27,7 +27,7 @@ const data = [
      🔧 SERVIÇOS GERAIS
   ========================= */
   {
-    nome: 'Serviços Gerais',
+    nome: 'Serviços gerais',
     profissões: [
         
       'Eletricista',
@@ -94,7 +94,7 @@ const data = [
      Especilistas 
   ========================= */
 {
-  nome: 'Profissionais Especializados',
+  nome: 'Profissionais especializados',
   profissões: [
     'Arquiteto',
     'Engenheiro civil',
