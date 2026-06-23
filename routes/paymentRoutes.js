@@ -297,19 +297,19 @@ else if(plano){
 switch(plano){
 
 case '1_dia':
-valor = 49.90
+valor = 29.90
 dias = 1
 type = 'access'
 break
 
 case '7_dias':
-valor = 79.90
+valor = 49.90
 dias = 7
 type = 'access'
 break
 
 case '15_dias':
-valor = 99.90
+valor = 79.90
 dias = 15
 type = 'access'
 break
@@ -441,6 +441,9 @@ user_id:req.userId
 
 const tx =
 payment?.point_of_interaction?.transaction_data
+console.log('QR_CODE:', tx?.qr_code)
+console.log('QR_BASE64:', !!tx?.qr_code_base64)
+; 
 
 return res.json({
 
