@@ -18,31 +18,37 @@ const data = [
       'Mecânico emergencial',
       'Socorrista automotivo',
       'Diarista',
-      'Baba',
+      'Bába',
       
     ]
   },
 
   /* =========================
-     🔧 PROJETOS E REPAROS
+     🔧 SERVIÇOS GERAIS
   ========================= */
   {
-    nome: 'Projetos e Reparos',
+    nome: 'Serviços Gerais',
     profissões: [
         
       'Eletricista',
       'Borracheiro',
+      'Carpinteiro',
       'Encanador',
+      'Frete',
       'Mestre de obras',
+      'Mudanças residenciais',
       'Pedreiro',
       'Pintor',
       'Montador de móveis',
       'Marceneiro',
       'Mecânico',
+      'Lavagem automotiva delivery',
       'Limpa-fossa',
+      'Limpeza de quintal',
       'Gesseiro',
       'Vidraceiro',
       'Serralheiro',
+      'Reparos simples',
       'Técnico de ar-condicionado',
       'Técnico em eletrodomésticos',
       
@@ -62,7 +68,7 @@ const data = [
       'Cozinheira',
       'Passadeira',
       'Caseiro',
-      'Carpinteiro'
+      
     ]
   },
 
@@ -129,7 +135,7 @@ const data = [
       'Editor de vídeo',
       'Social media',
       'Gestor de tráfego',
-      'Criador de sites',
+      'Criador de sites ou apps',
       'Desenvolvedor',
       'Programador',
       'Web designer',
