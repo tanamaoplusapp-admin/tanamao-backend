@@ -18,7 +18,7 @@ const data = [
       'Mecânico emergencial',
       'Socorrista automotivo',
       'Diarista',
-      'Bába',
+      'Babá',
       
     ]
   },
