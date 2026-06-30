@@ -250,33 +250,38 @@ async function calculateCancellationScore(profissional) {
 ============================================================ */
 
 async function calculateResponseScore(profissional) {
-  if (!profissional) return 0;
+
+  if (!profissional) return 100;
 
   const servicos = await Servico.find({
+
     profissional: profissional.userId,
 
     status: {
-        $in: ["aceito", "finalizado"]
-    },
-
-    tempoRespostaSegundos: {
-        $ne: null
+      $in: ["aceito", "finalizado"]
     }
-})
+
+  })
     .sort({ createdAt: -1 })
     .limit(50)
     .select("tempoRespostaSegundos");
 
-  if (servicos.length === 0) {
+  const validos = servicos.filter(
+    (s) =>
+      s.tempoRespostaSegundos !== null &&
+      s.tempoRespostaSegundos !== undefined
+  );
+
+  if (validos.length === 0) {
     return 100;
   }
 
   const mediaSegundos =
-    servicos.reduce(
+    validos.reduce(
       (total, servico) =>
         total + Number(servico.tempoRespostaSegundos || 0),
       0
-    ) / servicos.length;
+    ) / validos.length;
 
   const minutos = mediaSegundos / 60;
 
@@ -289,6 +294,7 @@ async function calculateResponseScore(profissional) {
   if (minutos <= 120) return 35;
 
   return 15;
+
 }
 /* ============================================================
    SCORE FINAL
