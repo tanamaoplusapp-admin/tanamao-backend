@@ -358,16 +358,22 @@ async function calculateScore(profissionalId) {
   const user = await User.findById(profissional.userId);
 
   const modules = {
+
     profile: calculateProfileScore(profissional),
+
     security: calculateSecurityScore(user),
+
     experience: calculateExperienceScore(profissional),
+
     reviews: calculateReviewScore(profissional),
 
-    punctuality: await calculatePunctualityScore(profissional),
+    // Ainda não implementados no app
+    punctuality: 100,
 
-    cancellations: await calculateCancellationScore(profissional),
+    cancellations: 100,
 
-    response: await calculateResponseScore(profissional),
+    response: 100,
+
   };
 
   const finalScore = calculateFinalScore(modules);
@@ -379,6 +385,7 @@ async function calculateScore(profissionalId) {
     level,
     modules,
   };
+
 }
 /* ============================================================
    ATUALIZAÇÃO DO SCORE
