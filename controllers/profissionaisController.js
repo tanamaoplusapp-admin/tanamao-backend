@@ -199,13 +199,15 @@ if (userId) {
       filtro[`tipoAtendimento.${tipoAtendimento}`] = true;
     }
 console.log('FILTRO FINAL:', JSON.stringify(filtro, null, 2));
+
+const profs = await Profissional.find(filtro)
+  .populate({
+    path: 'userId',
+    select: 'acessoExpiraEm online',
+  })
+  .lean();
+
 console.log('PROFISSIONAIS ENCONTRADOS:', profs.length);
-    const profs = await Profissional.find(filtro)
-      .populate({
-        path: 'userId',
-        select: 'acessoExpiraEm online',
-      })
-      .lean();
 
     const agora = new Date();
 
