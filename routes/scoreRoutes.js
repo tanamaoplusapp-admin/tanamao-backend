@@ -1,11 +1,12 @@
-/**
- * Minha evolução
- */
-router.get(
-  "/me",
-  verifyToken,
-  scoreController.getMyEvolution
-);
+const express = require("express");
+const router = express.Router();
+
+const scoreController = require("../controllers/scoreController");
+const { verifyToken } = require("../middleware/verifyToken");
+
+/* ======================================================
+   TanaScore
+====================================================== */
 
 /**
  * Consultar score de um profissional
@@ -24,12 +25,19 @@ router.put(
   verifyToken,
   scoreController.updateScore
 );
-
+router.get(
+  "/me",
+  verifyToken,
+  scoreController.getMyEvolution
+);
 /**
- * Recalcular score de todos
+ * Recalcular score de todos os profissionais
+ * (uso administrativo)
  */
 router.put(
   "/recalculate/all",
   verifyToken,
   scoreController.updateAllScores
 );
+
+module.exports = router;
