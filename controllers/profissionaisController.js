@@ -101,30 +101,87 @@ exports.list = async (req, res) => {
         filtro.servicosSocorroAutomotivo = servicoEmergencial;
       }
     } else {
-      if (categoriaId) {
-        if (!mongoose.Types.ObjectId.isValid(categoriaId)) {
-          return res.status(400).json({
-            ok: false,
-            message: 'categoriaId inválido',
-          });
-        }
-        filtro.categoriaId = new mongoose.Types.ObjectId(categoriaId);
-      }
+      /* ===============================
+   FILTRO POR CATEGORIA / PROFISSÃO
+   (SUPORTA ATÉ 3 PROFISSÕES)
+================================ */
 
-      if (profissaoId) {
-        if (!mongoose.Types.ObjectId.isValid(profissaoId)) {
-          return res.status(400).json({
-            ok: false,
-            message: 'profissaoId inválido',
-          });
-        }
-        filtro.profissaoId = new mongoose.Types.ObjectId(profissaoId);
-      }
+if (categoriaId || profissaoId) {
+  const filtros = [];
+
+  // Compatibilidade com profissionais antigos
+  const filtroPrincipal = {};
+
+  if (categoriaId) {
+    if (!mongoose.Types.ObjectId.isValid(categoriaId)) {
+      return res.status(400).json({
+        ok: false,
+        message: 'categoriaId inválido',
+      });
     }
 
-    if (cidade) {
-      filtro['endereco.cidadeSlug'] = cidade.toLowerCase();
+    filtroPrincipal.categoriaId = new mongoose.Types.ObjectId(categoriaId);
+  }
+
+  if (profissaoId) {
+    if (!mongoose.Types.ObjectId.isValid(profissaoId)) {
+      return res.status(400).json({
+        ok: false,
+        message: 'profissaoId inválido',
+      });
     }
+
+    filtroPrincipal.profissaoId = new mongoose.Types.ObjectId(profissaoId);
+  }
+
+  if (Object.keys(filtroPrincipal).length) {
+    filtros.push(filtroPrincipal);
+  }
+
+  // Novo formato (profissões múltiplas)
+  const filtroDetalhado = {};
+
+  if (categoriaId) {
+    filtroDetalhado['profissoesDetalhadas.categoriaId'] =
+      new mongoose.Types.ObjectId(categoriaId);
+  }
+
+  if (profissaoId) {
+    filtroDetalhado['profissoesDetalhadas.profissaoId'] =
+      new mongoose.Types.ObjectId(profissaoId);
+  }
+
+  if (Object.keys(filtroDetalhado).length) {
+    filtros.push(filtroDetalhado);
+  }
+
+  if (filtros.length === 1) {
+    Object.assign(filtro, filtros[0]);
+  } else if (filtros.length > 1) {
+    filtro.$or = filtros;
+  }
+}
+    }
+
+   /* ============================
+   FILTRO AUTOMÁTICO POR CIDADE
+============================ */
+
+const userId = getUserId(req);
+
+if (userId) {
+  const usuario = await User.findById(userId)
+    .select('cidadeSlug')
+    .lean();
+
+  if (usuario?.cidadeSlug) {
+    filtro['endereco.cidadeSlug'] = usuario.cidadeSlug;
+  }
+} else if (cidade) {
+  filtro['endereco.cidadeSlug'] = String(cidade)
+    .trim()
+    .toLowerCase();
+}
 
     if (tipoAtendimento) {
       filtro[`tipoAtendimento.${tipoAtendimento}`] = true;
@@ -462,7 +519,14 @@ if (Array.isArray(req.body.profissoesDetalhadas)) {
   updateData.profissoes = detalhadas
     .map((item) => item.nome)
     .filter(Boolean);
+// Mantém compatibilidade com o restante do sistema
+const principal = detalhadas[0];
 
+if (principal) {
+  updateData.categoriaId = principal.categoriaId;
+  updateData.profissaoId = principal.profissaoId;
+  updateData.profissaoNome = principal.nome;
+}
 } else if (Array.isArray(req.body.profissoes)) {
   updateData.profissoes = req.body.profissoes
     .slice(0, 3)

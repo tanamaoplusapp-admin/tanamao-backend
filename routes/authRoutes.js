@@ -89,20 +89,24 @@ router.post('/register-complete', createLimiter(100), registerComplete);
 router.post('/register-profissional', createLimiter(100), async (req, res) => {
   try {
 
-    const {
-      nome,
-      email,
-      telefone,
-      cpf,
-      senha,
-      profissoes,
-      banco,
-      agencia,
-      conta,
-      tipoConta,
-      pix,
-      photoUrl,
-    } = req.body;
+   const {
+  nome,
+  email,
+  telefone,
+  cpf,
+  senha,
+
+  cidade,
+  estado,
+
+  profissoes,
+  banco,
+  agencia,
+  conta,
+  tipoConta,
+  pix,
+  photoUrl,
+} = req.body;
 
     if (!nome || !email || !cpf || !telefone || !senha) {
       return res.status(400).json({
@@ -132,14 +136,19 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
     }
 
     const user = await User.create({
-      name: nome,
-      email: emailNorm,
-      password: senha,
-      role: 'profissional',
-      phone: telefone,
-      cpf,
-      avatar: photoUrl || null,
-    });
+  name: nome,
+  email: emailNorm,
+  password: senha,
+  role: 'profissional',
+
+  phone: telefone,
+  cpf,
+
+  cidade,
+  estado,
+
+  avatar: photoUrl || null,
+});
 /* =========================
 TRIAL 45 DIAS PROFISSIONAL
 ========================= */
@@ -159,16 +168,26 @@ user.subscriptionStatus = 'active';
 
 await user.save();
     const profissional = await Profissional.create({
-      userId: user._id,
-      name: nome,
-      email: emailNorm,
-      password: user.password,
-      cpf,
-      phone: telefone,
-      avatar: photoUrl || null,
-      especialidades: profissoes || [],
-      bank: banco
-        ? {
+  userId: user._id,
+
+  name: nome,
+  email: emailNorm,
+  password: user.password,
+
+  cpf,
+  phone: telefone,
+
+  endereco: {
+    cidade,
+    estado,
+  },
+
+  avatar: photoUrl || null,
+
+  especialidades: profissoes || [],
+
+  bank: banco
+    ? {
             banco,
             agencia,
             conta,
