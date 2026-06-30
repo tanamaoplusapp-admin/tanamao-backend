@@ -5,6 +5,7 @@ const Avaliacao = require('../models/Avaliacao');
 const Profissional = require('../models/Profissional');
 const User = require('../models/user');
 const Order = require('../models/order');
+const scoreEvents = require("../services/scoreEvents");
 const Servico = require('../models/Servico');
 const SERVICOS_SOCORRO_VALIDOS = [
   'pneu_furado',
@@ -686,18 +687,21 @@ if (socorristaFinal && servicosSocorroFinal.length === 0) {
     ============================ */
 
     const updated = await Profissional.findOneAndUpdate(
-      { _id: prof._id },
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
+  { _id: prof._id },
+  { $set: updateData },
+  { new: true, runValidators: true }
+);
 
-    console.log('SALVO NO BANCO:', updated);
+console.log('SALVO NO BANCO:', updated);
 
-    return res.json({
-      ok: true,
-      message: 'Perfil atualizado com sucesso',
-      profissional: updated,
-    });
+// Atualiza automaticamente o TanaScore
+await scoreEvents.onProfileUpdated(updated._id);
+
+return res.json({
+  ok: true,
+  message: 'Perfil atualizado com sucesso',
+  profissional: updated,
+});
 
   } catch (error) {
     console.error('profissionais.updateMe:', error);

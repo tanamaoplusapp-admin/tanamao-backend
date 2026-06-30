@@ -353,11 +353,72 @@ default:0
 servicosFinalizados:{
 type:Number,
 default:0
-}
+},
+/* =========================
+TANASCORE
+========================= */
+
+tanaScore: {
+  type: Number,
+  default: 0,
+  index: true,
+},
+
+tanaLevel: {
+  type: String,
+  default: "Bronze",
+},
+
+tanaLevelColor: {
+  type: String,
+  default: "#9E9E9E",
+},
+
+tanaModules: {
+  profile: {
+    type: Number,
+    default: 0,
+  },
+
+  security: {
+    type: Number,
+    default: 0,
+  },
+
+  experience: {
+    type: Number,
+    default: 0,
+  },
+
+  reviews: {
+    type: Number,
+    default: 0,
+  },
+
+  punctuality: {
+    type: Number,
+    default: 0,
+  },
+
+  cancellations: {
+    type: Number,
+    default: 0,
+  },
+
+  response: {
+    type: Number,
+    default: 0,
+  },
+},
+
+tanaScoreUpdatedAt: {
+  type: Date,
+},
 }
 
 },
 {timestamps:true}
+
 );
 
 /* ====================

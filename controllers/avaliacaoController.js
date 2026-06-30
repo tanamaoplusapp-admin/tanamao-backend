@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 const Avaliacao = require('../models/Avaliacao');
 const Servico = require('../models/Servico');
-
+const scoreEvents = require("../services/scoreEvents");
 let Profissional = null;
 try {
   Profissional = require('../models/Profissional');
@@ -60,7 +60,39 @@ const getProfissionalIdsFromService = ({
     profissionalUserId: toObjectId(profissionalUserIdRaw),
   };
 };
+const updateProfessionalRatingStats = async (profissionalId) => {
+  if (!Profissional || !profissionalId) return;
 
+  const profissionalObj = toObjectId(profissionalId);
+
+  if (!profissionalObj) return;
+
+  const avaliacoes = await Avaliacao.find({
+    $or: [
+      { profissionalId: profissionalObj },
+      { profissional: profissionalObj },
+      { profissionalUserId: profissionalObj },
+    ],
+  }).select("nota");
+
+  const totalAvaliacoes = avaliacoes.length;
+
+  const mediaAvaliacoes =
+    totalAvaliacoes > 0
+      ? avaliacoes.reduce((acc, item) => acc + Number(item.nota || 0), 0) /
+        totalAvaliacoes
+      : 0;
+await Profissional.findByIdAndUpdate(
+  profissionalObj,
+  {
+    $set: {
+      "metrics.totalAvaliacoes": totalAvaliacoes,
+      "metrics.mediaAvaliacoes": Number(mediaAvaliacoes.toFixed(2)),
+    },
+  },
+  { new: false }
+);
+};
 exports.getAvaliacoesPorMotorista = async (req, res) => {
   try {
     const { id } = req.params;
@@ -270,12 +302,18 @@ exports.createAvaliacaoGeneric = async (req, res) => {
         payload.profissionalUserId = profissionalUserId;
       }
 
-      const doc = await Avaliacao.create(payload);
+     const doc = await Avaliacao.create(payload);
 
-      return res.status(201).json({
-        message: 'Avaliação registrada',
-        avaliacao: doc,
-      });
+// Atualiza automaticamente o TanaScore
+if (profissionalId) {
+  await updateProfessionalRatingStats(profissionalId);
+await scoreEvents.onReviewCreated(profissionalId);
+}
+
+return res.status(201).json({
+  message: "Avaliação registrada",
+  avaliacao: doc,
+});
     }
 
     if (companyId) {
@@ -381,10 +419,16 @@ exports.createAvaliacaoGeneric = async (req, res) => {
 
       const doc = await Avaliacao.create(payload);
 
-      return res.status(201).json({
-        message: 'Avaliação registrada',
-        avaliacao: doc,
-      });
+// Atualiza automaticamente o TanaScore
+if (profissionalId) {
+  await updateProfessionalRatingStats(profissionalId);
+await scoreEvents.onReviewCreated(profissionalId);
+}
+
+return res.status(201).json({
+  message: "Avaliação registrada",
+  avaliacao: doc,
+});
     }
 
     return res.status(400).json({

@@ -6,6 +6,7 @@ const Chat = require('../models/Chat')
 const { enviarPushParaUsuario } = require('../services/pushService');
 const { sendNotification } = require('../services/notificationService');
 const agendaService = require('../services/agendaService');
+const scoreEvents = require("../services/scoreEvents");
 
 
 
@@ -23,7 +24,37 @@ function toPoint(lng, lat) {
     coordinates: [lng, lat],
   };
 }
+/* =====================================================
+ATUALIZA MÉTRICAS DO PROFISSIONAL
+===================================================== */
 
+async function updateProfessionalServiceStats(profissionalIdentifier) {
+  if (!profissionalIdentifier) return;
+
+  // Aceita User._id ou Profissional._id
+  const profissional = await Profissional.findOne({
+    $or: [
+      { _id: profissionalIdentifier },
+      { userId: profissionalIdentifier },
+    ],
+  });
+
+  if (!profissional) return;
+
+  const totalFinalizados = await Servico.countDocuments({
+    profissional: profissional.userId,
+    status: "finalizado",
+  });
+
+  await Profissional.findByIdAndUpdate(
+    profissional._id,
+    {
+      $set: {
+        "metrics.servicosFinalizados": totalFinalizados,
+      },
+    }
+  );
+}
 /* =====================================================
 CRIAR SERVIÇO
 POST /api/servicos
@@ -457,8 +488,16 @@ exports.updateStatus = async (req, res, next) => {
     /* =========================
        SOCKET
     ========================= */
-    await doc.save();
+  await doc.save();
 
+if (status === "finalizado" && doc.profissional) {
+  await updateProfessionalServiceStats(doc.profissional);
+
+  await scoreEvents.onServiceFinished(doc.profissional);
+}
+if (status === "cancelado" && doc.profissional) {
+  await scoreEvents.onServiceCancelled(doc.profissional);
+}
     if (io) {
       if (status === 'aceito' && doc.cliente) {
         io.to(doc.cliente.toString()).emit('servico_aceito', {
@@ -890,8 +929,12 @@ exports.cancelarService = async (req, res) => {
       });
     }
 
-    service.status = 'cancelado';
-    await service.save();
+   service.status = "cancelado";
+await service.save();
+
+if (service.profissional) {
+  await scoreEvents.onServiceCancelled(service.profissional);
+}
 
     /* =========================
        SOCKET

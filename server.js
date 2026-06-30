@@ -271,6 +271,7 @@ const routes = {
   promocoes: { path: '/api/promocoes', module: './routes/promocaoRoutes' },
   galeria: { path: '/api/galeria', module: './routes/galeriaRoutes' },
   profissionais: { path: '/api/profissionais', module: './routes/profissionaisRoutes' },
+  score: { path: '/api/score', module: './routes/scoreRoutes' },
 };
 
 Object.values(routes).forEach(({ path, module: modPath }) => {
