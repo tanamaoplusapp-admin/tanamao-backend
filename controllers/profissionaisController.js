@@ -174,9 +174,21 @@ if (userId) {
     .select('cidadeSlug')
     .lean();
 
-  if (usuario?.cidadeSlug) {
-    filtro['endereco.cidadeSlug'] = usuario.cidadeSlug;
-  }
+ if (usuario?.cidadeSlug) {
+  filtro.$or = [
+    {
+      'endereco.cidadeSlug': usuario.cidadeSlug,
+    },
+    {
+      'endereco.cidade': new RegExp(
+        `^${usuario.cidadeSlug
+          .replace(/-/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase())}$`,
+        'i'
+      ),
+    },
+  ];
+}
 } else if (cidade) {
   filtro['endereco.cidadeSlug'] = String(cidade)
     .trim()
@@ -186,7 +198,8 @@ if (userId) {
     if (tipoAtendimento) {
       filtro[`tipoAtendimento.${tipoAtendimento}`] = true;
     }
-
+console.log('FILTRO FINAL:', JSON.stringify(filtro, null, 2));
+console.log('PROFISSIONAIS ENCONTRADOS:', profs.length);
     const profs = await Profissional.find(filtro)
       .populate({
         path: 'userId',
@@ -489,8 +502,17 @@ exports.updateMe = async (req, res) => {
     if (req.body.dataNascimento !== undefined)
       updateData.dataNascimento = req.body.dataNascimento;
 
-    if (req.body.endereco && typeof req.body.endereco === 'object')
-      updateData.endereco = req.body.endereco;
+    if (req.body.endereco && typeof req.body.endereco === 'object') {
+  updateData.endereco = {
+    ...req.body.endereco,
+
+    cidadeSlug: String(req.body.endereco.cidade || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, ''),
+  };
+}
 
     /* ============================
    PROFISSÕES
@@ -543,22 +565,7 @@ if (principal) {
   updateData.profissoes = [req.body.profissaoNome];
 }
 
-if (req.body.profissaoNome !== undefined)
-  updateData.profissaoNome = req.body.profissaoNome;
 
-if (
-  req.body.categoriaId !== undefined &&
-  mongoose.Types.ObjectId.isValid(req.body.categoriaId)
-) {
-  updateData.categoriaId = req.body.categoriaId;
-}
-
-if (
-  req.body.profissaoId !== undefined &&
-  mongoose.Types.ObjectId.isValid(req.body.profissaoId)
-) {
-  updateData.profissaoId = req.body.profissaoId;
-}
 
 if (req.body.tipoAtendimento !== undefined)
   updateData.tipoAtendimento = req.body.tipoAtendimento;
