@@ -4,36 +4,50 @@ const router = express.Router();
 const scoreController = require("../controllers/scoreController");
 const { verifyToken } = require("../middleware/verifyToken");
 
+console.log("🔥 SCORE ROUTES CARREGADO");
+
 /* ======================================================
-   TanaScore
+   Minha Evolução
 ====================================================== */
 
-/**
- * Consultar score de um profissional
- */
+router.get(
+  "/me",
+  verifyToken,
+  (req, res, next) => {
+    console.log("🔥 PASSOU NA ROTA /api/score/me");
+    next();
+  },
+  scoreController.getMyEvolution
+);
+
+/* ======================================================
+   Consultar score de um profissional
+====================================================== */
+
 router.get(
   "/:profissionalId",
   verifyToken,
+  (req, res, next) => {
+    console.log("🔥 PASSOU NA ROTA /api/score/:profissionalId");
+    next();
+  },
   scoreController.getScore
 );
 
-/**
- * Recalcular score de um profissional
- */
+/* ======================================================
+   Recalcular score de um profissional
+====================================================== */
+
 router.put(
   "/:profissionalId/recalculate",
   verifyToken,
   scoreController.updateScore
 );
-router.get(
-  "/me",
-  verifyToken,
-  scoreController.getMyEvolution
-);
-/**
- * Recalcular score de todos os profissionais
- * (uso administrativo)
- */
+
+/* ======================================================
+   Recalcular score de todos
+====================================================== */
+
 router.put(
   "/recalculate/all",
   verifyToken,
