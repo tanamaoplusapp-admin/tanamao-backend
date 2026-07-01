@@ -354,6 +354,50 @@ servicosFinalizados:{
 type:Number,
 default:0
 },
+
+
+/* =========================
+ATIVIDADE TANASCORE
+========================= */
+
+activity: {
+
+  ofertasPublicadas: {
+    type: Number,
+    default: 0,
+  },
+
+  ofertasAtivas: {
+    type: Number,
+    default: 0,
+  },
+
+  mensagensRespondidas: {
+    type: Number,
+    default: 0,
+  },
+
+  perfilAtualizado: {
+    type: Number,
+    default: 0,
+  },
+
+  servicosAceitos: {
+    type: Number,
+    default: 0,
+  },
+
+  loginsConsecutivos: {
+    type: Number,
+    default: 0,
+  },
+
+  ultimoLogin: {
+    type: Date,
+    default: null,
+  },
+
+},
 /* =========================
 TANASCORE
 ========================= */

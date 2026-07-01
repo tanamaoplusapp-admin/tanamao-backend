@@ -1,4 +1,5 @@
 const Oferta = require('../models/Oferta');
+const activityEngine = require('../services/tanaEngine/activityEngine');
 
 /* ================================
    CRIAR OFERTA
@@ -31,7 +32,10 @@ exports.criar = async (req, res) => {
   status: status || 'ativa',
   visivelNoPerfil: visivelNoPerfil !== false,
 });
-
+await activityEngine.register(
+  id,
+  activityEngine.EVENTS.OFFER_CREATED
+);
     return res.status(201).json(oferta);
   } catch (e) {
     console.error('Erro ao criar oferta:', e);

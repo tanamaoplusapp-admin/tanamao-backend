@@ -175,6 +175,31 @@ function calculateExperienceScore(profissional) {
   return experienceCurve(atendimentos);
 }
 /* ============================================================
+   ATIVIDADE
+============================================================ */
+
+function calculateActivityScore(profissional) {
+
+  if (!profissional) return 0;
+
+  const activity = profissional.metrics?.activity || {};
+
+  let score = 0;
+
+  score += Math.min(activity.ofertasPublicadas || 0, 10) * 5;
+
+  score += Math.min(activity.mensagensRespondidas || 0, 20) * 2;
+
+  score += Math.min(activity.perfilAtualizado || 0, 10) * 2;
+
+  score += Math.min(activity.servicosAceitos || 0, 10) * 3;
+
+  score += Math.min(activity.loginsConsecutivos || 0, 30);
+
+  return clamp(score, 0, 100);
+
+}
+/* ============================================================
    AVALIAÇÕES
 ============================================================ */
 
@@ -301,9 +326,10 @@ async function calculateResponseScore(profissional) {
 ============================================================ */
 
 function calculateFinalScore(modules) {
+
   const score =
     (modules.profile * MODULE_WEIGHTS.profile) +
-    (modules.security * MODULE_WEIGHTS.security) +
+    (modules.activity * MODULE_WEIGHTS.activity) +
     (modules.experience * MODULE_WEIGHTS.experience) +
     (modules.reviews * MODULE_WEIGHTS.reviews) +
     (modules.punctuality * MODULE_WEIGHTS.punctuality) +
@@ -311,6 +337,7 @@ function calculateFinalScore(modules) {
     (modules.response * MODULE_WEIGHTS.response);
 
   return Math.round(clamp(score, 0, 100));
+
 }
 
 /* ============================================================
@@ -363,24 +390,24 @@ async function calculateScore(profissionalId) {
 
   const user = await User.findById(profissional.userId);
 
-  const modules = {
+ const modules = {
 
-    profile: calculateProfileScore(profissional),
+  profile: calculateProfileScore(profissional),
 
-    security: calculateSecurityScore(user),
+  activity: calculateActivityScore(profissional),
 
-    experience: calculateExperienceScore(profissional),
+  experience: calculateExperienceScore(profissional),
 
-    reviews: calculateReviewScore(profissional),
+  reviews: calculateReviewScore(profissional),
 
-    // Ainda não implementados no app
-    punctuality: 100,
+  // Mantidos por enquanto
+  punctuality: 100,
 
-    cancellations: 100,
+  cancellations: 100,
 
-    response: 100,
+  response: 100,
 
-  };
+};
 
   const finalScore = calculateFinalScore(modules);
 
@@ -412,14 +439,14 @@ await Profissional.findByIdAndUpdate(
       tanaLevelColor: resultado.level.color,
 
       tanaModules: {
-        profile: resultado.modules.profile,
-        security: resultado.modules.security,
-        experience: resultado.modules.experience,
-        reviews: resultado.modules.reviews,
-        punctuality: resultado.modules.punctuality,
-        cancellations: resultado.modules.cancellations,
-        response: resultado.modules.response,
-      },
+  profile: resultado.modules.profile,
+  activity: resultado.modules.activity,
+  experience: resultado.modules.experience,
+  reviews: resultado.modules.reviews,
+  punctuality: resultado.modules.punctuality,
+  cancellations: resultado.modules.cancellations,
+  response: resultado.modules.response,
+},
 
       tanaScoreUpdatedAt: new Date(),
     },
@@ -476,13 +503,14 @@ function generateEvolutionTips(profissional, modules) {
     });
   }
 
-  if (modules.security < 100) {
-    tips.push({
-      title: "Verifique sua conta",
-      description: "Complete as verificações de segurança.",
-      points: 10,
-    });
-  }
+if (modules.activity < 100) {
+  tips.push({
+    title: "Seja mais ativo no app",
+    description:
+      "Publique ofertas, responda mensagens e mantenha seu perfil atualizado.",
+    points: 10,
+  });
+}
 
   if (modules.experience < 80) {
     tips.push({

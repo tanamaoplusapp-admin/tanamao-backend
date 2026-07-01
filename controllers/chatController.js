@@ -6,7 +6,8 @@ const axios = require('axios');
 const Chat = require('../models/Chat');
 const Mensagem = require('../models/Mensagem');
 const User = require('../models/user');
-
+const Profissional = require('../models/Profissional');
+const activityEngine = require('../services/tanaEngine/activityEngine');
 const { sendNotification } = require('../services/notificationService');
 
 const isObjectId = (v) =>
@@ -192,7 +193,33 @@ exports.enviarMensagem = async (req, res) => {
     const novaMensagem = await Mensagem.findById(mensagemCriada._id)
       .populate('remetente', USER_CHAT_FIELDS)
       .lean();
+/* =========================================================
+   TANASCORE - ATIVIDADE NO CHAT
+========================================================= */
 
+try {
+
+  const profissional = await Profissional.findOne({
+    userId: remetenteId,
+  }).select("_id");
+
+  if (profissional) {
+
+    await activityEngine.register(
+      profissional._id,
+      activityEngine.EVENTS.CHAT_ANSWERED
+    );
+
+  }
+
+} catch (activityError) {
+
+  console.error(
+    "[ActivityEngine][CHAT]",
+    activityError.message
+  );
+
+}
     const io = req.app.get('io');
 
    if (io && novaMensagem) {

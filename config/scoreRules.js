@@ -7,19 +7,19 @@
 
 const MODULE_WEIGHTS = {
 
-  profile: 0.25,
+  profile: 0.20,
 
-  security: 0.10,
+  activity: 0.15,
 
   experience: 0.15,
 
-  reviews: 0.30,
+  reviews: 0.25,
 
   punctuality: 0.08,
 
-  cancellations: 0.06,
+  cancellations: 0.07,
 
-  response: 0.06,
+  response: 0.10,
 
 };
 
