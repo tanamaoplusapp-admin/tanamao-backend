@@ -23,15 +23,7 @@ const { updateScore } = require("../scoreService");
  * ============================================================
  */
 
-const EVENTS = {
-  OFFER_CREATED: "offer_created",
-  OFFER_UPDATED: "offer_updated",
-  CHAT_ANSWERED: "chat_answered",
-  PROFILE_UPDATED: "profile_updated",
-  SERVICE_ACCEPTED: "service_accepted",
-  SERVICE_FINISHED: "service_finished",
-  DAILY_LOGIN: "daily_login",
-};
+const EVENTS = require("./events");
 async function findProfessional(identifier) {
 
   if (!identifier) {

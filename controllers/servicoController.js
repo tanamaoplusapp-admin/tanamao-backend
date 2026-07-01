@@ -7,7 +7,7 @@ const { enviarPushParaUsuario } = require('../services/pushService');
 const { sendNotification } = require('../services/notificationService');
 const agendaService = require('../services/agendaService');
 const scoreEvents = require("../services/scoreEvents");
-
+const activityEngine = require("../services/tanaEngine/activityEngine");
 
 
 /* =====================================================
@@ -491,9 +491,14 @@ exports.updateStatus = async (req, res, next) => {
   await doc.save();
 
 if (status === "finalizado" && doc.profissional) {
+
   await updateProfessionalServiceStats(doc.profissional);
 
-  await scoreEvents.onServiceFinished(doc.profissional);
+  await activityEngine.register(
+    doc.profissional,
+    activityEngine.EVENTS.SERVICE_FINISHED
+  );
+
 }
 if (status === "cancelado" && doc.profissional) {
   await scoreEvents.onServiceCancelled(doc.profissional);
@@ -761,7 +766,12 @@ exports.salvarAgendamento = async (req, res) => {
     service.valorFinal = valorFinal;
 
     await service.save();
-
+    const clienteId = service.cliente?._id || service.cliente;
+const profissionalId = service.profissional?._id || service.profissional;
+await activityEngine.register(
+  profissionalId,
+  activityEngine.EVENTS.SERVICE_ACCEPTED
+);
     return res.json({ service });
   } catch (e) {
     return res.status(500).json({ erro: e.message });

@@ -7,6 +7,7 @@ const User = require('../models/user');
 const Order = require('../models/order');
 const scoreEvents = require("../services/scoreEvents");
 const Servico = require('../models/Servico');
+const activityEngine = require("../services/tanaEngine/activityEngine");
 const SERVICOS_SOCORRO_VALIDOS = [
   'pneu_furado',
   'bateria_descarregada',
@@ -693,9 +694,12 @@ if (socorristaFinal && servicosSocorroFinal.length === 0) {
 );
 
 console.log('SALVO NO BANCO:', updated);
-
+await activityEngine.register(
+    updated._id,
+    activityEngine.EVENTS.PROFILE_UPDATED
+);
 // Atualiza automaticamente o TanaScore
-await scoreEvents.onProfileUpdated(updated._id);
+
 
 return res.json({
   ok: true,
