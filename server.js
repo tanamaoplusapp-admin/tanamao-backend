@@ -272,6 +272,10 @@ const routes = {
   galeria: { path: '/api/galeria', module: './routes/galeriaRoutes' },
   profissionais: { path: '/api/profissionais', module: './routes/profissionaisRoutes' },
   score: { path: '/api/score', module: './routes/scoreRoutes' },
+  profile: {
+  path: "/api/profile",
+  module: "./routes/profileAnalyzerRoutes"
+},
 };
 
 Object.values(routes).forEach(({ path, module: modPath }) => {
