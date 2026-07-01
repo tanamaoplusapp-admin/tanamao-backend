@@ -9,7 +9,7 @@ const {
   getCityRanking,
   getProfessionRanking,
   distanceToLeader,
-} = require("./rankingService");
+} = require("./RankingService");
 
 const {
   generateSeals,
