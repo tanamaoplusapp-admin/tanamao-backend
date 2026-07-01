@@ -8,6 +8,24 @@ const Order = require('../models/order');
 const scoreEvents = require("../services/scoreEvents");
 const Servico = require('../models/Servico');
 const activityEngine = require("../services/tanaEngine/activityEngine");
+const {
+  calculateSearchScore,
+} = require("../services/searchScoreService");
+const {
+  getCityRanking,
+  getProfessionRanking,
+  distanceToLeader,
+} = require("../services/rankingService");
+
+const {
+  generateSeals,
+} = require("../services/tanaSealService");
+
+const {
+  getCurrentSeason,
+  isEligible,
+  getReward,
+} = require("../services/seasonService");
 const SERVICOS_SOCORRO_VALIDOS = [
   'pneu_furado',
   'bateria_descarregada',
@@ -277,30 +295,110 @@ console.log('PROFISSIONAIS ENCONTRADOS:', profs.length);
       ])
     );
 
-    const comMetricas = filtrados.map((p) => {
-      const profId = String(p._id);
-      const userId = String(p.userId?._id || p.userId || '');
+    const profissionais = filtrados
 
-      return {
-        ...p,
-        metrics:
-          mapaMetricas.get(profId) ||
-          mapaMetricas.get(userId) ||
-          {
-            mediaAvaliacoes: 0,
-            totalAvaliacoes: 0,
-          },
+  .map((p) => {
+
+    const profId = String(p._id);
+
+    const userId = String(
+      p.userId?._id || p.userId || ""
+    );
+
+    const metrics =
+
+      mapaMetricas.get(profId) ||
+
+      mapaMetricas.get(userId) ||
+
+      {
+        mediaAvaliacoes: 0,
+        totalAvaliacoes: 0,
       };
-    });
 
-    return res.json({ ok: true, data: comMetricas });
-  } catch (e) {
-    console.error('profissionais.list:', e);
-    return res.status(500).json({
-      ok: false,
-      message: 'Erro ao listar profissionais',
-    });
-  }
+    const profissional = {
+
+      ...p,
+
+      metrics,
+
+    };
+
+    profissional.searchScore =
+      calculateSearchScore(profissional);
+
+    return profissional;
+
+  })
+
+  .sort((a, b) => {
+
+    /* 1º Critério */
+    if (b.searchScore !== a.searchScore) {
+
+      return b.searchScore - a.searchScore;
+
+    }
+
+    /* 2º Critério */
+    if ((b.tanaScore || 0) !== (a.tanaScore || 0)) {
+
+      return (b.tanaScore || 0) -
+             (a.tanaScore || 0);
+
+    }
+
+    /* 3º Critério */
+    if (
+
+      b.metrics.mediaAvaliacoes !==
+      a.metrics.mediaAvaliacoes
+
+    ) {
+
+      return (
+
+        b.metrics.mediaAvaliacoes -
+
+        a.metrics.mediaAvaliacoes
+
+      );
+
+    }
+
+    /* 4º Critério */
+    return (
+
+      (b.metrics.totalAvaliacoes || 0) -
+
+      (a.metrics.totalAvaliacoes || 0)
+
+    );
+
+  });
+
+return res.json({
+
+  ok: true,
+
+  data: profissionais,
+
+});
+return res.json({
+  ok: true,
+  data: profissionais,
+});
+
+} catch (e) {
+
+  console.error("profissionais.list:", e);
+
+  return res.status(500).json({
+    ok: false,
+    message: "Erro ao listar profissionais",
+  });
+
+}
 };
 /* ============================================================================
  * DETALHE
@@ -388,7 +486,51 @@ exports.getById = async (req, res) => {
 
     console.log('METRICS FINAL:', prof.metrics);
 
-    
+    /* =========================
+   TANAPROFILE PREMIUM
+========================= */
+
+prof.searchScore =
+  calculateSearchScore(prof);
+
+const cityRanking =
+  await getCityRanking(prof);
+
+const professionRanking =
+  await getProfessionRanking(prof);
+
+prof.cityRanking = cityRanking;
+
+prof.professionRanking =
+  professionRanking;
+
+prof.distanceLeader =
+  distanceToLeader(
+    cityRanking,
+    prof.searchScore
+  );
+
+prof.tanaSeals =
+  generateSeals(
+    prof,
+    cityRanking
+  );
+
+const season =
+  getCurrentSeason();
+
+prof.season = season;
+
+if (isEligible(prof)) {
+
+  prof.reward =
+    getReward(cityRanking.position);
+
+} else {
+
+  prof.reward = null;
+
+}
     /* =========================
        BLOQUEIO PLANO EXPIRADO
     ========================= */

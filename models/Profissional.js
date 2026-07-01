@@ -407,7 +407,11 @@ tanaScore: {
   default: 0,
   index: true,
 },
-
+searchScore: {
+  type: Number,
+  default: 0,
+  index: true,
+},
 tanaLevel: {
   type: String,
   default: "Bronze",
@@ -424,11 +428,10 @@ tanaModules: {
     default: 0,
   },
 
-  security: {
+  activity: {
     type: Number,
     default: 0,
   },
-
   experience: {
     type: Number,
     default: 0,
@@ -454,7 +457,20 @@ tanaModules: {
     default: 0,
   },
 },
+tanaSeals: [
+  {
+    type: String,
+  },
+],
+lastSeason: {
 
+  year: Number,
+
+  month: Number,
+
+  name: String,
+
+},
 tanaScoreUpdatedAt: {
   type: Date,
 },

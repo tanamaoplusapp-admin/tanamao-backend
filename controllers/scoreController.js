@@ -106,18 +106,28 @@ exports.getMyEvolution = async (req, res) => {
 
         modules: resultado.modules,
 
-        cityRanking: null,
+searchScore: resultado.searchScore,
 
-        cityPercentile: null,
+cityRanking: resultado.cityRanking,
 
-        professionPercentile: null,
+professionRanking: resultado.professionRanking,
 
-        weeklyGain: 0,
+distanceLeader: resultado.distanceLeader,
 
-        tips: generateEvolutionTips(
+seals: resultado.seals || [],
+
+season: resultado.season || null,
+
+reward: resultado.reward || null,
+
+weeklyGain: 0,
+
+tips: generateEvolutionTips(
   profissional,
   resultado.modules
 ),
+
+achievements: [],
 
       },
 

@@ -1,10 +1,28 @@
-const User = require("../models/user");
+
 const Profissional = require("../models/Profissional");
 const Servico = require("../models/Servico");
+const {
+  calculateSearchScore,
+} = require("./searchScoreService");
 
 const {
+  getCityRanking,
+  getProfessionRanking,
+  distanceToLeader,
+} = require("./rankingService");
+
+const {
+  generateSeals,
+} = require("./tanaSealService");
+
+const {
+  getCurrentSeason,
+  isEligible,
+  getReward,
+} = require("./seasonService");
+const {
   PROFILE_RULES,
-  SECURITY_RULES,
+  
   MODULE_WEIGHTS,
   LEVELS,
   reviewCurve,
@@ -137,29 +155,7 @@ function calculateProfileScore(profissional) {
   return clamp(score, 0, 100);
 }
 
-/* ============================================================
-   SEGURANÇA
-============================================================ */
 
-function calculateSecurityScore(user) {
-  let score = 0;
-
-  if (!user) return 0;
-
-  if (user.emailVerificado)
-    score += SECURITY_RULES.email;
-
-  if (user.telefoneVerificado)
-    score += SECURITY_RULES.phone;
-
-  if (user.documentoVerificado)
-    score += SECURITY_RULES.document;
-
-  if (user.selfieVerificada)
-    score += SECURITY_RULES.selfie;
-
-  return clamp(score, 0, 100);
-}
 
 /* ============================================================
    EXPERIÊNCIA
@@ -388,7 +384,6 @@ async function calculateScore(profissionalId) {
 
   const profissional = await findProfessional(profissionalId);
 
-  const user = await User.findById(profissional.userId);
 
  const modules = {
 
@@ -401,23 +396,104 @@ async function calculateScore(profissionalId) {
   reviews: calculateReviewScore(profissional),
 
   // Mantidos por enquanto
-  punctuality: 100,
+ punctuality: await calculatePunctualityScore(profissional),
+  response: await calculateResponseScore(profissional),
 
-  cancellations: 100,
-
-  response: 100,
+cancellations: await calculateCancellationScore(profissional),
 
 };
 
-  const finalScore = calculateFinalScore(modules);
+ const finalScore = calculateFinalScore(modules);
 
-  const level = calculateLevel(finalScore);
+const level = calculateLevel(finalScore);
 
-  return {
-    score: finalScore,
-    level,
-    modules,
-  };
+/* ============================================================
+   Dados temporários para os serviços
+============================================================ */
+const profissionalScore = {
+
+  ...profissional.toObject(),
+
+  tanaScore: finalScore,
+
+  tanaModules: modules,
+
+};
+
+/* ============================================================
+   SearchScore
+============================================================ */
+
+const searchScore =
+ calculateSearchScore(profissionalScore)
+
+/* ============================================================
+   Ranking
+============================================================ */
+
+const cityRanking =
+  await getCityRanking(profissionalScore);
+
+const professionRanking =
+  await getProfessionRanking(profissionalScore);
+/* ============================================================
+   Selos
+============================================================ */
+
+const seals =
+  generateSeals(
+    profissionalScore,
+    cityRanking
+  );
+
+/* ============================================================
+   Temporada
+============================================================ */
+
+const season =
+  getCurrentSeason();
+
+const eligible =
+  isEligible(profissionalScore);
+
+const reward =
+  eligible && cityRanking
+    ? getReward(cityRanking.position)
+    : null;
+
+/* ============================================================
+   Distância até o líder
+============================================================ */
+
+const distanceLeader =
+  distanceToLeader(
+    cityRanking,
+    searchScore
+  );
+
+return {
+
+  score: finalScore,
+
+  searchScore,
+
+  level,
+
+  modules,
+
+  cityRanking,
+
+  professionRanking,
+
+  seals,
+
+  season,
+
+  reward,
+
+  distanceLeader,
+
+};
 
 }
 /* ============================================================
@@ -437,7 +513,11 @@ await Profissional.findByIdAndUpdate(
       tanaLevel: resultado.level.name,
 
       tanaLevelColor: resultado.level.color,
+searchScore: resultado.searchScore,
 
+tanaSeals: resultado.seals,
+
+lastSeason: resultado.season,
       tanaModules: {
   profile: resultado.modules.profile,
   activity: resultado.modules.activity,
@@ -544,7 +624,7 @@ if (modules.activity < 100) {
 
 module.exports = {
   calculateProfileScore,
-  calculateSecurityScore,
+ 
   calculateExperienceScore,
   calculateReviewScore,
   calculatePunctualityScore,
