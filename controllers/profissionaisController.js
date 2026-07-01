@@ -15,7 +15,7 @@ const {
   getCityRanking,
   getProfessionRanking,
   distanceToLeader,
-} = require("../services/RankingService");
+} = require("../../tana_mao_app/src/services/RankingService");
 
 const {
   generateSeals,
