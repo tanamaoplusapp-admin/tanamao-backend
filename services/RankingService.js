@@ -1,216 +1,691 @@
-/**
- * ============================================================
- * RankingService™
- * ------------------------------------------------------------
- * Responsável por calcular posições no ranking.
- *
- * O Ranking é sempre calculado usando o SearchScore™.
- *
- * Nunca salva posição em banco.
- *
- * ============================================================
- */
+import React from "react";
 
-const Profissional = require("../models/Profissional");
+import {
+  View,
+  Text,
+  StyleSheet,
+} from "react-native";
 
-const {
-    calculateSearchScore,
-} = require("./searchScoreService");
+import { Ionicons } from "@expo/vector-icons";
 
-/* ============================================================
-   RANKING DA CIDADE
-============================================================ */
+import ProgressBar from "./ProgressBar";
 
-async function getCityRanking(profissional) {
+export default function RankingCard({
 
-    if (!profissional) {
+  evolution = {},
 
-        return null;
+}) {
+
+  const cityRanking =
+    evolution?.cityRanking || {};
+
+  const professionRanking =
+    evolution?.professionRanking || {};
+
+  const reward =
+    evolution?.reward || {};
+
+  const season =
+    evolution?.season || {};
+
+  const score =
+    evolution?.score || 0;
+
+  const distance =
+    evolution?.distanceLeader || 0;
+
+  function getMedal(position){
+
+    switch(position){
+
+      case 1:
+        return "🥇";
+
+      case 2:
+        return "🥈";
+
+      case 3:
+        return "🥉";
+
+      default:
+        return "🏅";
 
     }
 
-    const cidade = profissional.endereco?.cidade;
+  }
 
-    if (!cidade) {
+  function getMessage(){
 
-        return null;
+    if(cityRanking?.position===1){
+
+      return "Você lidera o ranking da sua cidade. Continue ativo para manter sua posição.";
 
     }
 
-    const profissionais = await Profissional.find({
+    if(distance<=3){
 
-        "endereco.cidade": cidade,
+      return `Você está a apenas ${distance} pontos da liderança.`;
 
-    }).lean();
+    }
 
-    const ranking = profissionais
+    if(cityRanking?.position<=10){
 
-        .map((item) => ({
+      return "Você já faz parte dos profissionais em destaque da cidade.";
 
-            _id: item._id,
+    }
 
-            nome: item.nome,
+    return "Continue evoluindo para subir rapidamente no ranking.";
 
-            cidade,
+  }
 
-            searchScore: calculateSearchScore(item),
+  return(
 
-        }))
+    <View style={styles.card}>
 
-        .sort(
+      <View style={styles.header}>
 
-            (a, b) =>
+        <View style={styles.iconContainer}>
 
-                b.searchScore - a.searchScore
+          <Ionicons
 
-        );
+            name="trophy"
 
-    const position =
+            size={24}
 
-        ranking.findIndex(
+            color="#FF9900"
 
-            (p) =>
+          />
 
-                String(p._id) === String(profissional._id)
+        </View>
 
-        ) + 1;
+        <View style={{flex:1}}>
 
-    return {
+          <Text style={styles.title}>
 
-        city: cidade,
+            Ranking da Cidade
 
-        total: ranking.length,
+          </Text>
 
-        position,
+          <Text style={styles.subtitle}>
 
-        leaders: ranking.slice(0, 10),
+            Sua posição nesta temporada
 
-    };
+          </Text>
+
+        </View>
+
+      </View>
+
+      <View style={styles.positionContainer}>
+
+        <Text style={styles.medal}>
+
+          {getMedal(cityRanking?.position)}
+
+        </Text>
+
+        <Text style={styles.position}>
+
+          {
+
+            cityRanking?.position
+
+              ? `#${cityRanking.position}`
+
+              : "--"
+
+          }
+
+        </Text>
+
+        <Text style={styles.city}>
+
+          {
+
+            cityRanking?.city ||
+
+            "Sua cidade"
+
+          }
+
+        </Text>
+
+      </View>
+
+      <View style={styles.progressArea}>
+
+        <ProgressBar
+
+          value={score}
+
+          progressColor="#FF9900"
+
+        />
+
+      </View>
+
+      <Text style={styles.score}>
+
+        {score} pontos
+
+      </Text>
+
+      <View style={styles.messageBox}>
+
+        <Ionicons
+
+          name="rocket"
+
+          size={18}
+
+          color="#2563EB"
+
+        />
+
+        <Text style={styles.message}>
+
+          {getMessage()}
+
+        </Text>
+
+      </View>
+
+      <View style={styles.row}>
+
+        <View style={styles.smallCard}>
+
+          <Text style={styles.smallTitle}>
+
+            Ranking da profissão
+
+          </Text>
+
+          <Text style={styles.smallValue}>
+
+            {
+
+              professionRanking?.position
+
+                ? `#${professionRanking.position}`
+
+                : "--"
+
+            }
+
+          </Text>
+
+        </View>
+
+        <View style={styles.smallCard}>
+
+          <Text style={styles.smallTitle}>
+
+            Distância do líder
+
+          </Text>
+
+          <Text style={styles.smallValue}>
+
+            {distance}
+
+          </Text>
+
+        </View>
+
+      </View>
+            <View style={styles.rewardCard}>
+
+        <View style={styles.rewardHeader}>
+
+          <Ionicons
+            name="gift"
+            size={22}
+            color="#FF9900"
+          />
+
+          <Text style={styles.rewardTitle}>
+            Recompensa da Temporada
+          </Text>
+
+        </View>
+
+        <Text style={styles.rewardName}>
+
+          {reward?.title || "🏆 1 mês grátis no Tanamão+"}
+
+        </Text>
+
+        <Text style={styles.rewardDescription}>
+
+          Continue evoluindo no ranking para conquistar esta recompensa exclusiva.
+
+        </Text>
+
+      </View>
+
+      <View style={styles.goalCard}>
+
+        <View style={styles.goalHeader}>
+
+          <Ionicons
+            name="flag"
+            size={20}
+            color="#2E4F2F"
+          />
+
+          <Text style={styles.goalTitle}>
+
+            Próximo objetivo
+
+          </Text>
+
+        </View>
+
+        {
+
+          distance > 0 ? (
+
+            <Text style={styles.goalText}>
+
+              Você está a apenas{" "}
+
+              <Text style={styles.bold}>
+
+                {distance} pontos
+
+              </Text>
+
+              {" "}de conquistar a liderança da cidade.
+
+            </Text>
+
+          ) : (
+
+            <Text style={styles.goalText}>
+
+              👑 Você é o profissional mais bem colocado da cidade.
+
+            </Text>
+
+          )
+
+        }
+
+      </View>
+
+      <View style={styles.footerCard}>
+
+        <Ionicons
+
+          name="time-outline"
+
+          size={18}
+
+          color="#6B7280"
+
+        />
+
+        <Text style={styles.footerText}>
+
+          {
+
+            season?.remainingDays
+
+              ? `Restam ${season.remainingDays} dias para terminar esta temporada.`
+
+              : "A temporada está em andamento."
+
+          }
+
+        </Text>
+
+      </View>
+
+    </View>
+
+  );
 
 }
 
-/* ============================================================
-   RANKING POR PROFISSÃO
-============================================================ */
+const styles = StyleSheet.create({
 
-async function getProfessionRanking(
+  card:{
 
-    profissional
+    backgroundColor:"#FFFFFF",
 
-) {
+    borderRadius:26,
 
-    if (
+    padding:22,
 
-        !profissional ||
+    marginTop:18,
 
-        !profissional.profissoes ||
+    shadowColor:"#000",
 
-        !profissional.profissoes.length
+    shadowOpacity:0.06,
 
-    ) {
+    shadowRadius:14,
 
-        return null;
+    elevation:5,
 
-    }
+  },
 
-    const profissao =
+  header:{
 
-        profissional.profissoes[0];
+    flexDirection:"row",
 
-    const profissionais = await Profissional.find({
+    alignItems:"center",
 
-        profissoes: profissao,
+  },
 
-    }).lean();
+  iconContainer:{
 
-    const ranking = profissionais
+    width:50,
 
-        .map((item) => ({
+    height:50,
 
-            _id: item._id,
+    borderRadius:25,
 
-            nome: item.nome,
+    backgroundColor:"#FFF5E6",
 
-            searchScore: calculateSearchScore(item),
+    justifyContent:"center",
 
-        }))
+    alignItems:"center",
 
-        .sort(
+    marginRight:14,
 
-            (a, b) =>
+  },
 
-                b.searchScore - a.searchScore
+  title:{
 
-        );
+    fontSize:18,
 
-    const position =
+    fontWeight:"700",
 
-        ranking.findIndex(
+    color:"#2E4F2F",
 
-            (p) =>
+  },
 
-                String(p._id) === String(profissional._id)
+  subtitle:{
 
-        ) + 1;
+    color:"#6B7280",
 
-    return {
+    marginTop:2,
 
-        profession: profissao,
+    fontSize:13,
 
-        total: ranking.length,
+  },
 
-        position,
+  positionContainer:{
 
-        leaders: ranking.slice(0, 10),
+    alignItems:"center",
 
-    };
+    marginTop:22,
 
-}
+  },
 
-/* ============================================================
-   DISTÂNCIA PARA O PRIMEIRO
-============================================================ */
+  medal:{
 
-function distanceToLeader(
+    fontSize:42,
 
-    ranking,
+  },
 
-    myScore
+  position:{
 
-) {
+    marginTop:8,
 
-    if (
+    fontSize:46,
 
-        !ranking ||
+    fontWeight:"800",
 
-        !ranking.leaders ||
+    color:"#111827",
 
-        !ranking.leaders.length
+  },
 
-    ) {
+  city:{
 
-        return 0;
+    marginTop:6,
 
-    }
+    color:"#6B7280",
 
-    return Math.max(
+    fontSize:14,
 
-        ranking.leaders[0].searchScore -
+  },
 
-        myScore,
+  progressArea:{
 
-        0
+    marginTop:24,
 
-    );
+  },
 
-}
+  score:{
 
-module.exports = {
+    marginTop:10,
 
-    getCityRanking,
+    textAlign:"center",
 
-    getProfessionRanking,
+    color:"#6B7280",
 
-    distanceToLeader,
+    fontSize:13,
 
-};
+  },
+
+  messageBox:{
+
+    marginTop:22,
+
+    backgroundColor:"#EFF6FF",
+
+    borderRadius:18,
+
+    padding:16,
+
+    flexDirection:"row",
+
+    alignItems:"flex-start",
+
+  },
+
+  message:{
+
+    flex:1,
+
+    marginLeft:10,
+
+    color:"#1E3A8A",
+
+    lineHeight:22,
+
+    fontSize:14,
+
+  },
+
+  row:{
+
+    flexDirection:"row",
+
+    justifyContent:"space-between",
+
+    marginTop:22,
+
+  },
+
+  smallCard:{
+
+    flex:1,
+
+    backgroundColor:"#F8FAFC",
+
+    borderRadius:18,
+
+    paddingVertical:18,
+
+    marginHorizontal:4,
+
+    alignItems:"center",
+
+    borderWidth:1,
+
+    borderColor:"#E5E7EB",
+
+  },
+
+  smallTitle:{
+
+    color:"#6B7280",
+
+    fontSize:13,
+
+    textAlign:"center",
+
+    marginBottom:8,
+
+  },
+
+  smallValue:{
+
+    fontSize:28,
+
+    fontWeight:"800",
+
+    color:"#111827",
+
+  },
+    rewardCard:{
+
+    marginTop:22,
+
+    backgroundColor:"#FFF7ED",
+
+    borderRadius:18,
+
+    padding:18,
+
+    borderWidth:1,
+
+    borderColor:"#FDE68A",
+
+  },
+
+  rewardHeader:{
+
+    flexDirection:"row",
+
+    alignItems:"center",
+
+    marginBottom:12,
+
+  },
+
+  rewardTitle:{
+
+    marginLeft:10,
+
+    fontSize:15,
+
+    fontWeight:"700",
+
+    color:"#92400E",
+
+  },
+
+  rewardName:{
+
+    fontSize:22,
+
+    fontWeight:"800",
+
+    color:"#111827",
+
+  },
+
+  rewardDescription:{
+
+    marginTop:8,
+
+    color:"#92400E",
+
+    fontSize:14,
+
+    lineHeight:22,
+
+  },
+
+  goalCard:{
+
+    marginTop:20,
+
+    backgroundColor:"#ECFDF5",
+
+    borderRadius:18,
+
+    padding:18,
+
+    borderWidth:1,
+
+    borderColor:"#BBF7D0",
+
+  },
+
+  goalHeader:{
+
+    flexDirection:"row",
+
+    alignItems:"center",
+
+    marginBottom:10,
+
+  },
+
+  goalTitle:{
+
+    marginLeft:10,
+
+    fontWeight:"700",
+
+    fontSize:15,
+
+    color:"#166534",
+
+  },
+
+  goalText:{
+
+    color:"#166534",
+
+    lineHeight:22,
+
+    fontSize:14,
+
+  },
+
+  footerCard:{
+
+    marginTop:20,
+
+    flexDirection:"row",
+
+    alignItems:"center",
+
+    justifyContent:"center",
+
+  },
+
+  footerText:{
+
+    marginLeft:8,
+
+    color:"#6B7280",
+
+    fontSize:13,
+
+    textAlign:"center",
+
+  },
+
+  bold:{
+
+    fontWeight:"800",
+
+  },
+
+});
