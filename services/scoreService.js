@@ -238,12 +238,7 @@ async function calculateCancellationScore(profissional) {
 
  const total = await Servico.countDocuments({
     profissional: profissional.userId,
-    status: {
-        $in: [
-            "finalizado",
-            "cancelado"
-        ]
-    }
+    status: ["aceito", "finalizado"]
 });
   if (total === 0) {
     return 100;
@@ -277,9 +272,7 @@ async function calculateResponseScore(profissional) {
 
     profissional: profissional.userId,
 
-    status: {
-      $in: ["aceito", "finalizado"]
-    }
+   status: ["finalizado", "cancelado"]
 
   })
     .sort({ createdAt: -1 })
