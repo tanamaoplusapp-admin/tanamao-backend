@@ -8,9 +8,8 @@ const {
 const {
   getCityRanking,
   getProfessionRanking,
-  distanceToLeader,
+  getDistanceToLeader,
 } = require("./RankingService");
-
 const {
   generateSeals,
 } = require("./tanaSealService");
@@ -556,13 +555,18 @@ async function updateAllScores() {
         success: true,
         score: resultado.score,
       });
-    } catch (error) {
-      resultados.push({
-        profissionalId: profissional._id,
-        success: false,
-        error: error.message,
-      });
-    }
+    } catch (e) {
+
+  console.error("===== ERRO COMPLETO =====");
+  console.error(e);
+  console.error(e.stack);
+
+  res.status(500).json({
+    success: false,
+    message: e.message,
+  });
+
+}
   }
 
   return resultados;
