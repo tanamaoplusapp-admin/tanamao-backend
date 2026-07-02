@@ -127,7 +127,7 @@ tips: generateEvolutionTips(
   resultado.modules
 ),
 
-achievements: [],
+achievements: resultado.seals || [],
 
       },
 
