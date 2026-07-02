@@ -342,14 +342,24 @@ function generateSeals(
 
   /* RANKING */
 
-  if (ranking.position === 1)
+
+if (ranking?.position) {
+
+  if (ranking.position === 1) {
+
     seals.push(SEALS.CITY_LEADER);
 
-  else if (ranking.position <= 3)
+  } else if (ranking.position <= 3) {
+
     seals.push(SEALS.TOP3_CITY);
 
-  else if (ranking.position <= 10)
+  } else if (ranking.position <= 10) {
+
     seals.push(SEALS.TOP10_CITY);
+
+  }
+
+}
 
   /* DESTAQUE */
 

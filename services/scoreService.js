@@ -1,4 +1,4 @@
-
+console.log("######## SCORE SERVICE V3 ########");
 const Profissional = require("../models/Profissional");
 const Servico = require("../models/Servico");
 const {
@@ -238,7 +238,7 @@ async function calculateCancellationScore(profissional) {
 
  const total = await Servico.countDocuments({
     profissional: profissional.userId,
-    status: ["aceito", "finalizado"]
+    status: ["finalizado", "cancelado"]
 });
   if (total === 0) {
     return 100;
@@ -272,7 +272,7 @@ async function calculateResponseScore(profissional) {
 
     profissional: profissional.userId,
 
-   status: ["finalizado", "cancelado"]
+ status: ["aceito", "finalizado"]
 
   })
     .sort({ createdAt: -1 })
@@ -458,11 +458,9 @@ const reward =
 ============================================================ */
 
 const distanceLeader =
-  distanceToLeader(
-    cityRanking,
-    searchScore
+  await getDistanceToLeader(
+    profissionalScore
   );
-
 return {
 
   score: finalScore,
@@ -550,13 +548,12 @@ async function updateAllScores() {
       });
     } catch (e) {
 
-  console.error("===== ERRO COMPLETO =====");
   console.error(e);
-  console.error(e.stack);
 
-  res.status(500).json({
+  resultados.push({
+    profissionalId: profissional._id,
     success: false,
-    message: e.message,
+    error: e.message,
   });
 
 }

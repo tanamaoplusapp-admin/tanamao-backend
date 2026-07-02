@@ -35,13 +35,11 @@ async function getCityRanking(profissional) {
 
     }
 
-    const ranking = await Profissional.find({
+   const ranking = await Profissional.find({
 
-        "endereco.cidade": cidade,
+    "endereco.cidade": cidade,
 
-        aprovado: true,
-
-    })
+})
         .select(
             "name tanaScore searchScore endereco"
         )
@@ -124,11 +122,9 @@ async function getProfessionRanking(profissional) {
 
     const ranking = await Profissional.find({
 
-        profissaoNome: profissao,
+    profissaoNome: profissao,
 
-        aprovado: true,
-
-    })
+})
         .select(
             "name tanaScore searchScore profissaoNome"
         )
