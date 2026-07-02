@@ -14,7 +14,7 @@ const {
 const {
   getCityRanking,
   getProfessionRanking,
-  distanceToLeader,
+  getDistanceToLeader,
 } = require("../services/RankingService");
 const {
   generateSeals,
@@ -504,17 +504,13 @@ prof.professionRanking =
   professionRanking;
 
 prof.distanceLeader =
-  distanceToLeader(
-    cityRanking,
-    prof.searchScore
-  );
+  await getDistanceToLeader(prof);
 
 prof.tanaSeals =
   generateSeals(
     prof,
-    cityRanking
+    cityRanking || {}
   );
-
 const season =
   getCurrentSeason();
 
@@ -522,8 +518,10 @@ prof.season = season;
 
 if (isEligible(prof)) {
 
-  prof.reward =
-    getReward(cityRanking.position);
+prof.reward =
+  cityRanking
+    ? getReward(cityRanking.position)
+    : null;
 
 } else {
 
