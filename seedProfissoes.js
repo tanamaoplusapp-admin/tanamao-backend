@@ -45,6 +45,7 @@ const data = [
       'Lavagem automotiva delivery',
       'Limpa-fossa',
       'Limpeza de quintal',
+      'Loja online',
       'Gesseiro',
       'Vidraceiro',
       'Serralheiro',
