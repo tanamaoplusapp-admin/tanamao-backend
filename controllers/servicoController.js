@@ -186,11 +186,18 @@ if (!chat && profissionalId) {
   const clienteId = String(cliente);
   const profissionalIdStr = String(profissionalId);
 
-  chat = await Chat.findOne({
-    participantes: {
-      $all: [clienteId, profissionalIdStr],
+ const mongoose = require('mongoose');
+
+chat = await Chat.findOne({
+  $and: [
+    {
+      participantes: new mongoose.Types.ObjectId(clienteId),
     },
-  });
+    {
+      participantes: new mongoose.Types.ObjectId(profissionalIdStr),
+    },
+  ],
+});
 
   // Garante que seja um chat apenas entre essas duas pessoas
   if (chat && chat.participantes.length !== 2) {
