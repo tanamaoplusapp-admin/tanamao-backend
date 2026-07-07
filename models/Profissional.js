@@ -224,6 +224,15 @@ aceitaDinheiro: {
 },
 
 /* =========================
+FORMA DE RECEBER SERVIÇOS
+========================= */
+
+aceitaServicoImediato: {
+  type: Boolean,
+  default: true,
+},
+
+/* =========================
 GALERIA
 ========================= */
 
