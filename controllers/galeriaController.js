@@ -47,7 +47,7 @@ BODY:
 exports.criarDestaque = async (req, res, next) => {
   try {
     const profissionalId = obterProfissionalId(req);
-
+console.log('CRIANDO DESTAQUE PARA:', profissionalId);
     if (!profissionalId) {
       return res.status(401).json({
         message: 'Usuário não autenticado.',
@@ -191,7 +191,8 @@ exports.listarMeusDestaques = async (
         message: 'Usuário não autenticado.',
       });
     }
-
+console.log('REQ.USER GALERIA:', req.user);
+console.log('PROFISSIONAL ID GALERIA:', profissionalId);
     const destaques = await Galeria.find({
       profissional: profissionalId,
     })
