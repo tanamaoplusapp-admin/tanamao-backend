@@ -724,6 +724,8 @@ if (req.body.tipoAtendimento !== undefined)
 
     if (req.body.atende24h !== undefined)
       updateData.atende24h = req.body.atende24h;
+    if (req.body.aceitaServicoImediato !== undefined)
+  updateData.aceitaServicoImediato = req.body.aceitaServicoImediato;
     if (req.body.aceitaPix !== undefined)
   updateData.aceitaPix = req.body.aceitaPix;
 

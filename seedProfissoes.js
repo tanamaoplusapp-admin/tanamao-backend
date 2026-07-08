@@ -16,7 +16,6 @@ const data = [
       'Guincho',
       'Borracheiro',
       'Mecânico emergencial',
-      'Socorrista automotivo',
       'Diarista',
       'Babá',
       
