@@ -19,7 +19,10 @@ const {
 const {
   generateSeals,
 } = require("../services/tanaSealService");
-
+const {
+  sortProfessionalsByMatch,
+  generateMatchStats,
+} = require("../services/tanaMatchService");
 const {
   getCurrentSeason,
   isEligible,
@@ -109,124 +112,222 @@ exports.list = async (req, res) => {
       cidade,
       tipoAtendimento,
       servicoEmergencial,
+      query,
+      latitude,
+      longitude,
+      urgente,
+      immediate,
     } = req.query;
 
-    const filtro = {};
+    /* ============================================================
+       FILTROS
+    ============================================================ */
+
+    const filtrosPrincipais = [];
+
+    /* ============================================================
+       SOCORRO AUTOMOTIVO
+    ============================================================ */
 
     if (req.query.socorristaAutomotivo === 'true') {
-      filtro.socorristaAutomotivo = true;
+      filtrosPrincipais.push({
+        socorristaAutomotivo: true,
+      });
 
       if (servicoEmergencial) {
-        filtro.servicosSocorroAutomotivo = servicoEmergencial;
+        filtrosPrincipais.push({
+          servicosSocorroAutomotivo: servicoEmergencial,
+        });
       }
     } else {
-      /* ===============================
-   FILTRO POR CATEGORIA / PROFISSÃO
-   (SUPORTA ATÉ 3 PROFISSÕES)
-================================ */
+      /* ============================================================
+         FILTRO POR CATEGORIA / PROFISSÃO
+         SUPORTA:
+         • formato antigo
+         • profissões múltiplas
+      ============================================================ */
 
-if (categoriaId || profissaoId) {
-  const filtros = [];
+      if (categoriaId || profissaoId) {
+        const filtrosProfissao = [];
 
-  // Compatibilidade com profissionais antigos
-  const filtroPrincipal = {};
+        /* ============================
+           VALIDAÇÃO DOS IDS
+        ============================ */
 
-  if (categoriaId) {
-    if (!mongoose.Types.ObjectId.isValid(categoriaId)) {
-      return res.status(400).json({
-        ok: false,
-        message: 'categoriaId inválido',
+        if (
+          categoriaId &&
+          !mongoose.Types.ObjectId.isValid(categoriaId)
+        ) {
+          return res.status(400).json({
+            ok: false,
+            message: 'categoriaId inválido',
+          });
+        }
+
+        if (
+          profissaoId &&
+          !mongoose.Types.ObjectId.isValid(profissaoId)
+        ) {
+          return res.status(400).json({
+            ok: false,
+            message: 'profissaoId inválido',
+          });
+        }
+
+        /* ============================
+           FORMATO ANTIGO
+        ============================ */
+
+        const filtroPrincipal = {};
+
+        if (categoriaId) {
+          filtroPrincipal.categoriaId =
+            new mongoose.Types.ObjectId(categoriaId);
+        }
+
+        if (profissaoId) {
+          filtroPrincipal.profissaoId =
+            new mongoose.Types.ObjectId(profissaoId);
+        }
+
+        if (Object.keys(filtroPrincipal).length) {
+          filtrosProfissao.push(filtroPrincipal);
+        }
+
+        /* ============================
+           PROFISSÕES MÚLTIPLAS
+        ============================ */
+
+        const filtroDetalhado = {};
+
+        if (categoriaId) {
+          filtroDetalhado[
+            'profissoesDetalhadas.categoriaId'
+          ] = new mongoose.Types.ObjectId(categoriaId);
+        }
+
+        if (profissaoId) {
+          filtroDetalhado[
+            'profissoesDetalhadas.profissaoId'
+          ] = new mongoose.Types.ObjectId(profissaoId);
+        }
+
+        if (Object.keys(filtroDetalhado).length) {
+          filtrosProfissao.push(filtroDetalhado);
+        }
+
+        /* ============================
+           AGRUPAMENTO
+        ============================ */
+
+        if (filtrosProfissao.length === 1) {
+          filtrosPrincipais.push(
+            filtrosProfissao[0]
+          );
+        } else if (filtrosProfissao.length > 1) {
+          filtrosPrincipais.push({
+            $or: filtrosProfissao,
+          });
+        }
+      }
+    }
+
+    /* ============================================================
+       FILTRO AUTOMÁTICO POR CIDADE
+
+       IMPORTANTE:
+
+       Antes o filtro de cidade sobrescrevia o $or
+       de profissão/categoria.
+
+       Agora utilizamos $and para preservar ambos.
+    ============================================================ */
+
+    const userId = getUserId(req);
+
+    if (userId) {
+      const usuario = await User.findById(userId)
+        .select('cidadeSlug')
+        .lean();
+
+      if (usuario?.cidadeSlug) {
+        filtrosPrincipais.push({
+          $or: [
+            {
+              'endereco.cidadeSlug':
+                usuario.cidadeSlug,
+            },
+            {
+              'endereco.cidade': new RegExp(
+                `^${usuario.cidadeSlug
+                  .replace(/-/g, ' ')
+                  .replace(
+                    /\b\w/g,
+                    (letter) =>
+                      letter.toUpperCase()
+                  )}$`,
+                'i'
+              ),
+            },
+          ],
+        });
+      }
+    } else if (cidade) {
+      filtrosPrincipais.push({
+        'endereco.cidadeSlug': String(cidade)
+          .trim()
+          .toLowerCase(),
       });
     }
 
-    filtroPrincipal.categoriaId = new mongoose.Types.ObjectId(categoriaId);
-  }
-
-  if (profissaoId) {
-    if (!mongoose.Types.ObjectId.isValid(profissaoId)) {
-      return res.status(400).json({
-        ok: false,
-        message: 'profissaoId inválido',
-      });
-    }
-
-    filtroPrincipal.profissaoId = new mongoose.Types.ObjectId(profissaoId);
-  }
-
-  if (Object.keys(filtroPrincipal).length) {
-    filtros.push(filtroPrincipal);
-  }
-
-  // Novo formato (profissões múltiplas)
-  const filtroDetalhado = {};
-
-  if (categoriaId) {
-    filtroDetalhado['profissoesDetalhadas.categoriaId'] =
-      new mongoose.Types.ObjectId(categoriaId);
-  }
-
-  if (profissaoId) {
-    filtroDetalhado['profissoesDetalhadas.profissaoId'] =
-      new mongoose.Types.ObjectId(profissaoId);
-  }
-
-  if (Object.keys(filtroDetalhado).length) {
-    filtros.push(filtroDetalhado);
-  }
-
-  if (filtros.length === 1) {
-    Object.assign(filtro, filtros[0]);
-  } else if (filtros.length > 1) {
-    filtro.$or = filtros;
-  }
-}
-    }
-
-   /* ============================
-   FILTRO AUTOMÁTICO POR CIDADE
-============================ */
-
-const userId = getUserId(req);
-
-if (userId) {
-  const usuario = await User.findById(userId)
-    .select('cidadeSlug')
-    .lean();
-
- if (usuario?.cidadeSlug) {
-  filtro.$or = [
-    {
-      'endereco.cidadeSlug': usuario.cidadeSlug,
-    },
-    {
-      'endereco.cidade': new RegExp(
-        `^${usuario.cidadeSlug
-          .replace(/-/g, ' ')
-          .replace(/\b\w/g, (l) => l.toUpperCase())}$`,
-        'i'
-      ),
-    },
-  ];
-}
-} else if (cidade) {
-  filtro['endereco.cidadeSlug'] = String(cidade)
-    .trim()
-    .toLowerCase();
-}
+    /* ============================================================
+       TIPO DE ATENDIMENTO
+    ============================================================ */
 
     if (tipoAtendimento) {
-      filtro[`tipoAtendimento.${tipoAtendimento}`] = true;
+      filtrosPrincipais.push({
+        [`tipoAtendimento.${tipoAtendimento}`]: true,
+      });
     }
-console.log('FILTRO FINAL:', JSON.stringify(filtro, null, 2));
 
-const profs = await Profissional.find(filtro)
-  .populate({
-    path: 'userId',
-    select: 'acessoExpiraEm online',
-  })
-  .lean();
+    /* ============================================================
+       FILTRO FINAL
+    ============================================================ */
 
-console.log('PROFISSIONAIS ENCONTRADOS:', profs.length);
+    let filtro = {};
+
+    if (filtrosPrincipais.length === 1) {
+      filtro = filtrosPrincipais[0];
+    } else if (filtrosPrincipais.length > 1) {
+      filtro = {
+        $and: filtrosPrincipais,
+      };
+    }
+
+    console.log(
+      '[TanaMatch] FILTRO FINAL:',
+      JSON.stringify(filtro, null, 2)
+    );
+
+    /* ============================================================
+       BUSCA DOS PROFISSIONAIS
+    ============================================================ */
+
+    const profs = await Profissional.find(filtro)
+      .populate({
+        path: 'userId',
+        select: 'acessoExpiraEm online',
+      })
+      .lean();
+
+    console.log(
+      '[TanaMatch] PROFISSIONAIS ENCONTRADOS:',
+      profs.length
+    );
+
+    /* ============================================================
+       FILTRO DE PLANO ATIVO
+    ============================================================ */
 
     const agora = new Date();
 
@@ -234,170 +335,334 @@ console.log('PROFISSIONAIS ENCONTRADOS:', profs.length);
       const user = p.userId;
 
       if (!user) return false;
-      if (!user.acessoExpiraEm) return false;
-      if (user.acessoExpiraEm < agora) return false;
+
+      if (!user.acessoExpiraEm) {
+        return false;
+      }
+
+      if (user.acessoExpiraEm < agora) {
+        return false;
+      }
 
       return true;
     });
 
-    const idsProfissional = filtrados.map((p) => p._id);
+    console.log(
+      '[TanaMatch] PROFISSIONAIS COM PLANO ATIVO:',
+      filtrados.length
+    );
+
+    /* ============================================================
+       IDS PARA BUSCA DAS AVALIAÇÕES
+    ============================================================ */
+
+    const idsProfissional = filtrados.map(
+      (p) => p._id
+    );
+
     const idsUser = filtrados
-      .map((p) => p.userId?._id || p.userId)
+      .map(
+        (p) =>
+          p.userId?._id ||
+          p.userId
+      )
       .filter(Boolean);
 
-    const metricas = await Avaliacao.aggregate([
-      {
-        $match: {
-          origem: { $in: ['profissional', 'servico', 'pedido'] },
-          $or: [
-            { profissionalId: { $in: idsProfissional } },
-            { profissionalUserId: { $in: idsUser } },
-            { profissional: { $in: idsUser } },
-            { prestadorId: { $in: idsProfissional } },
-          ],
-        },
-      },
-      {
-        $project: {
-          nota: 1,
-          chave: {
-            $ifNull: [
-              '$profissionalId',
-              {
-                $ifNull: [
-                  '$prestadorId',
+    /* ============================================================
+       MÉTRICAS REAIS DE AVALIAÇÃO
+    ============================================================ */
+
+    const metricas =
+      idsProfissional.length > 0
+        ? await Avaliacao.aggregate([
+            {
+              $match: {
+                origem: {
+                  $in: [
+                    'profissional',
+                    'servico',
+                    'pedido',
+                  ],
+                },
+
+                $or: [
                   {
-                    $ifNull: ['$profissionalUserId', '$profissional'],
+                    profissionalId: {
+                      $in: idsProfissional,
+                    },
+                  },
+
+                  {
+                    profissionalUserId: {
+                      $in: idsUser,
+                    },
+                  },
+
+                  {
+                    profissional: {
+                      $in: idsUser,
+                    },
+                  },
+
+                  {
+                    prestadorId: {
+                      $in: idsProfissional,
+                    },
                   },
                 ],
               },
-            ],
-          },
-        },
-      },
-      {
-        $group: {
-          _id: '$chave',
-          mediaAvaliacoes: { $avg: '$nota' },
-          totalAvaliacoes: { $sum: 1 },
-        },
-      },
-    ]);
+            },
+
+            {
+              $project: {
+                nota: 1,
+
+                chave: {
+                  $ifNull: [
+                    '$profissionalId',
+
+                    {
+                      $ifNull: [
+                        '$prestadorId',
+
+                        {
+                          $ifNull: [
+                            '$profissionalUserId',
+                            '$profissional',
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+
+            {
+              $group: {
+                _id: '$chave',
+
+                mediaAvaliacoes: {
+                  $avg: '$nota',
+                },
+
+                totalAvaliacoes: {
+                  $sum: 1,
+                },
+              },
+            },
+          ])
+        : [];
+
+    /* ============================================================
+       MAPA DE MÉTRICAS
+    ============================================================ */
 
     const mapaMetricas = new Map(
       metricas.map((m) => [
         String(m._id),
+
         {
-          mediaAvaliacoes: Number(m.mediaAvaliacoes || 0),
-          totalAvaliacoes: m.totalAvaliacoes || 0,
+          mediaAvaliacoes: Number(
+            m.mediaAvaliacoes || 0
+          ),
+
+          totalAvaliacoes:
+            m.totalAvaliacoes || 0,
         },
       ])
     );
 
-    const profissionais = filtrados
+    /* ============================================================
+       PREPARAÇÃO DOS PROFISSIONAIS
 
-  .map((p) => {
+       IMPORTANTE:
 
-    const profId = String(p._id);
+       O online real vem do User populado.
 
-    const userId = String(
-      p.userId?._id || p.userId || ""
-    );
+       O TanaMatch precisa receber esse valor
+       diretamente no objeto do profissional.
+    ============================================================ */
 
-    const metrics =
+    const profissionaisPreparados =
+      filtrados.map((p) => {
+        const profId = String(p._id);
 
-      mapaMetricas.get(profId) ||
+        const professionalUserId = String(
+          p.userId?._id ||
+          p.userId ||
+          ''
+        );
 
-      mapaMetricas.get(userId) ||
+        const metrics =
+          mapaMetricas.get(profId) ||
+          mapaMetricas.get(
+            professionalUserId
+          ) || {
+            mediaAvaliacoes: 0,
+            totalAvaliacoes: 0,
+          };
 
-      {
-        mediaAvaliacoes: 0,
-        totalAvaliacoes: 0,
-      };
+        const profissional = {
+          ...p,
 
-    const profissional = {
+          /* ============================
+             MÉTRICAS REAIS
+          ============================ */
 
-      ...p,
+          metrics: {
+            ...(p.metrics || {}),
+            ...metrics,
+          },
 
-      metrics,
+          /* ============================
+             ONLINE REAL
 
+             No sistema atual o online
+             pode vir do User.
+          ============================ */
+
+          online:
+            p.userId?.online ??
+            p.online ??
+            false,
+        };
+
+        /* ============================
+           SEARCHSCORE
+
+           Mantemos funcionando.
+        ============================ */
+
+        profissional.searchScore =
+          calculateSearchScore(
+            profissional
+          );
+
+        return profissional;
+      });
+
+    /* ============================================================
+       CONTEXTO DO TANAMATCH™
+
+       Representa a necessidade atual do cliente.
+    ============================================================ */
+
+    const tanaMatchContext = {
+      categoriaId:
+        categoriaId || null,
+
+      profissaoId:
+        profissaoId || null,
+
+      query:
+        query || null,
+
+      servicoEmergencial:
+        servicoEmergencial || null,
+
+      latitude:
+        latitude !== undefined
+          ? Number(latitude)
+          : undefined,
+
+      longitude:
+        longitude !== undefined
+          ? Number(longitude)
+          : undefined,
+
+      urgente:
+        urgente === true ||
+        urgente === 'true',
+
+      immediate:
+        immediate === true ||
+        immediate === 'true',
+
+      socorristaAutomotivo:
+        req.query
+          .socorristaAutomotivo ===
+        'true',
     };
 
-    profissional.searchScore =
-      calculateSearchScore(profissional);
+    /* ============================================================
+       TANAMATCH™
 
-    return profissional;
+       ORDEM FINAL:
 
-  })
+       1. TanaMatch
+       2. SearchScore
+       3. TanaScore
+       4. Avaliação
+       5. Quantidade de avaliações
+    ============================================================ */
 
-  .sort((a, b) => {
-
-    /* 1º Critério */
-    if (b.searchScore !== a.searchScore) {
-
-      return b.searchScore - a.searchScore;
-
-    }
-
-    /* 2º Critério */
-    if ((b.tanaScore || 0) !== (a.tanaScore || 0)) {
-
-      return (b.tanaScore || 0) -
-             (a.tanaScore || 0);
-
-    }
-
-    /* 3º Critério */
-    if (
-
-      b.metrics.mediaAvaliacoes !==
-      a.metrics.mediaAvaliacoes
-
-    ) {
-
-      return (
-
-        b.metrics.mediaAvaliacoes -
-
-        a.metrics.mediaAvaliacoes
-
+    const profissionais =
+      sortProfessionalsByMatch(
+        profissionaisPreparados,
+        tanaMatchContext
       );
 
-    }
+    /* ============================================================
+       ESTATÍSTICAS
 
-    /* 4º Critério */
-    return (
+       Preparadas para:
+       • TanaInsights
+       • Dashboard
+       • monitoramento do algoritmo
 
-      (b.metrics.totalAvaliacoes || 0) -
+       Não altera o frontend atual.
+    ============================================================ */
 
-      (a.metrics.totalAvaliacoes || 0)
+    const matchStats =
+      generateMatchStats(profissionais);
 
+    console.log(
+      '[TanaMatch] CONTEXTO:',
+      tanaMatchContext
     );
 
-  });
+    console.log(
+      '[TanaMatch] ESTATÍSTICAS:',
+      matchStats
+    );
 
-return res.json({
+    /* ============================================================
+       RESPOSTA
 
-  ok: true,
+       Mantemos exatamente:
 
-  data: profissionais,
+       data: profissionais
 
-});
-return res.json({
-  ok: true,
-  data: profissionais,
-});
+       para não quebrar a ListaProfissionaisScreen.
+    ============================================================ */
 
-} catch (e) {
+    return res.json({
+      ok: true,
 
-  console.error("profissionais.list:", e);
+      data: profissionais,
 
-  return res.status(500).json({
-    ok: false,
-    message: "Erro ao listar profissionais",
-  });
+      meta: {
+        tanaMatch: true,
 
-}
+        total:
+          profissionais.length,
+
+        matchStats,
+      },
+    });
+  } catch (e) {
+    console.error(
+      '[TanaMatch] profissionais.list:',
+      e
+    );
+
+    return res.status(500).json({
+      ok: false,
+      message:
+        'Erro ao listar profissionais',
+    });
+  }
 };
 /* ============================================================================
  * DETALHE
