@@ -231,7 +231,114 @@ exports.list = async (req, res) => {
         }
       }
     }
+/* ============================================================
+   BUSCA TEXTUAL INTELIGENTE
 
+   Exemplos suportados:
+
+   • Marcela
+   • Roni pintor
+   • pintor
+   • massagem relaxante
+   • Marcela massagem
+
+   A busca encontra candidatos por:
+   • nome
+   • profissão principal
+   • profissões
+   • profissões detalhadas
+   • serviços cadastrados
+============================================================ */
+
+const searchQuery = String(query || '')
+  .trim()
+  .replace(/\s+/g, ' ');
+
+if (searchQuery) {
+  /* ============================
+     ESCAPA CARACTERES DE REGEX
+  ============================ */
+
+  const escapeRegex = (value) =>
+    String(value).replace(
+      /[.*+?^${}()|[\]\\]/g,
+      '\\$&'
+    );
+
+  /* ============================
+     SEPARA A BUSCA EM TERMOS
+
+     "Roni pintor"
+     →
+     ["Roni", "pintor"]
+  ============================ */
+
+  const searchTerms = searchQuery
+    .split(' ')
+    .map((term) => term.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  /* ============================
+     CADA TERMO PRECISA APARECER
+     EM PELO MENOS UM CAMPO
+
+     Exemplo:
+
+     Roni → name
+     pintor → profissão
+
+     Isso permite busca combinada.
+  ============================ */
+
+  const filtrosPorTermo =
+    searchTerms.map((term) => {
+      const regex = new RegExp(
+        escapeRegex(term),
+        'i'
+      );
+
+      return {
+        $or: [
+          {
+            name: regex,
+          },
+
+          {
+            profissaoNome: regex,
+          },
+
+          {
+            profissoes: regex,
+          },
+
+          {
+            'profissoesDetalhadas.nome':
+              regex,
+          },
+
+          {
+            'profissoesDetalhadas.categoriaNome':
+              regex,
+          },
+
+          {
+            'servicos.nome': regex,
+          },
+        ],
+      };
+    });
+
+  if (filtrosPorTermo.length === 1) {
+    filtrosPrincipais.push(
+      filtrosPorTermo[0]
+    );
+  } else if (filtrosPorTermo.length > 1) {
+    filtrosPrincipais.push({
+      $and: filtrosPorTermo,
+    });
+  }
+}
     /* ============================================================
        FILTRO AUTOMÁTICO POR CIDADE
 
@@ -289,7 +396,17 @@ exports.list = async (req, res) => {
         [`tipoAtendimento.${tipoAtendimento}`]: true,
       });
     }
+console.log(
+  '[Busca Inteligente] QUERY:',
+  searchQuery || null
+);
 
+console.log(
+  '[Busca Inteligente] TERMOS:',
+  searchQuery
+    ? searchQuery.split(' ')
+    : []
+);
     /* ============================================================
        FILTRO FINAL
     ============================================================ */
@@ -555,8 +672,7 @@ exports.list = async (req, res) => {
       profissaoId:
         profissaoId || null,
 
-      query:
-        query || null,
+     query: null,
 
       servicoEmergencial:
         servicoEmergencial || null,
