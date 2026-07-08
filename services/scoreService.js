@@ -493,41 +493,77 @@ return {
 async function updateScore(profissionalId) {
   const resultado = await calculateScore(profissionalId);
 
-const profissional = await findProfessional(profissionalId);
+  const profissional =
+    await findProfessional(profissionalId);
 
-await Profissional.findByIdAndUpdate(
-    profissional._id,
-    {
-      tanaScore: resultado.score,
+  const updated =
+    await Profissional.findByIdAndUpdate(
+      profissional._id,
+      {
+        $set: {
+          "metrics.tanaScore":
+            resultado.score,
 
-      tanaLevel: resultado.level.name,
+          "metrics.tanaLevel":
+            resultado.level.name,
 
-      tanaLevelColor: resultado.level.color,
-searchScore: resultado.searchScore,
+          "metrics.tanaLevelColor":
+            resultado.level.color,
 
-tanaSeals: resultado.seals,
+          "metrics.searchScore":
+            resultado.searchScore,
 
-lastSeason: resultado.season,
-      tanaModules: {
-  profile: resultado.modules.profile,
-  activity: resultado.modules.activity,
-  experience: resultado.modules.experience,
-  reviews: resultado.modules.reviews,
-  punctuality: resultado.modules.punctuality,
-  cancellations: resultado.modules.cancellations,
-  response: resultado.modules.response,
-},
+          "metrics.tanaSeals": Array.isArray(resultado.seals)
+  ? resultado.seals
+      .map((seal) =>
+        typeof seal === "string"
+          ? seal
+          : seal?.id
+      )
+      .filter(Boolean)
+  : [],
 
-      tanaScoreUpdatedAt: new Date(),
-    },
-    {
-      new: true,
-    }
-  );
+          "metrics.lastSeason":
+            resultado.season,
 
-  return resultado;
+          "metrics.tanaModules": {
+            profile:
+              resultado.modules.profile,
+
+            activity:
+              resultado.modules.activity,
+
+            experience:
+              resultado.modules.experience,
+
+            reviews:
+              resultado.modules.reviews,
+
+            punctuality:
+              resultado.modules.punctuality,
+
+            cancellations:
+              resultado.modules.cancellations,
+
+            response:
+              resultado.modules.response,
+          },
+
+          "metrics.tanaScoreUpdatedAt":
+            new Date(),
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+  return {
+    ...resultado,
+    profissional: updated,
+  };
 }
-
 /* ============================================================
    RECÁLCULO EM LOTE
 ============================================================ */

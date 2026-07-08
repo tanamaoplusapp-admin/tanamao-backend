@@ -620,7 +620,9 @@ function calculateDistanceScore(
 
 function calculateTanaScore(profissional) {
   return clamp(
-    profissional?.tanaScore || 0
+    profissional?.metrics?.tanaScore ??
+    profissional?.tanaScore ??
+    0
   );
 }
 
@@ -754,21 +756,20 @@ function calculateAvailabilityScore(
 
 function calculateResponseScore(profissional) {
   return clamp(
+    profissional?.metrics?.tanaModules?.response ??
     profissional?.tanaModules?.response ??
-      50
+    50
   );
 }
-
 /* ============================================================
    EXPERIÊNCIA
 ============================================================ */
 
-function calculateExperienceScore(
-  profissional
-) {
+function calculateExperienceScore(profissional) {
   return clamp(
-    profissional?.tanaModules
-      ?.experience ?? 0
+    profissional?.metrics?.tanaModules?.experience ??
+    profissional?.tanaModules?.experience ??
+    0
   );
 }
 
@@ -805,20 +806,18 @@ function getSealId(seal) {
   return seal.id || "";
 }
 
-function calculateReputationScore(
-  profissional
-) {
+function calculateReputationScore(profissional) {
   const seals =
-    Array.isArray(profissional.tanaSeals)
-      ? profissional.tanaSeals
-      : [];
+    profissional?.metrics?.tanaSeals ??
+    profissional?.tanaSeals ??
+    [];
 
-  if (seals.length === 0) {
+  if (!Array.isArray(seals) || seals.length === 0) {
     return 0;
   }
 
-  const totalPoints =
-    seals.reduce((total, seal) => {
+  const totalPoints = seals.reduce(
+    (total, seal) => {
       const sealId = getSealId(seal);
 
       return (
@@ -827,11 +826,12 @@ function calculateReputationScore(
           SEAL_POINTS[sealId]
         )
       );
-    }, 0);
+    },
+    0
+  );
 
   return clamp(totalPoints);
 }
-
 /* ============================================================
    CONTEXTO DE URGÊNCIA
 ============================================================ */
@@ -1087,50 +1087,46 @@ function sortProfessionalsByMatch(
         );
       }
 
-      /* ============================
-         2. SEARCHSCORE
-      ============================ */
 
-      if (
-        normalizeNumber(
-          second.searchScore
-        ) !==
-        normalizeNumber(
-          first.searchScore
-        )
-      ) {
-        return (
-          normalizeNumber(
-            second.searchScore
-          ) -
-          normalizeNumber(
-            first.searchScore
-          )
-        );
-      }
+/* ============================
+   2. SEARCHSCORE
+============================ */
 
-      /* ============================
-         3. TANASCORE
-      ============================ */
+const firstSearchScore =
+  normalizeNumber(
+    first?.metrics?.searchScore ??
+    first?.searchScore
+  );
 
-      if (
-        normalizeNumber(
-          second.tanaScore
-        ) !==
-        normalizeNumber(
-          first.tanaScore
-        )
-      ) {
-        return (
-          normalizeNumber(
-            second.tanaScore
-          ) -
-          normalizeNumber(
-            first.tanaScore
-          )
-        );
-      }
+const secondSearchScore =
+  normalizeNumber(
+    second?.metrics?.searchScore ??
+    second?.searchScore
+  );
 
+if (secondSearchScore !== firstSearchScore) {
+  return secondSearchScore - firstSearchScore;
+}
+
+/* ============================
+   3. TANASCORE
+============================ */
+
+const firstTanaScore =
+  normalizeNumber(
+    first?.metrics?.tanaScore ??
+    first?.tanaScore
+  );
+
+const secondTanaScore =
+  normalizeNumber(
+    second?.metrics?.tanaScore ??
+    second?.tanaScore
+  );
+
+if (secondTanaScore !== firstTanaScore) {
+  return secondTanaScore - firstTanaScore;
+}
       /* ============================
          4. MÉDIA DE AVALIAÇÕES
       ============================ */
