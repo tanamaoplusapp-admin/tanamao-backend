@@ -366,42 +366,61 @@ if (profissionalId) {
      • profissões múltiplas
   ============================================================ */
 
-  const filtrosCompatibilidade = [];
+ const categoriaId = req.body.categoriaId;
+const profissaoId = req.body.profissaoId;
 
-  if (req.body.profissaoId) {
-    filtrosCompatibilidade.push({
-      $or: [
-        {
-          profissaoId:
-            req.body.profissaoId,
-        },
-        {
-          'profissoesDetalhadas.profissaoId':
-            req.body.profissaoId,
-        },
-      ],
-    });
-  }
+const filtrosCompatibilidade = [];
 
-  if (req.body.categoriaId) {
-    filtrosCompatibilidade.push({
-      $or: [
-        {
-          categoriaId:
-            req.body.categoriaId,
+if (categoriaId && profissaoId) {
+  filtrosCompatibilidade.push(
+    {
+      categoriaId,
+      profissaoId,
+    },
+    {
+      profissoesDetalhadas: {
+        $elemMatch: {
+          categoriaId,
+          profissaoId,
         },
-        {
-          'profissoesDetalhadas.categoriaId':
-            req.body.categoriaId,
+      },
+    }
+  );
+} else if (categoriaId) {
+  filtrosCompatibilidade.push(
+    {
+      categoriaId,
+    },
+    {
+      profissoesDetalhadas: {
+        $elemMatch: {
+          categoriaId,
         },
-      ],
-    });
-  }
+      },
+    }
+  );
+} else if (profissaoId) {
+  filtrosCompatibilidade.push(
+    {
+      profissaoId,
+    },
+    {
+      profissoesDetalhadas: {
+        $elemMatch: {
+          profissaoId,
+        },
+      },
+    }
+  );
+}
 
-  if (filtrosCompatibilidade.length > 0) {
-    filtro.$and =
-      filtrosCompatibilidade;
-  }
+if (filtrosCompatibilidade.length > 0) {
+  filtro.$and = [
+    {
+      $or: filtrosCompatibilidade,
+    },
+  ];
+}
 
   /* ============================================================
      BUSCA DOS CANDIDATOS

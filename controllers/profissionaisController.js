@@ -23,7 +23,6 @@ const {
   sortProfessionalsByMatch,
   generateMatchStats,
 } = require("../services/tanaMatchService");
-
 const {
   getCurrentSeason,
   isEligible,
@@ -148,90 +147,205 @@ exports.list = async (req, res) => {
          • profissões múltiplas
       ============================================================ */
 
-      if (categoriaId || profissaoId) {
-        const filtrosProfissao = [];
+    /* ============================================================
+   FILTRO POR CATEGORIA / PROFISSÃO
 
-        /* ============================
-           VALIDAÇÃO DOS IDS
-        ============================ */
+   SUPORTA:
 
-        if (
-          categoriaId &&
-          !mongoose.Types.ObjectId.isValid(categoriaId)
-        ) {
-          return res.status(400).json({
-            ok: false,
-            message: 'categoriaId inválido',
-          });
-        }
+   • formato antigo
+   • profissão principal
+   • profissões múltiplas
+   • somente categoria
+   • somente profissão
+   • categoria + profissão
+============================================================ */
 
-        if (
-          profissaoId &&
-          !mongoose.Types.ObjectId.isValid(profissaoId)
-        ) {
-          return res.status(400).json({
-            ok: false,
-            message: 'profissaoId inválido',
-          });
-        }
+if (categoriaId || profissaoId) {
+  /* ============================
+     VALIDAÇÃO DOS IDS
+  ============================ */
 
-        /* ============================
-           FORMATO ANTIGO
-        ============================ */
+  if (
+    categoriaId &&
+    !mongoose.Types.ObjectId.isValid(categoriaId)
+  ) {
+    return res.status(400).json({
+      ok: false,
+      message: 'categoriaId inválido',
+    });
+  }
 
-        const filtroPrincipal = {};
+  if (
+    profissaoId &&
+    !mongoose.Types.ObjectId.isValid(profissaoId)
+  ) {
+    return res.status(400).json({
+      ok: false,
+      message: 'profissaoId inválido',
+    });
+  }
 
-        if (categoriaId) {
-          filtroPrincipal.categoriaId =
-            new mongoose.Types.ObjectId(categoriaId);
-        }
+  /* ============================
+     CONVERSÃO DOS IDS
+  ============================ */
 
-        if (profissaoId) {
-          filtroPrincipal.profissaoId =
-            new mongoose.Types.ObjectId(profissaoId);
-        }
+  const categoriaObjectId = categoriaId
+    ? new mongoose.Types.ObjectId(categoriaId)
+    : null;
 
-        if (Object.keys(filtroPrincipal).length) {
-          filtrosProfissao.push(filtroPrincipal);
-        }
+  const profissaoObjectId = profissaoId
+    ? new mongoose.Types.ObjectId(profissaoId)
+    : null;
 
-        /* ============================
-           PROFISSÕES MÚLTIPLAS
-        ============================ */
+  /* ============================
+     FILTROS DE COMPATIBILIDADE
+  ============================ */
 
-        const filtroDetalhado = {};
+  const filtrosCompatibilidade = [];
 
-        if (categoriaId) {
-          filtroDetalhado[
-            'profissoesDetalhadas.categoriaId'
-          ] = new mongoose.Types.ObjectId(categoriaId);
-        }
+  /* ============================================================
+     CASO 1
+     CATEGORIA + PROFISSÃO
 
-        if (profissaoId) {
-          filtroDetalhado[
-            'profissoesDetalhadas.profissaoId'
-          ] = new mongoose.Types.ObjectId(profissaoId);
-        }
+     Exemplo:
 
-        if (Object.keys(filtroDetalhado).length) {
-          filtrosProfissao.push(filtroDetalhado);
-        }
+     Saúde
+     +
+     Massoterapeuta
 
-        /* ============================
-           AGRUPAMENTO
-        ============================ */
+     Procura:
 
-        if (filtrosProfissao.length === 1) {
-          filtrosPrincipais.push(
-            filtrosProfissao[0]
-          );
-        } else if (filtrosProfissao.length > 1) {
-          filtrosPrincipais.push({
-            $or: filtrosProfissao,
-          });
-        }
+     • profissão principal antiga
+
+     OU
+
+     • uma das profissões múltiplas
+
+     $elemMatch garante que categoria
+     e profissão pertençam ao MESMO
+     item de profissoesDetalhadas.
+  ============================================================ */
+
+  if (
+    categoriaObjectId &&
+    profissaoObjectId
+  ) {
+    filtrosCompatibilidade.push(
+      {
+        categoriaId:
+          categoriaObjectId,
+
+        profissaoId:
+          profissaoObjectId,
+      },
+
+      {
+        profissoesDetalhadas: {
+          $elemMatch: {
+            categoriaId:
+              categoriaObjectId,
+
+            profissaoId:
+              profissaoObjectId,
+          },
+        },
       }
-    }
+    );
+  }
+
+  /* ============================================================
+     CASO 2
+     SOMENTE CATEGORIA
+
+     O profissional aparece se:
+
+     • categoria principal corresponde
+
+     OU
+
+     • qualquer uma das 3 profissões
+       pertence à categoria
+  ============================================================ */
+
+  else if (categoriaObjectId) {
+    filtrosCompatibilidade.push(
+      {
+        categoriaId:
+          categoriaObjectId,
+      },
+
+      {
+        profissoesDetalhadas: {
+          $elemMatch: {
+            categoriaId:
+              categoriaObjectId,
+          },
+        },
+      }
+    );
+  }
+
+  /* ============================================================
+     CASO 3
+     SOMENTE PROFISSÃO
+
+     O profissional aparece se:
+
+     • profissão principal corresponde
+
+     OU
+
+     • qualquer uma das 3 profissões
+       corresponde
+  ============================================================ */
+
+  else if (profissaoObjectId) {
+    filtrosCompatibilidade.push(
+      {
+        profissaoId:
+          profissaoObjectId,
+      },
+
+      {
+        profissoesDetalhadas: {
+          $elemMatch: {
+            profissaoId:
+              profissaoObjectId,
+          },
+        },
+      }
+    );
+  }
+
+  /* ============================================================
+     AGRUPAMENTO FINAL
+
+     O profissional precisa corresponder
+     a pelo menos UMA das estruturas:
+
+     • formato principal
+
+     OU
+
+     • profissões múltiplas
+  ============================================================ */
+
+  if (filtrosCompatibilidade.length === 1) {
+    filtrosPrincipais.push(
+      filtrosCompatibilidade[0]
+    );
+  } else if (
+    filtrosCompatibilidade.length > 1
+  ) {
+    filtrosPrincipais.push({
+      $or: filtrosCompatibilidade,
+    });
+  }
+}
+
+/* FECHA O ELSE DO SOCORRISTA AUTOMOTIVO */
+}
+
 /* ============================================================
    BUSCA TEXTUAL INTELIGENTE
 
@@ -1139,16 +1253,37 @@ if (req.body.atendeFimSemana !== undefined)
 
 if (req.body.atende24h !== undefined)
   updateData.atende24h = req.body.atende24h;
-    /* ============================
-       FOTO
-    ============================ */
+   /* ============================
+   FOTO DE PERFIL E CAPA
+============================ */
 
-    let fotoPerfilAtual = prof.photoUrl;
+let fotoPerfilAtual = prof.photoUrl;
 
-    if (req.body.fotoPerfil !== undefined) {
-      updateData.photoUrl = req.body.fotoPerfil;
-      fotoPerfilAtual = req.body.fotoPerfil;
-    }
+/* FOTO DE PERFIL */
+
+if (req.body.fotoPerfil !== undefined) {
+  updateData.photoUrl = req.body.fotoPerfil;
+  fotoPerfilAtual = req.body.fotoPerfil;
+}
+
+/* Compatibilidade com frontend usando photoUrl */
+
+if (req.body.photoUrl !== undefined) {
+  updateData.photoUrl = req.body.photoUrl;
+  fotoPerfilAtual = req.body.photoUrl;
+}
+
+/* CAPA DO PERFIL */
+
+if (req.body.banner !== undefined) {
+  updateData.banner = req.body.banner;
+}
+
+/* Compatibilidade com frontend usando bannerUrl */
+
+if (req.body.bannerUrl !== undefined) {
+  updateData.banner = req.body.bannerUrl;
+}
 
     /* ============================
        GALERIA
