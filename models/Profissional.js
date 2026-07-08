@@ -101,7 +101,11 @@ photoUrl:{
 type:String,
 trim:true
 },
-
+banner:{
+  type:String,
+  trim:true,
+  default:null
+},
 categoriaSlug:{
 type:String,
 trim:true,
