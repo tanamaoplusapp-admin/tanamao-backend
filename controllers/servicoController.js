@@ -9,7 +9,10 @@ const agendaService = require('../services/agendaService');
 const scoreEvents = require("../services/scoreEvents");
 const activityEngine = require("../services/tanaEngine/activityEngine");
 
-
+const {
+  selectBestCandidates,
+  generateMatchStats,
+} = require('../services/tanaMatchService');
 /* =====================================================
 UTIL
 ===================================================== */
@@ -319,47 +322,258 @@ console.log('Erro SLA cancelamento:',e)
    🔥 MATCHING INTELIGENTE (SEM QUEBRAR)
 ========================= */
 
+/* =========================
+   🔥 TANAMATCH™
+   SELEÇÃO INTELIGENTE DE PROFISSIONAIS
+========================= */
+
 let profissionaisAlvo = [];
 
 if (profissionalId) {
-  // 👉 comportamento atual (mantido)
-  profissionaisAlvo = [{ userId: profissionalId }];
+  /* ============================================================
+     CONTRATAÇÃO DIRETA
+
+     Mantém exatamente o comportamento atual.
+
+     O cliente já escolheu o profissional.
+  ============================================================ */
+
+  profissionaisAlvo = [
+    {
+      userId: profissionalId,
+    },
+  ];
 } else {
-  // 👉 novo comportamento (matching)
+  /* ============================================================
+     MATCHING AUTOMÁTICO
+
+     Busca primeiro candidatos elegíveis.
+
+     Depois o TanaMatch™ calcula a compatibilidade
+     e seleciona os melhores profissionais.
+  ============================================================ */
 
   const filtro = {
     online: true,
     operationalStatus: 'disponivel',
   };
 
-  // 🔥 só filtra se vier (não quebra nada)
-  if (req.body.profissaoId) filtro.profissaoId = req.body.profissaoId;
-  if (req.body.categoriaId) filtro.categoriaId = req.body.categoriaId;
+  /* ============================================================
+     PROFISSÃO / CATEGORIA
 
-  const profissionais = await Profissional.find(filtro)
-    .select('userId')
-    .populate({
-      path: 'userId',
-      select: 'acessoExpiraEm receberServicos'
-    })
-    .lean();
+     Compatível com:
+     • profissão principal
+     • profissões múltiplas
+  ============================================================ */
 
-  profissionaisAlvo = profissionais.filter(p => {
+  const filtrosCompatibilidade = [];
 
-    const user = p.userId;
+  if (req.body.profissaoId) {
+    filtrosCompatibilidade.push({
+      $or: [
+        {
+          profissaoId:
+            req.body.profissaoId,
+        },
+        {
+          'profissoesDetalhadas.profissaoId':
+            req.body.profissaoId,
+        },
+      ],
+    });
+  }
 
-    if (!user) return false;
+  if (req.body.categoriaId) {
+    filtrosCompatibilidade.push({
+      $or: [
+        {
+          categoriaId:
+            req.body.categoriaId,
+        },
+        {
+          'profissoesDetalhadas.categoriaId':
+            req.body.categoriaId,
+        },
+      ],
+    });
+  }
 
-    // bloqueio manual
-    if (user.receberServicos === false) return false;
+  if (filtrosCompatibilidade.length > 0) {
+    filtro.$and =
+      filtrosCompatibilidade;
+  }
 
-    // bloqueio financeiro
-    const ativo =
-  user.acessoExpiraEm &&
-  user.acessoExpiraEm > new Date();
+  /* ============================================================
+     BUSCA DOS CANDIDATOS
+  ============================================================ */
 
-    return ativo;
-  });
+  const profissionais =
+    await Profissional.find(filtro)
+      .populate({
+        path: 'userId',
+        select:
+          'acessoExpiraEm receberServicos online',
+      })
+      .lean();
+
+  /* ============================================================
+     ELEGIBILIDADE
+
+     Mantém as regras atuais:
+     • usuário existente
+     • recebimento de serviços ativo
+     • plano ativo
+  ============================================================ */
+
+  const agoraMatching = new Date();
+
+  const candidatosElegiveis =
+    profissionais
+      .filter((profissional) => {
+        const user =
+          profissional.userId;
+
+        if (!user) {
+          return false;
+        }
+
+        if (
+          user.receberServicos === false
+        ) {
+          return false;
+        }
+
+        const planoAtivo =
+          user.acessoExpiraEm &&
+          user.acessoExpiraEm >
+            agoraMatching;
+
+        return planoAtivo;
+      })
+
+      /* ============================================================
+         ONLINE REAL
+
+         Compatibilidade com o User e Profissional.
+      ============================================================ */
+
+      .map((profissional) => ({
+        ...profissional,
+
+        online:
+          profissional.userId?.online ??
+          profissional.online ??
+          false,
+      }));
+
+  /* ============================================================
+     CONTEXTO DO TANAMATCH™
+
+     Representa a necessidade real do cliente.
+  ============================================================ */
+
+  const tanaMatchContext = {
+    categoriaId:
+      req.body.categoriaId ||
+      null,
+
+    profissaoId:
+      req.body.profissaoId ||
+      null,
+
+    servicoNome:
+      servicoNome ||
+      descricao ||
+      categoria ||
+      null,
+
+    servicoEmergencial:
+      req.body.servicoEmergencial ||
+      null,
+
+    latitude,
+
+    longitude,
+
+    urgente,
+
+    immediate:
+      tipoServico === 'normal',
+  };
+
+  /* ============================================================
+     SELEÇÃO DOS MELHORES CANDIDATOS
+
+     Primeira versão:
+     • máximo 10 profissionais
+     • match mínimo 30
+
+     Futuramente:
+     • distribuição em ondas
+     • limite regional dinâmico
+     • aprendizado pelo TanaInsights™
+  ============================================================ */
+
+  profissionaisAlvo =
+    selectBestCandidates(
+      candidatosElegiveis,
+      tanaMatchContext,
+      {
+        limit: 10,
+        minimumScore: 30,
+      }
+    );
+
+  /* ============================================================
+     ESTATÍSTICAS
+
+     Preparado para Dashboard e TanaInsights™.
+  ============================================================ */
+
+  const matchStats =
+    generateMatchStats(
+      profissionaisAlvo
+    );
+
+  console.log(
+    '[TanaMatch Serviço] CANDIDATOS:',
+    candidatosElegiveis.length
+  );
+
+  console.log(
+    '[TanaMatch Serviço] SELECIONADOS:',
+    profissionaisAlvo.length
+  );
+
+  console.log(
+    '[TanaMatch Serviço] CONTEXTO:',
+    tanaMatchContext
+  );
+
+  console.log(
+    '[TanaMatch Serviço] ESTATÍSTICAS:',
+    matchStats
+  );
+
+  console.log(
+    '[TanaMatch Serviço] RANKING:',
+    profissionaisAlvo.map(
+      (profissional) => ({
+        profissionalId:
+          profissional._id,
+
+        userId:
+          profissional.userId?._id ||
+          profissional.userId,
+
+        matchScore:
+          profissional.matchScore,
+
+        distanceKm:
+          profissional.matchDistanceKm,
+      })
+    )
+  );
 }
 /* =========================
    SOCKET
@@ -367,7 +581,10 @@ if (profissionalId) {
 
 for (const prof of profissionaisAlvo) {
 
-  const userId = prof.userId?.toString?.() || prof.userId;
+  const userId =
+  prof.userId?._id?.toString?.() ||
+  prof.userId?.toString?.() ||
+  prof.userId;
 
   if (!userId) continue;
 
