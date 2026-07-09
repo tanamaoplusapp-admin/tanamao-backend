@@ -33,11 +33,21 @@ exports.criarChat = async (req, res) => {
     const { destinatarioId } = req.body || {};
 
     if (!remetenteId) {
-      return res.status(401).json({ error: 'Não autenticado' });
+      return res.status(401).json({
+        error: 'Não autenticado',
+      });
+    }
+
+    if (!isObjectId(remetenteId)) {
+      return res.status(400).json({
+        error: 'remetenteId inválido.',
+      });
     }
 
     if (!isObjectId(destinatarioId)) {
-      return res.status(400).json({ error: 'destinatarioId inválido.' });
+      return res.status(400).json({
+        error: 'destinatarioId inválido.',
+      });
     }
 
     if (String(remetenteId) === String(destinatarioId)) {
@@ -46,31 +56,56 @@ exports.criarChat = async (req, res) => {
       });
     }
 
+    const remetenteObjectId =
+      new mongoose.Types.ObjectId(String(remetenteId));
+
+    const destinatarioObjectId =
+      new mongoose.Types.ObjectId(String(destinatarioId));
+
     /* ===============================
        1 CLIENTE + 1 PRESTADOR = 1 CHAT
     =============================== */
 
     let chat = await Chat.findOne({
-      participantes: {
-        $all: [remetenteId, destinatarioId],
-      },
-    }).populate('participantes', USER_CHAT_FIELDS);
+      $and: [
+        {
+          participantes: remetenteObjectId,
+        },
+        {
+          participantes: destinatarioObjectId,
+        },
+        {
+          serviceId: null,
+        },
+      ],
+    }).populate(
+      'participantes',
+      USER_CHAT_FIELDS
+    );
 
     if (chat) {
       return res.json(chat);
     }
 
     chat = await Chat.create({
-      participantes: [remetenteId, destinatarioId],
+      participantes: [
+        remetenteObjectId,
+        destinatarioObjectId,
+      ],
+      serviceId: null,
       ultimoTexto: '',
       atualizadoEm: new Date(),
     });
 
     const chatCriado = await Chat.findById(chat._id)
-      .populate('participantes', USER_CHAT_FIELDS)
+      .populate(
+        'participantes',
+        USER_CHAT_FIELDS
+      )
       .lean();
 
     return res.status(201).json(chatCriado);
+
   } catch (error) {
     console.error('criarChat erro:', error);
 
@@ -78,7 +113,7 @@ exports.criarChat = async (req, res) => {
       error: 'Erro ao criar chat',
     });
   }
-};
+};;
 
 /* =========================================================
    LISTAR CHATS DO USUÁRIO
