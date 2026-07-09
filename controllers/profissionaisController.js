@@ -189,13 +189,26 @@ if (categoriaId || profissaoId) {
      CONVERSÃO DOS IDS
   ============================ */
 
-  const categoriaObjectId = categoriaId
-    ? new mongoose.Types.ObjectId(categoriaId)
-    : null;
+ if (
+  categoriaObjectId &&
+  profissaoObjectId
+) {
+  filtrosCompatibilidade.push(
+    {
+      categoriaId: categoriaObjectId,
+      profissaoId: profissaoObjectId,
+    },
 
-  const profissaoObjectId = profissaoId
-    ? new mongoose.Types.ObjectId(profissaoId)
-    : null;
+    {
+      profissoesDetalhadas: {
+        $elemMatch: {
+          categoriaId: categoriaObjectId,
+          profissaoId: profissaoObjectId,
+        },
+      },
+    }
+  );
+}
 
   /* ============================
      FILTROS DE COMPATIBILIDADE
