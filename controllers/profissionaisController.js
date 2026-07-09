@@ -455,130 +455,154 @@ if (searchQuery) {
   }
 }
     /* ============================================================
-       FILTRO AUTOMÁTICO POR CIDADE
+   FILTRO AUTOMÁTICO POR CIDADE
 
-       IMPORTANTE:
+   REGRA:
+   • vale para TODAS as buscas
+   • profissão principal
+   • profissões secundárias
+   • socorrista
+   • emergência
+   • busca textual
 
-       Antes o filtro de cidade sobrescrevia o $or
-       de profissão/categoria.
+   PRIORIDADE:
+   1. cidade enviada pelo frontend
+   2. cidadeSlug do usuário autenticado
+============================================================ */
 
-       Agora utilizamos $and para preservar ambos.
-    ============================================================ */
+const userId = getUserId(req);
 
-    const userId = getUserId(req);
+let cidadeSlugEfetiva = '';
 
-    if (userId) {
-      const usuario = await User.findById(userId)
-        .select('cidadeSlug')
-        .lean();
+/* ============================
+   1. CIDADE RECEBIDA DO FRONT
+============================ */
 
-      if (usuario?.cidadeSlug) {
-        filtrosPrincipais.push({
-          $or: [
-            {
-              'endereco.cidadeSlug':
-                usuario.cidadeSlug,
-            },
-            {
-              'endereco.cidade': new RegExp(
-                `^${usuario.cidadeSlug
-                  .replace(/-/g, ' ')
-                  .replace(
-                    /\b\w/g,
-                    (letter) =>
-                      letter.toUpperCase()
-                  )}$`,
-                'i'
-              ),
-            },
-          ],
-        });
-      }
-    } else if (cidade) {
-      filtrosPrincipais.push({
-        'endereco.cidadeSlug': String(cidade)
-          .trim()
-          .toLowerCase(),
-      });
-    }
+if (cidade) {
+  cidadeSlugEfetiva = String(cidade)
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '-');
+}
 
-    /* ============================================================
-       TIPO DE ATENDIMENTO
-    ============================================================ */
+/* ============================
+   2. FALLBACK PARA O USER
+============================ */
 
-    if (tipoAtendimento) {
-      filtrosPrincipais.push({
-        [`tipoAtendimento.${tipoAtendimento}`]: true,
-      });
-    }
+if (!cidadeSlugEfetiva && userId) {
+  const usuario = await User.findById(userId)
+    .select('cidadeSlug cidade')
+    .lean();
+
+  cidadeSlugEfetiva =
+    usuario?.cidadeSlug ||
+    String(usuario?.cidade || '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, '-');
+}
+
+/* ============================
+   APLICAR FILTRO DE CIDADE
+============================ */
+
+if (cidadeSlugEfetiva) {
+  filtrosPrincipais.push({
+    'endereco.cidadeSlug': cidadeSlugEfetiva,
+  });
+}
+
+/* ============================
+   DEBUG DA CIDADE
+============================ */
+
 console.log(
-  '[Busca Inteligente] QUERY:',
-  searchQuery || null
+  '[Busca] USER ID:',
+  userId || null
 );
 
 console.log(
-  '[Busca Inteligente] TERMOS:',
-  searchQuery
-    ? searchQuery.split(' ')
-    : []
+  '[Busca] CIDADE RECEBIDA:',
+  cidade || null
 );
-    /* ============================================================
-       FILTRO FINAL
-    ============================================================ */
 
-    let filtro = {};
+console.log(
+  '[Busca] CIDADE EFETIVA:',
+  cidadeSlugEfetiva || null
+);
 
-    if (filtrosPrincipais.length === 1) {
-      filtro = filtrosPrincipais[0];
-    } else if (filtrosPrincipais.length > 1) {
-      filtro = {
-        $and: filtrosPrincipais,
-      };
-    }
+/* ============================================================
+   TIPO DE ATENDIMENTO
+============================================================ */
 
-    console.log(
-      '[TanaMatch] FILTRO FINAL:',
-      JSON.stringify(filtro, null, 2)
-    );
+if (tipoAtendimento) {
+  filtrosPrincipais.push({
+    [`tipoAtendimento.${tipoAtendimento}`]: true,
+  });
+}
 
-    /* ============================================================
-       BUSCA DOS PROFISSIONAIS
-    ============================================================ */
+/* ============================================================
+   MONTAR FILTRO FINAL
+============================================================ */
+
+let filtro = {};
+
+if (filtrosPrincipais.length === 1) {
+  filtro = filtrosPrincipais[0];
+} else if (filtrosPrincipais.length > 1) {
+  filtro = {
+    $and: filtrosPrincipais,
+  };
+}
+
+/* ============================================================
+   DEBUG DO FILTRO FINAL
+============================================================ */
+
 console.log('==============================');
-console.log('DEBUG BUSCA PROFISSIONAIS');
-console.log('categoriaId recebido:', categoriaId);
-console.log('profissaoId recebido:', profissaoId);
-console.log('cidade recebida:', cidade);
 
 console.log(
-  'FILTRO MONGO:',
+  '[TanaMatch] CATEGORIA:',
+  categoriaId || null
+);
+
+console.log(
+  '[TanaMatch] PROFISSÃO:',
+  profissaoId || null
+);
+
+console.log(
+  '[TanaMatch] CIDADE:',
+  cidadeSlugEfetiva || null
+);
+
+console.log(
+  '[TanaMatch] FILTRO FINAL:',
   JSON.stringify(filtro, null, 2)
 );
 
-const debugProfissionais =
-  await Profissional.find({})
-    .select(
-      'name categoriaId profissaoId profissaoNome profissoesDetalhadas endereco.cidadeSlug'
-    )
-    .lean();
+console.log('==============================');
+
+/* ============================================================
+   BUSCAR PROFISSIONAIS
+============================================================ */
+
+const profs = await Profissional.find(filtro)
+  .populate({
+    path: 'userId',
+    select: 'acessoExpiraEm online',
+  })
+  .lean();
 
 console.log(
-  'PROFISSIONAIS NO BANCO:',
-  JSON.stringify(debugProfissionais, null, 2)
+  '[TanaMatch] PROFISSIONAIS ENCONTRADOS:',
+  profs.length
 );
-
-console.log('==============================');
-    const profs = await Profissional.find(filtro)
-      .populate({
-        path: 'userId',
-        select: 'acessoExpiraEm online',
-      })
-      .lean();
-
-    console.log(
-      '[TanaMatch] PROFISSIONAIS ENCONTRADOS:',
-      profs.length
-    );
+      
 
     /* ============================================================
        FILTRO DE PLANO ATIVO
