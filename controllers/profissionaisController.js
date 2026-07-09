@@ -490,15 +490,16 @@ if (cidade) {
 /* ============================
    2. FALLBACK PARA O USER
 ============================ */
-
 if (!cidadeSlugEfetiva && userId) {
-  const usuario = await User.findById(userId)
-    .select('cidadeSlug cidade')
+  const profissionalLogado = await Profissional.findOne({
+    userId,
+  })
+    .select('endereco.cidade endereco.cidadeSlug')
     .lean();
 
   cidadeSlugEfetiva =
-    usuario?.cidadeSlug ||
-    String(usuario?.cidade || '')
+    profissionalLogado?.endereco?.cidadeSlug ||
+    String(profissionalLogado?.endereco?.cidade || '')
       .trim()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')

@@ -34,7 +34,7 @@ const ofertaCtrl = require('../controllers/ofertaController');
 ========================================================= */
 
 // 🔥 LISTAR PROFISSIONAIS (com filtros)
-router.get('/', ctrl.list);
+router.get('/', verifyToken, ctrl.list);
 
 // 🔥 NOVO — LISTAR CATEGORIAS
 router.get('/categorias', async (req, res) => {
