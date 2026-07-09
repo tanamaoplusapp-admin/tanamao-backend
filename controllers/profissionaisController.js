@@ -587,7 +587,46 @@ console.log(
 );
 
 console.log('==============================');
+/* ============================================================
+   DEBUG TEMPORÁRIO - PROFISSÃO SECUNDÁRIA
+============================================================ */
 
+const debugUsuario = await Profissional.findOne({
+  userId,
+})
+  .select(
+    'name endereco categoriaId profissaoId profissaoNome profissoesDetalhadas'
+  )
+  .lean();
+
+console.log('==========================================');
+console.log('[DEBUG PROFISSIONAL LOGADO]');
+console.log(JSON.stringify(debugUsuario, null, 2));
+
+const debugSomenteProfissao = await Profissional.find({
+  'profissoesDetalhadas.profissaoId':
+    new mongoose.Types.ObjectId(profissaoId),
+})
+  .select('name endereco profissoesDetalhadas')
+  .lean();
+
+console.log(
+  '[DEBUG SOMENTE PROFISSÃO]:',
+  JSON.stringify(debugSomenteProfissao, null, 2)
+);
+
+const debugSomenteCidade = await Profissional.find({
+  'endereco.cidadeSlug': cidadeSlugEfetiva,
+})
+  .select('name endereco profissoesDetalhadas')
+  .lean();
+
+console.log(
+  '[DEBUG SOMENTE CIDADE]:',
+  JSON.stringify(debugSomenteCidade, null, 2)
+);
+
+console.log('==========================================');
 /* ============================================================
    BUSCAR PROFISSIONAIS
 ============================================================ */
