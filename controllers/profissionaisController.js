@@ -206,27 +206,19 @@ const filtrosCompatibilidade = [];
 /* ============================
    CATEGORIA + PROFISSÃO
 ============================ */
-
 if (
   categoriaObjectId &&
   profissaoObjectId
 ) {
   filtrosCompatibilidade.push(
     {
-      categoriaId: categoriaObjectId,
       profissaoId: profissaoObjectId,
     },
     {
-      profissoesDetalhadas: {
-        $elemMatch: {
-          categoriaId: categoriaObjectId,
-          profissaoId: profissaoObjectId,
-        },
-      },
+      'profissoesDetalhadas.profissaoId': profissaoObjectId,
     }
   );
 }
-
 
   /* ============================================================
      CASO 2
