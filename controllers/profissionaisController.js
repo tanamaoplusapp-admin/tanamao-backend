@@ -186,10 +186,28 @@ if (categoriaId || profissaoId) {
   }
 
   /* ============================
-     CONVERSÃO DOS IDS
-  ============================ */
+   CONVERSÃO DOS IDS
+============================ */
 
- if (
+const categoriaObjectId = categoriaId
+  ? new mongoose.Types.ObjectId(categoriaId)
+  : null;
+
+const profissaoObjectId = profissaoId
+  ? new mongoose.Types.ObjectId(profissaoId)
+  : null;
+
+/* ============================
+   FILTROS DE COMPATIBILIDADE
+============================ */
+
+const filtrosCompatibilidade = [];
+
+/* ============================
+   CATEGORIA + PROFISSÃO
+============================ */
+
+if (
   categoriaObjectId &&
   profissaoObjectId
 ) {
@@ -198,7 +216,6 @@ if (categoriaId || profissaoId) {
       categoriaId: categoriaObjectId,
       profissaoId: profissaoObjectId,
     },
-
     {
       profissoesDetalhadas: {
         $elemMatch: {
@@ -210,61 +227,6 @@ if (categoriaId || profissaoId) {
   );
 }
 
-  /* ============================
-     FILTROS DE COMPATIBILIDADE
-  ============================ */
-
-  const filtrosCompatibilidade = [];
-
-  /* ============================================================
-     CASO 1
-     CATEGORIA + PROFISSÃO
-
-     Exemplo:
-
-     Saúde
-     +
-     Massoterapeuta
-
-     Procura:
-
-     • profissão principal antiga
-
-     OU
-
-     • uma das profissões múltiplas
-
-     $elemMatch garante que categoria
-     e profissão pertençam ao MESMO
-     item de profissoesDetalhadas.
-  ============================================================ */
-
-  if (
-    categoriaObjectId &&
-    profissaoObjectId
-  ) {
-    filtrosCompatibilidade.push(
-      {
-        categoriaId:
-          categoriaObjectId,
-
-        profissaoId:
-          profissaoObjectId,
-      },
-
-      {
-        profissoesDetalhadas: {
-          $elemMatch: {
-            categoriaId:
-              categoriaObjectId,
-
-            profissaoId:
-              profissaoObjectId,
-          },
-        },
-      }
-    );
-  }
 
   /* ============================================================
      CASO 2
