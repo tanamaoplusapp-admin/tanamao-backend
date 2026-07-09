@@ -2,13 +2,18 @@ const mongoose = require('mongoose');
 const Categoria = require('./models/Categoria');
 const Profissao = require('./models/Profissao');
 
-const MONGO_URI = 'SUA_URL_AQUI';
+require('dotenv').config();
+
+/* =========================================================
+   DADOS DAS CATEGORIAS E PROFISSÕES
+========================================================= */
 
 const data = [
 
   /* =========================
-     🚨 EMERGÊNCIA (CRÍTICO)
+     🚨 EMERGÊNCIA
   ========================= */
+
   {
     nome: 'Emergência',
     profissões: [
@@ -18,17 +23,16 @@ const data = [
       'Mecânico emergencial',
       'Diarista',
       'Babá',
-      
-    ]
+    ],
   },
 
   /* =========================
      🔧 SERVIÇOS GERAIS
   ========================= */
+
   {
     nome: 'Serviços gerais',
     profissões: [
-        
       'Eletricista',
       'Borracheiro',
       'Carpinteiro',
@@ -51,13 +55,13 @@ const data = [
       'Reparos simples',
       'Técnico de ar-condicionado',
       'Técnico em eletrodomésticos',
-      
-    ]
+    ],
   },
 
   /* =========================
      🧍 SERVIÇOS PESSOAIS
   ========================= */
+
   {
     nome: 'Serviços pessoais',
     profissões: [
@@ -68,13 +72,13 @@ const data = [
       'Cozinheira',
       'Passadeira',
       'Caseiro',
-      
-    ]
+    ],
   },
 
   /* =========================
      💄 BELEZA
   ========================= */
+
   {
     nome: 'Beleza',
     profissões: [
@@ -87,32 +91,36 @@ const data = [
       'Maquiador',
       'Lash designer',
       'Depiladora',
-      'Micropigmentador'
-    ]
+      'Micropigmentador',
+    ],
   },
-   /* =========================
-     Especilistas 
+
+  /* =========================
+     👷 PROFISSIONAIS ESPECIALIZADOS
   ========================= */
-{
-  nome: 'Profissionais especializados',
-  profissões: [
-    'Arquiteto',
-    'Engenheiro civil',
-    'Engenheiro elétrico',
-    'Engenheiro mecânico',
-    'Advogado',
-    'Contador',
-    'Projetista',
-    'Despachante',
-    'Dedetizador',
-    'Corretor de imóveis',
-    'Consultor',
-    
-  ]
-},
+
+  {
+    nome: 'Profissionais especializados',
+    profissões: [
+      'Arquiteto',
+      'Engenheiro civil',
+      'Engenheiro elétrico',
+      'Engenheiro mecânico',
+      'Engenheiro agrônomo',
+      'Advogado',
+      'Contador',
+      'Projetista',
+      'Despachante',
+      'Dedetizador',
+      'Corretor de imóveis',
+      'Consultor',
+    ],
+  },
+
   /* =========================
      📚 EDUCAÇÃO
   ========================= */
+
   {
     nome: 'Educação',
     profissões: [
@@ -121,13 +129,14 @@ const data = [
       'Instrutor de informática',
       'Instrutor de direção',
       'Professor de música',
-      'Professor'
-    ]
+      'Professor',
+    ],
   },
 
   /* =========================
      💻 DIGITAL
   ========================= */
+
   {
     nome: 'Digital',
     profissões: [
@@ -139,13 +148,14 @@ const data = [
       'Desenvolvedor',
       'Programador',
       'Web designer',
-      'Copywriter'
-    ]
+      'Copywriter',
+    ],
   },
 
   /* =========================
      🩺 SAÚDE
   ========================= */
+
   {
     nome: 'Saúde',
     profissões: [
@@ -155,60 +165,178 @@ const data = [
       'Nutricionista',
       'Terapeuta holístico',
       'Podólogo',
-      'Personal trainer'
-    ]
-  }
-
+      'Personal trainer',
+    ],
+  },
 ];
 
-require('dotenv').config(); //  ESSENCIAL
+/* =========================================================
+   SLUG
+========================================================= */
+
+const slugify = (str) =>
+  String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-');
+
+/* =========================================================
+   EXECUTAR SEED
+========================================================= */
 
 async function run() {
   try {
-
     if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI não definido no .env');
+      throw new Error(
+        'MONGO_URI não definido no .env'
+      );
     }
 
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(
+      process.env.MONGO_URI
+    );
 
     console.log('🔥 Conectado no Mongo');
 
-    console.log('🔥 Limpando banco...');
-    await Categoria.deleteMany({});
-    await Profissao.deleteMany({});
+    console.log(
+      '🔄 Sincronizando categorias e profissões...'
+    );
+
+    /* =====================================================
+       PERCORRER CATEGORIAS
+    ===================================================== */
 
     for (const cat of data) {
+      const slugCategoria = slugify(cat.nome);
 
-      const categoria = await Categoria.create({
-        nome: cat.nome,
-        slug: cat.nome.toLowerCase().replace(/\s/g, '-')
-      });
+      /* ===================================================
+         BUSCAR CATEGORIA EXISTENTE
+      =================================================== */
 
-      console.log(`✅ ${cat.nome}`);
+      let categoria =
+        await Categoria.findOne({
+          $or: [
+            {
+              nome: cat.nome,
+            },
+            {
+              slug: slugCategoria,
+            },
+          ],
+        });
+
+      /* ===================================================
+         CRIAR SOMENTE SE NÃO EXISTIR
+      =================================================== */
+
+      if (!categoria) {
+        categoria = await Categoria.create({
+          nome: cat.nome,
+          slug: slugCategoria,
+        });
+
+        console.log(
+          `🆕 Categoria criada: ${cat.nome}`
+        );
+      } else {
+        let alterouCategoria = false;
+
+        if (categoria.nome !== cat.nome) {
+          categoria.nome = cat.nome;
+          alterouCategoria = true;
+        }
+
+        if (
+          categoria.slug !== slugCategoria
+        ) {
+          categoria.slug = slugCategoria;
+          alterouCategoria = true;
+        }
+
+        if (alterouCategoria) {
+          await categoria.save();
+
+          console.log(
+            `🔄 Categoria atualizada: ${cat.nome}`
+          );
+        } else {
+          console.log(
+            `✅ Categoria existente: ${cat.nome}`
+          );
+        }
+      }
+
+      /* ===================================================
+         PERCORRER PROFISSÕES DA CATEGORIA
+      =================================================== */
 
       for (const nomeProf of cat.profissões) {
 
-        await Profissao.create({
-          nome: nomeProf,
-          categoriaId: categoria._id
-        });
+        /* =================================================
+           BUSCAR PROFISSÃO EXISTENTE NA CATEGORIA
+        ================================================= */
 
-        console.log(`   ↳ ${nomeProf}`);
+        let profissao =
+          await Profissao.findOne({
+            nome: nomeProf,
+            categoriaId: categoria._id,
+          });
+
+        /* =================================================
+           CRIAR SOMENTE SE NÃO EXISTIR
+        ================================================= */
+
+        if (!profissao) {
+          profissao =
+            await Profissao.create({
+              nome: nomeProf,
+              categoriaId: categoria._id,
+            });
+
+          console.log(
+            `   🆕 ${nomeProf}`
+          );
+        } else {
+          console.log(
+            `   ✓ ${nomeProf}`
+          );
+        }
       }
-
     }
 
-    console.log('\n🚀 Seed COMPLETO ALINHADO COM APP!');
+    console.log('');
+    console.log(
+      '🚀 Seed sincronizado com sucesso!'
+    );
 
-    process.exit(0);
+    console.log(
+      '✅ Categorias existentes mantiveram seus IDs.'
+    );
+
+    console.log(
+      '✅ Profissões existentes mantiveram seus IDs.'
+    );
+
+    console.log(
+      '✅ Novas categorias e profissões foram adicionadas.'
+    );
 
   } catch (err) {
+    console.error(
+      '❌ ERRO NO SEED:',
+      err
+    );
 
-    console.error('❌ ERRO NO SEED:', err.message);
+    process.exitCode = 1;
 
-    process.exit(1);
+  } finally {
+    await mongoose.disconnect();
 
+    console.log(
+      '🔌 MongoDB desconectado.'
+    );
   }
 }
 
