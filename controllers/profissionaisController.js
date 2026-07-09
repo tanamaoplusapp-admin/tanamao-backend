@@ -544,7 +544,30 @@ console.log(
     /* ============================================================
        BUSCA DOS PROFISSIONAIS
     ============================================================ */
+console.log('==============================');
+console.log('DEBUG BUSCA PROFISSIONAIS');
+console.log('categoriaId recebido:', categoriaId);
+console.log('profissaoId recebido:', profissaoId);
+console.log('cidade recebida:', cidade);
 
+console.log(
+  'FILTRO MONGO:',
+  JSON.stringify(filtro, null, 2)
+);
+
+const debugProfissionais =
+  await Profissional.find({})
+    .select(
+      'name categoriaId profissaoId profissaoNome profissoesDetalhadas endereco.cidadeSlug'
+    )
+    .lean();
+
+console.log(
+  'PROFISSIONAIS NO BANCO:',
+  JSON.stringify(debugProfissionais, null, 2)
+);
+
+console.log('==============================');
     const profs = await Profissional.find(filtro)
       .populate({
         path: 'userId',
