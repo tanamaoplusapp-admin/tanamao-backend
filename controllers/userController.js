@@ -242,13 +242,14 @@ exports.authUser = asyncHandler(async (req, res) => {
 
   const token = signAuthToken(user);
 
-  res.json({
+res.json({
   _id: user._id,
   name: user.name,
   email: user.email,
   phone: user.phone,
   avatar: user.avatar,
   role: user.role || 'cliente',
+  temPerfilProfissional: !!user.temPerfilProfissional,
   isVerified: !!user.isVerified,
   token,
 });
