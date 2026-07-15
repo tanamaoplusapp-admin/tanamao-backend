@@ -4,6 +4,7 @@ const Company = require('../models/company');
 const Servico = require('../models/Servico');
 const Chat = require('../models/Chat');
 const Avaliacao = require('../models/Avaliacao');
+const Transaction = require('../models/transaction');
 const Profissional = require('../models/Profissional');
 const Mensagem = require('../models/Mensagem');
 const mongoose = require('mongoose');
@@ -98,16 +99,22 @@ const getChatType = (chat = {}) =>
 const getChatStatus = (chat = {}) =>
   String(chat.status || '').toLowerCase();
 
-/* ============================================================================
- * DASHBOARD GERAL DA CENTRAL
- * ========================================================================== */
 const getCentralDashboard = async (_req, res) => {
   try {
     const now = new Date();
+
     const todayStart = startOfDay(now);
     const weekStart = startOfWeek(now);
     const monthStart = startOfMonth(now);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const sevenDaysAgo = new Date(
+      now.getTime() -
+        7 * 24 * 60 * 60 * 1000
+    );
+
+    /* =====================================================
+       BUSCA DOS DADOS REAIS
+    ===================================================== */
 
     const [
       users,
@@ -115,46 +122,227 @@ const getCentralDashboard = async (_req, res) => {
       servicos,
       chats,
       avaliacoes,
-      prestadoresAtivos,
+      transactions,
     ] = await Promise.all([
       User.find().lean(),
+
       Company.find().lean(),
+
       Servico.find().lean(),
+
       Chat.find().lean(),
+
       Avaliacao.find().lean(),
-      Profissional.countDocuments({
-        $or: [{ aprovado: true }, { status: 'aprovado' }],
-      }),
+
+      Transaction.find({
+        status: 'approved',
+      }).lean(),
     ]);
 
-    const profissionais = users.filter((u) => u.role === 'profissional');
-    const clientes = users.filter((u) => u.role === 'cliente');
-    const motoristas = users.filter((u) => u.role === 'motorista');
+    /* =====================================================
+       USUÁRIOS
+    ===================================================== */
 
-    const bloqueados = users.filter(isBlockedUser).length;
-    const inadimplentes = profissionais.filter(isOverdueProvider).length;
+    const profissionais = users.filter(
+      (u) =>
+        u.role === 'profissional'
+    );
 
-    const assinaturasAtivas = profissionais.filter(
-      (u) => u.subscriptionStatus === 'active'
-    ).length;
+    const clientes = users.filter(
+      (u) =>
+        u.role === 'cliente'
+    );
 
-    const prestadoresPagantes = profissionais.filter(isPayingProvider).length;
+    const motoristas = users.filter(
+      (u) =>
+        u.role === 'motorista'
+    );
 
-    const novosHoje = users.filter((u) => {
-      const createdAt = toDate(u.createdAt);
-      return createdAt && createdAt >= todayStart;
-    }).length;
+    const bloqueados =
+      users.filter(
+        isBlockedUser
+      ).length;
 
-    const novos7dias = users.filter((u) => {
-      const createdAt = toDate(u.createdAt);
-      return createdAt && createdAt >= sevenDaysAgo;
-    }).length;
+    /* =====================================================
+       ACESSOS ATIVOS / EXPIRADOS
+    ===================================================== */
+
+    const prestadoresAtivos =
+      profissionais.filter((u) => {
+        const expira =
+          toDate(
+            u.acessoExpiraEm
+          );
+
+        return (
+          expira &&
+          expira > now
+        );
+      }).length;
+
+    const acessosExpirados =
+      profissionais.filter((u) => {
+        const expira =
+          toDate(
+            u.acessoExpiraEm
+          );
+
+        return (
+          expira &&
+          expira <= now
+        );
+      }).length;
+
+    /* =====================================================
+       NOVOS USUÁRIOS
+    ===================================================== */
+
+    const novosHoje =
+      users.filter((u) => {
+        const createdAt =
+          toDate(
+            u.createdAt
+          );
+
+        return (
+          createdAt &&
+          createdAt >=
+            todayStart
+        );
+      }).length;
+
+    const novos7dias =
+      users.filter((u) => {
+        const createdAt =
+          toDate(
+            u.createdAt
+          );
+
+        return (
+          createdAt &&
+          createdAt >=
+            sevenDaysAgo
+        );
+      }).length;
+
+    /* =====================================================
+       FINANCEIRO REAL
+
+       Fonte:
+       Transaction
+       status = approved
+    ===================================================== */
 
     let receitaHoje = 0;
     let receitaSemana = 0;
     let receitaMes = 0;
     let receitaTotal = 0;
-    let mrr = 0;
+
+    for (
+      const transaction
+      of transactions
+    ) {
+      const amount =
+        toNumber(
+          transaction.amount,
+          0
+        );
+
+      const createdAt =
+        toDate(
+          transaction.createdAt
+        );
+
+      receitaTotal +=
+        amount;
+
+      if (
+        createdAt &&
+        createdAt >= todayStart
+      ) {
+        receitaHoje +=
+          amount;
+      }
+
+      if (
+        createdAt &&
+        createdAt >= weekStart
+      ) {
+        receitaSemana +=
+          amount;
+      }
+
+      if (
+        createdAt &&
+        createdAt >= monthStart
+      ) {
+        receitaMes +=
+          amount;
+      }
+    }
+
+    /* =====================================================
+       TICKET MÉDIO
+
+       Receita total aprovada
+       dividida pelo número de pagamentos aprovados
+    ===================================================== */
+
+    const ticketMedio =
+      transactions.length > 0
+        ? receitaTotal /
+          transactions.length
+        : 0;
+
+    /* =====================================================
+       PRESTADORES PAGANTES
+
+       Usuários únicos com pagamento aprovado
+    ===================================================== */
+
+    const payingUserIds =
+      new Set();
+
+    for (
+      const transaction
+      of transactions
+    ) {
+      const userId =
+        transaction.userId ||
+        transaction.profissional;
+
+      if (userId) {
+        payingUserIds.add(
+          String(userId)
+        );
+      }
+    }
+
+    const prestadoresPagantes =
+      profissionais.filter(
+        (profissional) =>
+          payingUserIds.has(
+            String(
+              profissional._id
+            )
+          )
+      ).length;
+
+    /* =====================================================
+       CONVERSÃO
+    ===================================================== */
+
+    const taxaPagamento =
+      profissionais.length > 0
+        ? (
+            prestadoresPagantes /
+            profissionais.length
+          ) * 100
+        : 0;
+
+    /* =====================================================
+       SERVIÇOS
+    ===================================================== */
 
     let criados = 0;
     let aceitos = 0;
@@ -162,211 +350,449 @@ const getCentralDashboard = async (_req, res) => {
     let cancelados = 0;
     let semResposta = 0;
 
-    const servicosPagos = [];
-
-    for (const s of servicos) {
+    for (
+      const servico
+      of servicos
+    ) {
       criados += 1;
 
-      const createdAt = toDate(s.createdAt);
-      const valorPago = toNumber(s.valorPago ?? s.valorFinal ?? s.price, 0);
-      const status = String(s.status || 'pendente').toLowerCase();
-
-      receitaTotal += valorPago;
-      if (valorPago > 0) servicosPagos.push(s);
-
-      if (createdAt && createdAt >= todayStart) {
-        receitaHoje += valorPago;
-      }
-
-      if (createdAt && createdAt >= weekStart) {
-        receitaSemana += valorPago;
-      }
-
-      if (createdAt && createdAt >= monthStart) {
-        receitaMes += valorPago;
-      }
-
-      if (status === 'aceito') aceitos += 1;
-      if (status === 'finalizado') finalizados += 1;
-      if (status === 'cancelado') cancelados += 1;
+      const status =
+        String(
+          servico.status ||
+            'pendente'
+        ).toLowerCase();
 
       if (
-        status === 'pendente' ||
-        status === 'aguardando' ||
-        status === 'solicitado' ||
-        !s.status
+        status ===
+        'aceito'
+      ) {
+        aceitos += 1;
+      }
+
+      if (
+        status ===
+        'finalizado'
+      ) {
+        finalizados += 1;
+      }
+
+      if (
+        status ===
+        'cancelado'
+      ) {
+        cancelados += 1;
+      }
+
+      if (
+        status ===
+          'pendente' ||
+        status ===
+          'aguardando' ||
+        status ===
+          'solicitado' ||
+        !servico.status
       ) {
         semResposta += 1;
       }
     }
 
-    for (const p of profissionais) {
-      if (
-        p.subscriptionStatus === 'active' &&
-        ['profissional', 'mensal_comissao'].includes(p.planType)
-      ) {
-        mrr += toNumber(p.subscriptionAmount, 0);
-      }
-    }
-
-    const ticketMedio =
-      servicosPagos.length > 0 ? receitaTotal / servicosPagos.length : 0;
-
     const taxaResposta =
-      criados > 0 ? ((aceitos + finalizados) / criados) * 100 : 0;
-
-    const taxaPagamento =
-      profissionais.length > 0
-        ? (prestadoresPagantes / profissionais.length) * 100
+      criados > 0
+        ? (
+            (
+              aceitos +
+              finalizados
+            ) /
+            criados
+          ) * 100
         : 0;
 
-    // KPIs de chats calculados em memória para evitar CastError no createdAt
-const chatsHojeList = chats.filter((c) => {
-  const createdAt = toDate(c.createdAt);
-  return createdAt && createdAt >= todayStart;
-});
+    /* =====================================================
+       SERVIÇOS HOJE
+    ===================================================== */
 
-const chatsHoje = chatsHojeList.length;
+    const servicosHoje =
+      servicos.filter(
+        (servico) => {
+          const createdAt =
+            toDate(
+              servico.createdAt
+            );
 
-const chatIdsHoje = chatsHojeList
-  .map((c) => c?._id)
-  .filter(Boolean)
-  .map((id) => String(id));
+          return (
+            createdAt &&
+            createdAt >=
+              todayStart
+          );
+        }
+      ).length;
 
-const chatIdsHojeSet = new Set(chatIdsHoje);
+    /* =====================================================
+       CHATS HOJE
+    ===================================================== */
 
-const chatsAbertosSuporte = chats.filter((c) => {
-  const type = getChatType(c);
-  const status = getChatStatus(c);
+    const chatsHojeList =
+      chats.filter(
+        (chat) => {
+          const createdAt =
+            toDate(
+              chat.createdAt
+            );
 
-  const isSupport =
-    type.includes('support') ||
-    type.includes('suporte') ||
-    c.isSupport === true;
+          return (
+            createdAt &&
+            createdAt >=
+              todayStart
+          );
+        }
+      );
 
-  const isOpen =
-    !status ||
-    status === 'open' ||
-    status === 'aberto' ||
-    status === 'pending' ||
-    status === 'pendente';
+    const chatsHoje =
+      chatsHojeList.length;
 
-  return isSupport && isOpen;
-}).length;
+    /* =====================================================
+       IDs DOS CHATS DE HOJE
+    ===================================================== */
 
-const somaAvaliacoes = avaliacoes.reduce((acc, item) => {
-  const value = item.rating ?? item.nota ?? item.score ?? item.stars;
-  return acc + toNumber(value, 0);
-}, 0);
+    const chatIdsHoje =
+      chatsHojeList
+        .map(
+          (chat) =>
+            chat?._id
+        )
+        .filter(Boolean)
+        .map(
+          (id) =>
+            String(id)
+        );
 
-const ratingMedio =
-  avaliacoes.length > 0 ? somaAvaliacoes / avaliacoes.length : 0;
+    const chatIdsHojeSet =
+      new Set(
+        chatIdsHoje
+      );
 
-let tempoResposta = 0;
-let tempoPrimeiroChat = 0;
+    /* =====================================================
+       SUPORTE
+    ===================================================== */
 
-let mensagens = [];
+    const chatsAbertosSuporte =
+      chats.filter(
+        (chat) => {
+          const type =
+            getChatType(
+              chat
+            );
 
-if (chatIdsHojeSet.size > 0) {
-  const todasMensagens = await Mensagem.find(
-    {},
-    { chatId: 1, remetente: 1, createdAt: 1, enviadoEm: 1 }
-  )
-    .sort({ chatId: 1, createdAt: 1, enviadoEm: 1 })
-    .lean();
+          const status =
+            getChatStatus(
+              chat
+            );
 
-  mensagens = todasMensagens.filter((msg) =>
-    chatIdsHojeSet.has(String(msg.chatId))
-  );
-}
+          const isSupport =
+            type.includes(
+              'support'
+            ) ||
+            type.includes(
+              'suporte'
+            ) ||
+            chat.isSupport ===
+              true;
 
-const mensagensPorChat = new Map();
+          const isOpen =
+            !status ||
+            status ===
+              'open' ||
+            status ===
+              'aberto' ||
+            status ===
+              'pending' ||
+            status ===
+              'pendente';
 
-for (const msg of mensagens) {
-  const key = String(msg.chatId);
-  if (!mensagensPorChat.has(key)) {
-    mensagensPorChat.set(key, []);
-  }
-  mensagensPorChat.get(key).push(msg);
-}
+          return (
+            isSupport &&
+            isOpen
+          );
+        }
+      ).length;
 
-const tempos = [];
+    /* =====================================================
+       AVALIAÇÕES
+    ===================================================== */
 
-for (const [, msgs] of mensagensPorChat) {
-  if (!msgs || msgs.length < 2) continue;
+    const somaAvaliacoes =
+      avaliacoes.reduce(
+        (
+          acc,
+          item
+        ) => {
+          const value =
+            item.rating ??
+            item.nota ??
+            item.score ??
+            item.stars;
 
-  const primeira = msgs[0];
-
-  const resposta = msgs.find(
-    (m) => String(m.remetente) !== String(primeira.remetente)
-  );
-
-  if (!resposta) continue;
-
-  const t1 = new Date(primeira.createdAt || primeira.enviadoEm);
-  const t2 = new Date(resposta.createdAt || resposta.enviadoEm);
-
-  if (Number.isNaN(t1.getTime()) || Number.isNaN(t2.getTime())) continue;
-  if (t2 < t1) continue;
-
-  const diffMin = Math.round((t2 - t1) / 60000);
-  tempos.push(diffMin);
-}
-
-if (tempos.length > 0) {
-  const media = Math.round(
-    tempos.reduce((acc, n) => acc + n, 0) / tempos.length
-  );
-  tempoResposta = media;
-  tempoPrimeiroChat = media;
-}
-
-    const servicosHoje = servicos.filter((s) => {
-      const createdAt = toDate(s.createdAt);
-      return createdAt && createdAt >= todayStart;
-    }).length;
-
-    const prestadoresSemResposta = profissionais.filter((p) => {
-      const totalSolicitacoes = toNumber(
-        p.totalSolicitacoesRecebidas ?? p.totalSolicitacoes ?? 0,
+          return (
+            acc +
+            toNumber(
+              value,
+              0
+            )
+          );
+        },
         0
       );
 
-      const totalRespondidas = toNumber(
-        p.totalSolicitacoesRespondidas ?? p.totalRespondidas ?? 0,
-        0
-      );
+    const ratingMedio =
+      avaliacoes.length > 0
+        ? somaAvaliacoes /
+          avaliacoes.length
+        : 0;
 
-      return totalSolicitacoes > 0 && totalRespondidas === 0;
-    }).length;
+    /* =====================================================
+       TEMPO DE RESPOSTA
+    ===================================================== */
+
+    let tempoResposta = 0;
+    let tempoPrimeiroChat = 0;
+
+    let mensagens = [];
+
+    if (
+      chatIdsHojeSet.size >
+      0
+    ) {
+      const todasMensagens =
+        await Mensagem.find(
+          {},
+          {
+            chatId: 1,
+            remetente: 1,
+            createdAt: 1,
+            enviadoEm: 1,
+          }
+        )
+          .sort({
+            chatId: 1,
+            createdAt: 1,
+            enviadoEm: 1,
+          })
+          .lean();
+
+      mensagens =
+        todasMensagens.filter(
+          (msg) =>
+            chatIdsHojeSet.has(
+              String(
+                msg.chatId
+              )
+            )
+        );
+    }
+
+    const mensagensPorChat =
+      new Map();
+
+    for (
+      const msg
+      of mensagens
+    ) {
+      const key =
+        String(
+          msg.chatId
+        );
+
+      if (
+        !mensagensPorChat.has(
+          key
+        )
+      ) {
+        mensagensPorChat.set(
+          key,
+          []
+        );
+      }
+
+      mensagensPorChat
+        .get(key)
+        .push(msg);
+    }
+
+    const tempos = [];
+
+    for (
+      const [, msgs]
+      of mensagensPorChat
+    ) {
+      if (
+        !msgs ||
+        msgs.length < 2
+      ) {
+        continue;
+      }
+
+      const primeira =
+        msgs[0];
+
+      const resposta =
+        msgs.find(
+          (m) =>
+            String(
+              m.remetente
+            ) !==
+            String(
+              primeira.remetente
+            )
+        );
+
+      if (!resposta) {
+        continue;
+      }
+
+      const t1 =
+        new Date(
+          primeira.createdAt ||
+            primeira.enviadoEm
+        );
+
+      const t2 =
+        new Date(
+          resposta.createdAt ||
+            resposta.enviadoEm
+        );
+
+      if (
+        Number.isNaN(
+          t1.getTime()
+        ) ||
+        Number.isNaN(
+          t2.getTime()
+        )
+      ) {
+        continue;
+      }
+
+      if (t2 < t1) {
+        continue;
+      }
+
+      const diffMin =
+        Math.round(
+          (t2 - t1) /
+            60000
+        );
+
+      tempos.push(
+        diffMin
+      );
+    }
+
+    if (
+      tempos.length > 0
+    ) {
+      const media =
+        Math.round(
+          tempos.reduce(
+            (
+              acc,
+              n
+            ) =>
+              acc + n,
+            0
+          ) /
+            tempos.length
+        );
+
+      tempoResposta =
+        media;
+
+      tempoPrimeiroChat =
+        media;
+    }
+
+    /* =====================================================
+       PRESTADORES SEM RESPOSTA
+    ===================================================== */
+
+    const prestadoresSemResposta =
+      profissionais.filter(
+        (p) => {
+          const totalSolicitacoes =
+            toNumber(
+              p.totalSolicitacoesRecebidas ??
+                p.totalSolicitacoes ??
+                0,
+              0
+            );
+
+          const totalRespondidas =
+            toNumber(
+              p.totalSolicitacoesRespondidas ??
+                p.totalRespondidas ??
+                0,
+              0
+            );
+
+          return (
+            totalSolicitacoes >
+              0 &&
+            totalRespondidas ===
+              0
+          );
+        }
+      ).length;
+
+    /* =====================================================
+       RESPOSTA FINAL
+    ===================================================== */
 
     return res.json({
       ok: true,
+
       marketplace: {
         prestadoresAtivos,
         servicosHoje,
         chatsHoje,
         tempoResposta,
       },
+
       finance: {
         receitaHoje,
         receitaSemana,
         receitaMes,
         receitaTotal,
-        mrr,
+
         ticketMedio,
-        assinaturasAtivas,
-        inadimplentes,
+
+        acessosAtivos:
+          prestadoresAtivos,
+
+        acessosExpirados,
+
+        transacoesAprovadas:
+          transactions.length,
       },
+
       users: {
-        total: users.length,
-        clientes: clientes.length,
-        prestadores: profissionais.length,
-        motoristas: motoristas.length,
+        total:
+          users.length,
+
+        clientes:
+          clientes.length,
+
+        prestadores:
+          profissionais.length,
+
+        motoristas:
+          motoristas.length,
+
         bloqueados,
+
         novosHoje,
+
         novos7dias,
       },
+
       services: {
         criados,
         aceitos,
@@ -375,32 +801,61 @@ if (tempos.length > 0) {
         semResposta,
         taxaResposta,
       },
+
       conversion: {
-        prestadoresCadastro: profissionais.length,
+        prestadoresCadastro:
+          profissionais.length,
+
         prestadoresPagantes,
+
         taxaPagamento,
+
         prestadoresAtivos,
       },
+
       quality: {
         ratingMedio,
+
         tempoPrimeiroChat,
+
         prestadoresSemResposta,
       },
+
       support: {
-        abertos: chatsAbertosSuporte,
+        abertos:
+          chatsAbertosSuporte,
       },
+
       extras: {
-        empresasTotal: companies.length,
-        empresasAtivas: companies.filter((c) => !!c.active).length,
+        empresasTotal:
+          companies.length,
+
+        empresasAtivas:
+          companies.filter(
+            (c) =>
+              !!c.active
+          ).length,
       },
     });
+
   } catch (e) {
-    console.error('central.getCentralDashboard:', e);
-    return res.status(500).json({
-      ok: false,
-      message: 'Erro ao gerar dashboard central',
-      error: e.message,
-    });
+
+    console.error(
+      'central.getCentralDashboard:',
+      e
+    );
+
+    return res
+      .status(500)
+      .json({
+        ok: false,
+
+        message:
+          'Erro ao gerar dashboard central',
+
+        error:
+          e.message,
+      });
   }
 };
 
