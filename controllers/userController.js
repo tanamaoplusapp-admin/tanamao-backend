@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
+const Profissional = require('../models/Profissional');
 const generateToken = require('../utils/generateToken');
 const { sendMail } = require('../services/mailer');
 const config = require('../config/env');
@@ -452,5 +453,198 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
   res.json({
     ok: true,
     message: "Conta excluída com sucesso"
+  });
+  
+});
+/* =====================================================
+ATIVAR PERFIL PROFISSIONAL
+PARA USUÁRIO JÁ CADASTRADO
+===================================================== */
+
+exports.ativarPerfilProfissional = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    res.status(401);
+    throw new Error('Usuário não autenticado');
+  }
+
+  /* =========================
+     BUSCAR USUÁRIO
+  ========================= */
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    res.status(404);
+    throw new Error('Usuário não encontrado');
+  }
+
+  /* =========================
+     VERIFICAR SE JÁ POSSUI
+     PERFIL PROFISSIONAL
+  ========================= */
+
+  const profissionalExistente = await Profissional.findOne({
+    userId: user._id,
+  });
+
+  if (profissionalExistente) {
+    /*
+     * Garante compatibilidade caso exista
+     * um perfil profissional antigo, mas
+     * a flag ainda esteja como false.
+     */
+
+    if (!user.temPerfilProfissional) {
+      user.temPerfilProfissional = true;
+      await user.save();
+    }
+
+    return res.json({
+      ok: true,
+      jaExistia: true,
+      message: 'Você já possui um perfil profissional.',
+      profissional: profissionalExistente,
+    });
+  }
+
+  /* =========================
+     DADOS RECEBIDOS
+  ========================= */
+
+  const {
+    cpf,
+    telefone,
+    cidade,
+    estado,
+  } = req.body || {};
+
+  const cpfFinal = cpf || user.cpf;
+  const telefoneFinal = telefone || user.phone;
+
+  if (!cpfFinal) {
+    res.status(400);
+    throw new Error(
+      'Informe seu CPF para ativar o perfil profissional.'
+    );
+  }
+
+  if (!telefoneFinal) {
+    res.status(400);
+    throw new Error(
+      'Informe seu telefone para ativar o perfil profissional.'
+    );
+  }
+
+  /* =========================
+     VERIFICAR CPF
+  ========================= */
+
+  const cpfLimpo = String(cpfFinal).replace(/\D/g, '');
+
+  const cpfEmUso = await Profissional.findOne({
+    cpf: cpfLimpo,
+    userId: { $ne: user._id },
+  });
+
+  if (cpfEmUso) {
+    res.status(400);
+    throw new Error(
+      'Este CPF já está vinculado a outro perfil profissional.'
+    );
+  }
+
+  /* =========================
+     CRIAR PERFIL PROFISSIONAL
+  ========================= */
+
+  const profissional = await Profissional.create({
+    userId: user._id,
+
+    name: user.name,
+    email: user.email,
+
+    cpf: cpfLimpo,
+    phone: telefoneFinal,
+
+    endereco: {
+      cidade: cidade || user.cidade || '',
+      estado: estado || user.estado || '',
+    },
+
+    statusCadastro: 'incompleto',
+  });
+
+  /* =========================
+     ATIVAR TRIAL DE 45 DIAS
+  ========================= */
+
+  const agora = new Date();
+
+  const expira = new Date(
+    agora.getTime() + 45 * 24 * 60 * 60 * 1000
+  );
+
+  user.temPerfilProfissional = true;
+
+  /*
+   * Mantemos role = cliente.
+   * Isso evita quebrar o fluxo atual.
+   */
+
+  if (!user.acessoExpiraEm || user.acessoExpiraEm < agora) {
+    user.acessoExpiraEm = expira;
+    user.planoAtivo = 'trial_45_dias';
+  }
+
+  /*
+   * Aproveitamos para completar os dados
+   * do User caso ainda não existam.
+   */
+
+  if (!user.cpf) {
+    user.cpf = cpfLimpo;
+  }
+
+  if (!user.phone) {
+    user.phone = telefoneFinal;
+  }
+
+  if (!user.cidade && cidade) {
+    user.cidade = cidade;
+  }
+
+  if (!user.estado && estado) {
+    user.estado = estado;
+  }
+
+  await user.save();
+
+  /* =========================
+     RESPOSTA
+  ========================= */
+
+  return res.status(201).json({
+    ok: true,
+    jaExistia: false,
+
+    message:
+      'Perfil profissional ativado com sucesso.',
+
+    profissional,
+
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      temPerfilProfissional:
+        user.temPerfilProfissional,
+      acessoExpiraEm:
+        user.acessoExpiraEm,
+      planoAtivo:
+        user.planoAtivo,
+    },
   });
 });

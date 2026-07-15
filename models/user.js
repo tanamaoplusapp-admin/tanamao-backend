@@ -55,7 +55,24 @@ const userSchema = new Schema(
     default:'cliente',
     index:true
   },
+/* ============================
+ * PERFIS DISPONÍVEIS
+ * ============================ */
 
+/*
+ * Indica se este usuário também possui
+ * um perfil profissional vinculado.
+ *
+ * O role continua representando o tipo
+ * original/principal da conta para manter
+ * compatibilidade com o sistema atual.
+ */
+
+temPerfilProfissional:{
+  type:Boolean,
+  default:false,
+  index:true
+},
   /* ============================
    * CONTATO
    * ============================ */

@@ -8,7 +8,8 @@ const {
   updateMe,
   updateUserAvailability,
   savePushToken,
-  deleteAccount
+  deleteAccount,
+  ativarPerfilProfissional
 } = require('../controllers/userController');
 
 const User = require('../models/user');
@@ -43,7 +44,15 @@ router.put('/profile', verifyToken, updateMe);
 
 router.get('/me', verifyToken, getMe);
 router.put('/me', verifyToken, updateMe);
+/* =====================================================
+ATIVAR PERFIL PROFISSIONAL
+===================================================== */
 
+router.post(
+  '/ativar-perfil-profissional',
+  verifyToken,
+  ativarPerfilProfissional
+);
 /* =====================================================
 EXCLUIR CONTA (APPLE REQUIREMENT)
 ===================================================== */
