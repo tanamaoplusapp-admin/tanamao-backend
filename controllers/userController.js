@@ -542,18 +542,19 @@ exports.ativarPerfilProfissional = asyncHandler(async (req, res) => {
   ========================= */
 
   const cpfLimpo = String(cpfFinal).replace(/\D/g, '');
+const cpfEmUso = await Profissional.findOne({
+  cpf: cpfLimpo,
+});
 
-  const cpfEmUso = await Profissional.findOne({
-    cpf: cpfLimpo,
-    userId: { $ne: user._id },
-  });
-
-  if (cpfEmUso) {
-    res.status(400);
-    throw new Error(
-      'Este CPF já está vinculado a outro perfil profissional.'
-    );
-  }
+if (
+  cpfEmUso &&
+  String(cpfEmUso.userId) !== String(user._id)
+) {
+  res.status(400);
+  throw new Error(
+    'Este CPF já está vinculado a outro perfil profissional.'
+  );
+}
 
   /* =========================
      CRIAR PERFIL PROFISSIONAL
