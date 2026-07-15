@@ -1199,11 +1199,12 @@ exports.updateMe = async (req, res) => {
   updateData.endereco = {
     ...req.body.endereco,
 
-    cidadeSlug: String(req.body.endereco.cidade || '')
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, ''),
+   cidadeSlug: String(req.body.endereco.cidade || '')
+  .trim()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/\s+/g, '-'),
   };
 }
 

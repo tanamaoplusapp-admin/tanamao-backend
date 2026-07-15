@@ -559,7 +559,19 @@ if (
   /* =========================
      CRIAR PERFIL PROFISSIONAL
   ========================= */
+const cidadeFinal = String(
+  cidade || user.cidade || ''
+).trim();
 
+const estadoFinal = String(
+  estado || user.estado || ''
+).trim();
+
+const cidadeSlug = cidadeFinal
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/\s+/g, '-');
   const profissional = await Profissional.create({
     userId: user._id,
 
@@ -570,10 +582,10 @@ if (
     phone: telefoneFinal,
 
     endereco: {
-      cidade: cidade || user.cidade || '',
-      estado: estado || user.estado || '',
-    },
-
+  cidade: cidadeFinal,
+  estado: estadoFinal,
+  cidadeSlug,
+},
     statusCadastro: 'incompleto',
   });
 
