@@ -486,17 +486,12 @@ exports.ativarPerfilProfissional = asyncHandler(async (req, res) => {
      PERFIL PROFISSIONAL
   ========================= */
 
-  const profissionalExistente = await Profissional.findOne({
-    userId: user._id,
-  });
+  const profissionalExistente =
+    await Profissional.findOne({
+      userId: user._id,
+    });
 
   if (profissionalExistente) {
-    /*
-     * Garante compatibilidade caso exista
-     * um perfil profissional antigo, mas
-     * a flag ainda esteja como false.
-     */
-
     if (!user.temPerfilProfissional) {
       user.temPerfilProfissional = true;
       await user.save();
@@ -505,8 +500,10 @@ exports.ativarPerfilProfissional = asyncHandler(async (req, res) => {
     return res.json({
       ok: true,
       jaExistia: true,
-      message: 'Você já possui um perfil profissional.',
-      profissional: profissionalExistente,
+      message:
+        'Você já possui um perfil profissional.',
+      profissional:
+        profissionalExistente,
     });
   }
 
@@ -519,10 +516,16 @@ exports.ativarPerfilProfissional = asyncHandler(async (req, res) => {
     telefone,
     cidade,
     estado,
+    endereco,
   } = req.body || {};
 
-  const cpfFinal = cpf || user.cpf;
-  const telefoneFinal = telefone || user.phone;
+  const cpfFinal =
+    cpf ||
+    user.cpf;
+
+  const telefoneFinal =
+    telefone ||
+    user.phone;
 
   if (!cpfFinal) {
     res.status(400);
@@ -542,38 +545,166 @@ exports.ativarPerfilProfissional = asyncHandler(async (req, res) => {
      VERIFICAR CPF
   ========================= */
 
-  const cpfLimpo = String(cpfFinal).replace(/\D/g, '');
-const cpfEmUso = await Profissional.findOne({
-  cpf: cpfLimpo,
-});
+  const cpfLimpo =
+    String(cpfFinal)
+      .replace(/\D/g, '');
 
-if (
-  cpfEmUso &&
-  String(cpfEmUso.userId) !== String(user._id)
-) {
-  res.status(400);
-  throw new Error(
-    'Este CPF já está vinculado a outro perfil profissional.'
-  );
-}
+  const cpfEmUso =
+    await Profissional.findOne({
+      cpf: cpfLimpo,
+    });
+
+  if (
+    cpfEmUso &&
+    String(cpfEmUso.userId) !==
+      String(user._id)
+  ) {
+    res.status(400);
+    throw new Error(
+      'Este CPF já está vinculado a outro perfil profissional.'
+    );
+  }
+
+  /* =========================
+     PREPARAR ENDEREÇO
+
+     Prioridade:
+     1. Endereço enviado pela tela
+     2. Endereço já salvo no cliente
+     3. Cidade/estado da raiz do User
+  ========================= */
+
+  const enderecoRecebido =
+    endereco &&
+    typeof endereco === 'object'
+      ? endereco
+      : {};
+
+  const enderecoSalvo =
+    user.enderecoSelecionado &&
+    typeof user.enderecoSelecionado === 'object'
+      ? user.enderecoSelecionado
+      : {};
+
+  const logradouro =
+    enderecoRecebido.logradouro ||
+    enderecoRecebido.rua ||
+    enderecoSalvo.logradouro ||
+    enderecoSalvo.rua ||
+    '';
+
+  const numero =
+    enderecoRecebido.numero ||
+    enderecoSalvo.numero ||
+    '';
+
+  const bairro =
+    enderecoRecebido.bairro ||
+    enderecoSalvo.bairro ||
+    '';
+
+  const cidadeFinal =
+    String(
+      enderecoRecebido.cidade ||
+      cidade ||
+      enderecoSalvo.cidade ||
+      user.cidade ||
+      ''
+    ).trim();
+
+  const estadoFinal =
+    String(
+      enderecoRecebido.estado ||
+      estado ||
+      enderecoSalvo.estado ||
+      user.estado ||
+      ''
+    ).trim();
+
+  const cep =
+    enderecoRecebido.cep ||
+    enderecoSalvo.cep ||
+    '';
+
+  const pais =
+    enderecoRecebido.pais ||
+    enderecoSalvo.pais ||
+    '';
+
+  /* =========================
+     COORDENADAS
+  ========================= */
+
+  const latitudeRecebida =
+    enderecoRecebido.latitude !== undefined &&
+    enderecoRecebido.latitude !== null
+      ? Number(enderecoRecebido.latitude)
+      : null;
+
+  const longitudeRecebida =
+    enderecoRecebido.longitude !== undefined &&
+    enderecoRecebido.longitude !== null
+      ? Number(enderecoRecebido.longitude)
+      : null;
+
+  const latitudeSalva =
+    enderecoSalvo.latitude !== undefined &&
+    enderecoSalvo.latitude !== null
+      ? Number(enderecoSalvo.latitude)
+      : (
+          Array.isArray(user.geo?.coordinates)
+            ? Number(user.geo.coordinates[1])
+            : null
+        );
+
+  const longitudeSalva =
+    enderecoSalvo.longitude !== undefined &&
+    enderecoSalvo.longitude !== null
+      ? Number(enderecoSalvo.longitude)
+      : (
+          Array.isArray(user.geo?.coordinates)
+            ? Number(user.geo.coordinates[0])
+            : null
+        );
+
+  const latitude =
+    Number.isFinite(latitudeRecebida)
+      ? latitudeRecebida
+      : latitudeSalva;
+
+  const longitude =
+    Number.isFinite(longitudeRecebida)
+      ? longitudeRecebida
+      : longitudeSalva;
+
+  const temCoordenadas =
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude);
+
+  /* =========================
+     ENDEREÇO COMPLETO
+  ========================= */
+
+  const enderecoCompleto =
+    enderecoRecebido.enderecoCompleto ||
+    enderecoSalvo.enderecoCompleto ||
+    [
+      logradouro,
+      numero,
+      bairro,
+      cidadeFinal,
+      estadoFinal,
+      cep,
+      pais,
+    ]
+      .filter(Boolean)
+      .join(', ');
 
   /* =========================
      CRIAR PERFIL PROFISSIONAL
   ========================= */
-const cidadeFinal = String(
-  cidade || user.cidade || ''
-).trim();
 
-const estadoFinal = String(
-  estado || user.estado || ''
-).trim();
-
-const cidadeSlug = cidadeFinal
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .replace(/\s+/g, '-');
-  const profissional = await Profissional.create({
+  const profissionalData = {
     userId: user._id,
 
     name: user.name,
@@ -583,54 +714,144 @@ const cidadeSlug = cidadeFinal
     phone: telefoneFinal,
 
     endereco: {
-  cidade: cidadeFinal,
-  estado: estadoFinal,
-  cidadeSlug,
-},
-    statusCadastro: 'incompleto',
-  });
+      cep,
+      logradouro,
+      numero,
+      bairro,
+      cidade: cidadeFinal,
+      estado: estadoFinal,
+      pais,
+      enderecoCompleto,
+    },
+
+    // Compatibilidade
+    address:
+      enderecoCompleto,
+
+    statusCadastro:
+      'incompleto',
+  };
+
+  /*
+   * GeoJSON:
+   * [longitude, latitude]
+   */
+  if (temCoordenadas) {
+    profissionalData.geo = {
+      type: 'Point',
+      coordinates: [
+        longitude,
+        latitude,
+      ],
+    };
+  }
+
+  const profissional =
+    await Profissional.create(
+      profissionalData
+    );
 
   /* =========================
      ATIVAR TRIAL DE 45 DIAS
   ========================= */
 
-  const agora = new Date();
+  const agora =
+    new Date();
 
-  const expira = new Date(
-    agora.getTime() + 45 * 24 * 60 * 60 * 1000
-  );
+  const expira =
+    new Date(
+      agora.getTime() +
+      45 * 24 * 60 * 60 * 1000
+    );
 
-  user.temPerfilProfissional = true;
+  user.temPerfilProfissional =
+    true;
 
   /*
    * Mantemos role = cliente.
-   * Isso evita quebrar o fluxo atual.
+   * O usuário passa a possuir os
+   * dois perfis.
    */
 
-  if (!user.acessoExpiraEm || user.acessoExpiraEm < agora) {
-    user.acessoExpiraEm = expira;
-    user.planoAtivo = 'trial_45_dias';
+  if (
+    !user.acessoExpiraEm ||
+    user.acessoExpiraEm < agora
+  ) {
+    user.acessoExpiraEm =
+      expira;
+
+    user.planoAtivo =
+      'trial_45_dias';
   }
 
-  /*
-   * Aproveitamos para completar os dados
-   * do User caso ainda não existam.
-   */
+  /* =========================
+     ATUALIZAR DADOS DO USER
+  ========================= */
 
   if (!user.cpf) {
-    user.cpf = cpfLimpo;
+    user.cpf =
+      cpfLimpo;
   }
 
   if (!user.phone) {
-    user.phone = telefoneFinal;
+    user.phone =
+      telefoneFinal;
   }
 
-  if (!user.cidade && cidade) {
-    user.cidade = cidade;
-  }
+  /*
+   * Sincroniza a localização do
+   * User com o endereço usado para
+   * criar o perfil profissional.
+   */
 
-  if (!user.estado && estado) {
-    user.estado = estado;
+  user.cidade =
+    cidadeFinal;
+
+  user.estado =
+    estadoFinal;
+
+  user.enderecoSelecionado = {
+    label:
+      enderecoRecebido.label ||
+      enderecoSalvo.label ||
+      'Principal',
+
+    // Compatibilidade
+    rua:
+      logradouro,
+
+    // Novo padrão
+    logradouro,
+
+    numero,
+    bairro,
+    cidade:
+      cidadeFinal,
+    estado:
+      estadoFinal,
+    cep,
+    pais,
+    enderecoCompleto,
+
+    latitude:
+      temCoordenadas
+        ? latitude
+        : undefined,
+
+    longitude:
+      temCoordenadas
+        ? longitude
+        : undefined,
+  };
+
+  if (temCoordenadas) {
+    user.geo = {
+      type: 'Point',
+      coordinates: [
+        longitude,
+        latitude,
+      ],
+    };
   }
 
   await user.save();
@@ -649,16 +870,38 @@ const cidadeSlug = cidadeFinal
     profissional,
 
     user: {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
+      _id:
+        user._id,
+
+      name:
+        user.name,
+
+      email:
+        user.email,
+
+      role:
+        user.role,
+
       temPerfilProfissional:
         user.temPerfilProfissional,
+
       acessoExpiraEm:
         user.acessoExpiraEm,
+
       planoAtivo:
         user.planoAtivo,
+
+      cidade:
+        user.cidade,
+
+      estado:
+        user.estado,
+
+      enderecoSelecionado:
+        user.enderecoSelecionado,
+
+      geo:
+        user.geo,
     },
   });
 });
