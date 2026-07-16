@@ -123,47 +123,127 @@ temPerfilProfissional:{
       index:'2dsphere'
     }
   },
-  enderecos: [
+ enderecos: [
   {
-    label: String,
-    rua: String,
-    cidade: String,
-    estado: String,
-    cep: String,
-    numero: String,
+    label: {
+      type: String,
+      trim: true,
+    },
 
-    latitude: Number,
-    longitude: Number,
+    rua: {
+      type: String,
+      trim: true,
+    },
+
+    logradouro: {
+      type: String,
+      trim: true,
+    },
+
+    numero: {
+      type: String,
+      trim: true,
+    },
+
+    bairro: {
+      type: String,
+      trim: true,
+    },
+
+    cidade: {
+      type: String,
+      trim: true,
+    },
+
+    estado: {
+      type: String,
+      trim: true,
+    },
+
+    cep: {
+      type: String,
+      trim: true,
+    },
+
+    pais: {
+      type: String,
+      trim: true,
+    },
+
+    enderecoCompleto: {
+      type: String,
+      trim: true,
+    },
+
+    latitude: {
+      type: Number,
+    },
+
+    longitude: {
+      type: Number,
+    },
   }
 ],
 
 enderecoSelecionado: {
-  label: String,
-  rua: String,
-  cidade: String,
-  estado: String,
-  cep: String,
-  numero: String,
+  label: {
+    type: String,
+    trim: true,
+  },
 
-  latitude: Number,
-  longitude: Number,
+  rua: {
+    type: String,
+    trim: true,
+  },
+
+  logradouro: {
+    type: String,
+    trim: true,
+  },
+
+  numero: {
+    type: String,
+    trim: true,
+  },
+
+  bairro: {
+    type: String,
+    trim: true,
+  },
+
+  cidade: {
+    type: String,
+    trim: true,
+  },
+
+  estado: {
+    type: String,
+    trim: true,
+  },
+
+  cep: {
+    type: String,
+    trim: true,
+  },
+
+  pais: {
+    type: String,
+    trim: true,
+  },
+
+  enderecoCompleto: {
+    type: String,
+    trim: true,
+  },
+
+  latitude: {
+    type: Number,
+  },
+
+  longitude: {
+    type: Number,
+  },
 },
-
-  /* ============================
-   * EMPRESA
-   * ============================ */
-
-  companyId:{
-    type:Types.ObjectId,
-    ref:'Company',
-    index:true
-  },
-
-  porteEmpresa:{
-    type:String,
-    enum:['pequena','media','grande'],
-    default:undefined
-  },
 
   /* ============================
    * MOTORISTA

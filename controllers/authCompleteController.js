@@ -54,40 +54,133 @@ exports.registerComplete = async (req, res) => {
       });
     }
 
-    /* ================= CREATE USER ================= */
+/* ================= PREPARAR ENDEREÇO ================= */
 
-    const hash = await bcrypt.hash(password, 10);
+const latitude =
+  endereco?.latitude !== undefined &&
+  endereco?.latitude !== null
+    ? Number(endereco.latitude)
+    : null;
 
-    const user = await User.create({
-      name,
-      email: emailNorm,
-      password: hash,
-      role: 'cliente',
+const longitude =
+  endereco?.longitude !== undefined &&
+  endereco?.longitude !== null
+    ? Number(endereco.longitude)
+    : null;
 
-      cpf,
-      phone: telefone,
+const temCoordenadas =
+  Number.isFinite(latitude) &&
+  Number.isFinite(longitude);
 
-      cidade: endereco?.cidade,
-      estado: endereco?.estado,
+const logradouro =
+  endereco?.logradouro ||
+  endereco?.rua ||
+  '';
 
-      isVerified: true,
-    });
+const enderecoCompleto =
+  endereco?.enderecoCompleto ||
+  [
+    logradouro,
+    endereco?.numero,
+    endereco?.bairro,
+    endereco?.cidade,
+    endereco?.estado,
+    endereco?.cep,
+    endereco?.pais,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
-    /* ================= CREATE ADDRESS ================= */
+/* ================= CREATE USER ================= */
 
-    if (endereco) {
-      await Address.create({
-        userId: user._id,
-        cep: endereco.cep,
-        rua: endereco.rua,
-        numero: endereco.numero,
-        complemento: endereco.complemento,
-        bairro: endereco.bairro,
-        cidade: endereco.cidade,
-        estado: endereco.estado,
-      });
-    }
+const hash = await bcrypt.hash(password, 10);
 
+const userData = {
+  name,
+  email: emailNorm,
+  password: hash,
+  role: 'cliente',
+
+  cpf,
+  phone: telefone,
+
+  cidade: endereco?.cidade || '',
+  estado: endereco?.estado || '',
+
+  enderecoSelecionado: {
+    label: endereco?.label || 'Principal',
+
+    // compatibilidade com telas antigas
+    rua: logradouro,
+
+    // novo padrão
+    logradouro,
+
+    numero: endereco?.numero || '',
+    bairro: endereco?.bairro || '',
+    cidade: endereco?.cidade || '',
+    estado: endereco?.estado || '',
+    cep: endereco?.cep || '',
+    pais: endereco?.pais || '',
+    enderecoCompleto,
+
+    latitude: temCoordenadas
+      ? latitude
+      : undefined,
+
+    longitude: temCoordenadas
+      ? longitude
+      : undefined,
+  },
+
+  isVerified: true,
+};
+
+/*
+ * GeoJSON usa:
+ * [longitude, latitude]
+ */
+if (temCoordenadas) {
+  userData.geo = {
+    type: 'Point',
+    coordinates: [
+      longitude,
+      latitude,
+    ],
+  };
+}
+
+const user = await User.create(userData);
+
+/* ================= CREATE ADDRESS ================= */
+
+if (endereco) {
+  await Address.create({
+    userId: user._id,
+
+    cep: endereco.cep || '',
+
+    // mantém o padrão atual do model Address
+    rua: logradouro,
+
+    numero: endereco.numero || '',
+    complemento: endereco.complemento || '',
+    bairro: endereco.bairro || '',
+    cidade: endereco.cidade || '',
+    estado: endereco.estado || '',
+
+    pais: endereco.pais || '',
+    enderecoCompleto,
+
+    latitude: temCoordenadas
+      ? latitude
+      : undefined,
+
+    longitude: temCoordenadas
+      ? longitude
+      : undefined,
+  });
+}
     /* ================= TOKEN ================= */
 
     const token = sign(user);

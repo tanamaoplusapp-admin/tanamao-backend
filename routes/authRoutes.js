@@ -88,25 +88,32 @@ router.post('/register-complete', createLimiter(100), registerComplete);
 
 router.post('/register-profissional', createLimiter(100), async (req, res) => {
   try {
+    const {
+      nome,
+      email,
+      telefone,
+      cpf,
+      senha,
 
-   const {
-  nome,
-  email,
-  telefone,
-  cpf,
-  senha,
+      // Mantidos por compatibilidade
+      cidade,
+      estado,
 
-  cidade,
-  estado,
+      // Novo padrão de endereço
+      endereco,
 
-  profissoes,
-  banco,
-  agencia,
-  conta,
-  tipoConta,
-  pix,
-  photoUrl,
-} = req.body;
+      profissoes,
+      banco,
+      agencia,
+      conta,
+      tipoConta,
+      pix,
+      photoUrl,
+    } = req.body || {};
+
+    /* =========================
+       VALIDAÇÃO
+    ========================= */
 
     if (!nome || !email || !cpf || !telefone || !senha) {
       return res.status(400).json({
@@ -115,9 +122,20 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
       });
     }
 
-    const emailNorm = String(email).trim().toLowerCase();
+    const emailNorm = String(email)
+      .trim()
+      .toLowerCase();
 
-    const existingUser = await User.findOne({ email: emailNorm });
+    const cpfLimpo = String(cpf)
+      .replace(/\D/g, '');
+
+    /* =========================
+       VERIFICAR E-MAIL
+    ========================= */
+
+    const existingUser = await User.findOne({
+      email: emailNorm,
+    });
 
     if (existingUser) {
       return res.status(400).json({
@@ -126,7 +144,13 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
       });
     }
 
-    const existingCpf = await Profissional.findOne({ cpf });
+    /* =========================
+       VERIFICAR CPF
+    ========================= */
+
+    const existingCpf = await Profissional.findOne({
+      cpf: cpfLimpo,
+    });
 
     if (existingCpf) {
       return res.status(400).json({
@@ -135,70 +159,280 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
       });
     }
 
-    const user = await User.create({
-  name: nome,
-  email: emailNorm,
-  password: senha,
-  role: 'profissional',
+    /* =========================
+       PREPARAR ENDEREÇO
+    ========================= */
 
-  phone: telefone,
-  cpf,
+    const enderecoRecebido =
+      endereco && typeof endereco === 'object'
+        ? endereco
+        : {};
 
-  cidade,
-  estado,
+    const logradouro =
+      enderecoRecebido.logradouro ||
+      enderecoRecebido.rua ||
+      '';
 
-  avatar: photoUrl || null,
-});
-/* =========================
-TRIAL 45 DIAS PROFISSIONAL
-========================= */
+    const cidadeFinal =
+      enderecoRecebido.cidade ||
+      cidade ||
+      '';
 
-const agora = new Date();
-const expira = new Date(
-  agora.getTime() + 45 * 24 * 60 * 60 * 1000
-);
+    const estadoFinal =
+      enderecoRecebido.estado ||
+      estado ||
+      '';
 
-user.perfilAtivo = true;
-user.acessoLiberado = true;
+    const latitude =
+      enderecoRecebido.latitude !== undefined &&
+      enderecoRecebido.latitude !== null
+        ? Number(enderecoRecebido.latitude)
+        : null;
 
-user.acessoExpiraEm = expira;
+    const longitude =
+      enderecoRecebido.longitude !== undefined &&
+      enderecoRecebido.longitude !== null
+        ? Number(enderecoRecebido.longitude)
+        : null;
 
-user.planType = 'trial_45_dias';
-user.subscriptionStatus = 'active';
+    const temCoordenadas =
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude);
 
-await user.save();
-    const profissional = await Profissional.create({
-  userId: user._id,
+    const enderecoCompleto =
+      enderecoRecebido.enderecoCompleto ||
+      [
+        logradouro,
+        enderecoRecebido.numero,
+        enderecoRecebido.bairro,
+        cidadeFinal,
+        estadoFinal,
+        enderecoRecebido.cep,
+        enderecoRecebido.pais,
+      ]
+        .filter(Boolean)
+        .join(', ');
 
-  name: nome,
-  email: emailNorm,
-  password: user.password,
+    /* =========================
+       PREPARAR USER
+    ========================= */
 
-  cpf,
-  phone: telefone,
+    const userData = {
+      name: nome,
+      email: emailNorm,
+      password: senha,
+      role: 'profissional',
 
-  endereco: {
-    cidade,
-    estado,
-  },
+      phone: telefone,
+      cpf: cpfLimpo,
 
-  avatar: photoUrl || null,
+      cidade: cidadeFinal,
+      estado: estadoFinal,
 
-  especialidades: profissoes || [],
+      enderecoSelecionado: {
+        label:
+          enderecoRecebido.label ||
+          'Principal',
 
-  bank: banco
-    ? {
-            banco,
-            agencia,
-            conta,
-            tipoConta,
-            pix,
-            titular: nome,
-            documento: cpf,
-            updatedAt: new Date(),
-          }
-        : undefined,
-    });
+        // Compatibilidade com telas antigas
+        rua: logradouro,
+
+        // Novo padrão
+        logradouro,
+
+        numero:
+          enderecoRecebido.numero ||
+          '',
+
+        bairro:
+          enderecoRecebido.bairro ||
+          '',
+
+        cidade:
+          cidadeFinal,
+
+        estado:
+          estadoFinal,
+
+        cep:
+          enderecoRecebido.cep ||
+          '',
+
+        pais:
+          enderecoRecebido.pais ||
+          '',
+
+        enderecoCompleto,
+
+        latitude:
+          temCoordenadas
+            ? latitude
+            : undefined,
+
+        longitude:
+          temCoordenadas
+            ? longitude
+            : undefined,
+      },
+
+      avatar:
+        photoUrl ||
+        null,
+    };
+
+    /*
+     * GeoJSON:
+     * [longitude, latitude]
+     */
+    if (temCoordenadas) {
+      userData.geo = {
+        type: 'Point',
+        coordinates: [
+          longitude,
+          latitude,
+        ],
+      };
+    }
+
+    /* =========================
+       CRIAR USER
+    ========================= */
+
+    const user = await User.create(
+      userData
+    );
+
+    /* =========================
+       TRIAL 45 DIAS
+    ========================= */
+
+    const agora = new Date();
+
+    const expira = new Date(
+      agora.getTime() +
+      45 * 24 * 60 * 60 * 1000
+    );
+
+    user.perfilAtivo = true;
+    user.acessoLiberado = true;
+
+    user.acessoExpiraEm = expira;
+
+    user.planType =
+      'trial_45_dias';
+
+    user.subscriptionStatus =
+      'active';
+
+    await user.save();
+
+    /* =========================
+       PREPARAR PROFISSIONAL
+    ========================= */
+
+    const profissionalData = {
+      userId: user._id,
+
+      name: nome,
+      email: emailNorm,
+
+      /*
+       * Mantido por compatibilidade
+       * com o fluxo atual.
+       */
+      password: user.password,
+
+      cpf: cpfLimpo,
+      phone: telefone,
+
+      endereco: {
+        cep:
+          enderecoRecebido.cep ||
+          '',
+
+        logradouro,
+
+        numero:
+          enderecoRecebido.numero ||
+          '',
+
+        bairro:
+          enderecoRecebido.bairro ||
+          '',
+
+        cidade:
+          cidadeFinal,
+
+        estado:
+          estadoFinal,
+
+        pais:
+          enderecoRecebido.pais ||
+          '',
+
+        enderecoCompleto,
+      },
+
+      /*
+       * Mantemos address por
+       * compatibilidade.
+       */
+      address:
+        enderecoCompleto,
+
+      photoUrl:
+        photoUrl ||
+        null,
+
+      profissoes:
+        Array.isArray(profissoes)
+          ? profissoes
+          : [],
+    };
+
+    /*
+     * Salvar coordenadas também
+     * no perfil profissional.
+     */
+    if (temCoordenadas) {
+      profissionalData.geo = {
+        type: 'Point',
+        coordinates: [
+          longitude,
+          latitude,
+        ],
+      };
+    }
+
+    /* =========================
+       DADOS BANCÁRIOS
+    ========================= */
+
+    if (banco) {
+      profissionalData.bank = {
+        banco,
+        agencia,
+        conta,
+        tipoConta,
+        pix,
+        titular: nome,
+        documento: cpfLimpo,
+        updatedAt: new Date(),
+      };
+    }
+
+    /* =========================
+       CRIAR PROFISSIONAL
+    ========================= */
+
+    const profissional =
+      await Profissional.create(
+        profissionalData
+      );
+
+    /* =========================
+       TOKEN
+    ========================= */
 
     const token = jwt.sign(
       {
@@ -208,31 +442,55 @@ await user.save();
         role: user.role,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      {
+        expiresIn: '7d',
+      }
     );
+
+    /* =========================
+       RESPOSTA
+    ========================= */
 
     return res.status(201).json({
       ok: true,
-      message: 'Profissional cadastrado com sucesso',
+
+      message:
+        'Profissional cadastrado com sucesso',
+
       token,
+
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
         avatar: user.avatar,
+
+        cidade: user.cidade,
+        estado: user.estado,
+
+        enderecoSelecionado:
+          user.enderecoSelecionado,
+
+        geo:
+          user.geo,
       },
+
       profissional,
     });
 
   } catch (error) {
-
-    console.error('register-profissional error:', error);
+    console.error(
+      'register-profissional error:',
+      error
+    );
 
     return res.status(500).json({
       ok: false,
-      message: 'Erro ao cadastrar profissional',
-      details: error.message,
+      message:
+        'Erro ao cadastrar profissional',
+      details:
+        error.message,
     });
   }
 });

@@ -251,27 +251,53 @@ trim:true
 ENDEREÇO
 ========================= */
 
-endereco:{
-cep:{type:String,trim:true},
-logradouro:{type:String,trim:true},
-numero:{type:String,trim:true},
-bairro:{type:String,trim:true},
+endereco: {
+  cep: {
+    type: String,
+    trim: true,
+  },
 
-cidade:{
-type:String,
-trim:true,
-index:true
-},
+  logradouro: {
+    type: String,
+    trim: true,
+  },
 
-cidadeSlug:{
-type:String,
-index:true
-},
+  numero: {
+    type: String,
+    trim: true,
+  },
 
-estado:{
-type:String,
-trim:true
-}
+  bairro: {
+    type: String,
+    trim: true,
+  },
+
+  cidade: {
+    type: String,
+    trim: true,
+    index: true,
+  },
+
+  cidadeSlug: {
+    type: String,
+    trim: true,
+    index: true,
+  },
+
+  estado: {
+    type: String,
+    trim: true,
+  },
+
+  pais: {
+    type: String,
+    trim: true,
+  },
+
+  enderecoCompleto: {
+    type: String,
+    trim: true,
+  },
 },
 
 /* =========================
