@@ -994,12 +994,30 @@ exports.getById = async (req, res) => {
         message: 'ID inválido'
       });
 
-    const prof = await Profissional.findById(id)
-      .populate({
-        path: 'userId',
-        select: 'acessoExpiraEm online'
-      })
-      .lean();
+    let prof = await Profissional.findOne({
+  userId: id,
+})
+  .populate({
+    path: 'userId',
+    select: 'acessoExpiraEm online'
+  })
+  .lean();
+
+/*
+ * FALLBACK:
+ * também aceita o _id do próprio Profissional.
+ *
+ * Isso mantém compatibilidade com o app,
+ * caso alguma tela interna ainda envie Profissional._id.
+ */
+if (!prof) {
+  prof = await Profissional.findById(id)
+    .populate({
+      path: 'userId',
+      select: 'acessoExpiraEm online'
+    })
+    .lean();
+}
 
     if (!prof)
       return res.status(404).json({
