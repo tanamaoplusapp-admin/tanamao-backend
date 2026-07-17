@@ -9,7 +9,36 @@ const router = express.Router();
 
 const User = require('../models/user');
 const Profissional = require('../models/Profissional');
+/* ===== Sistema de Indicação ===== */
 
+async function gerarCodigoIndicacao(nome) {
+  const primeiroNome = String(nome || 'PRO')
+    .trim()
+    .split(/\s+/)[0]
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 6);
+
+  let codigo;
+  let existe = true;
+
+  while (existe) {
+    const sufixo = Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase();
+
+    codigo = `${primeiroNome}${sufixo}`;
+
+    existe = await User.exists({
+      codigoIndicacao: codigo,
+    });
+  }
+
+  return codigo;
+}
 /* ===== Controller NOVO ===== */
 
 const { registerComplete } = require('../controllers/authCompleteController');
@@ -94,6 +123,7 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
       telefone,
       cpf,
       senha,
+      codigoIndicacaoUsado,
 
       // Mantidos por compatibilidade
       cidade,
@@ -213,16 +243,50 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
         .filter(Boolean)
         .join(', ');
 
+        /* =========================
+   VALIDAR INDICAÇÃO
+========================= */
+
+let indicador = null;
+
+if (codigoIndicacaoUsado) {
+  const codigoNormalizado = String(
+    codigoIndicacaoUsado
+  )
+    .trim()
+    .toUpperCase();
+
+  indicador = await User.findOne({
+    codigoIndicacao: codigoNormalizado,
+    role: 'profissional',
+  });
+
+  /*
+   * Código inválido não impede
+   * o cadastro do novo profissional.
+   */
+  if (!indicador) {
+    console.log(
+      '[INDICAÇÃO] Código não encontrado:',
+      codigoNormalizado
+    );
+  }
+}
     /* =========================
        PREPARAR USER
     ========================= */
-
+const novoCodigoIndicacao =
+  await gerarCodigoIndicacao(nome);
     const userData = {
       name: nome,
       email: emailNorm,
       password: senha,
       role: 'profissional',
+codigoIndicacao: novoCodigoIndicacao,
 
+indicadoPor:
+  indicador?._id ||
+  null,
       phone: telefone,
       cpf: cpfLimpo,
 
@@ -429,7 +493,42 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
       await Profissional.create(
         profissionalData
       );
+/* =========================
+   BÔNUS DE INDICAÇÃO
+========================= */
 
+if (
+  indicador &&
+  !user.bonusIndicacaoConcedido
+) {
+  const agoraBonus = new Date();
+
+  const acessoAtual =
+    indicador.acessoExpiraEm &&
+    new Date(indicador.acessoExpiraEm) > agoraBonus
+      ? new Date(indicador.acessoExpiraEm)
+      : agoraBonus;
+
+  acessoAtual.setDate(
+    acessoAtual.getDate() + 3
+  );
+
+  indicador.acessoExpiraEm =
+    acessoAtual;
+
+  indicador.totalIndicacoes =
+    (indicador.totalIndicacoes || 0) + 1;
+
+  await indicador.save();
+
+  user.bonusIndicacaoConcedido = true;
+
+  await user.save();
+
+  console.log(
+    `[INDICAÇÃO] ${indicador.name} ganhou +3 dias de acesso.`
+  );
+}
     /* =========================
        TOKEN
     ========================= */

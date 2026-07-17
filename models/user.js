@@ -343,6 +343,55 @@ planoAtivo:{
 ],
   default:null
 },
+/* ============================
+ * SISTEMA DE INDICAÇÃO
+ * ============================ */
+
+/*
+ * Código único que este profissional
+ * poderá compartilhar com outros
+ * prestadores.
+ *
+ * Exemplo: MARCE8F3A
+ */
+codigoIndicacao: {
+  type: String,
+  unique: true,
+  sparse: true,
+  uppercase: true,
+  trim: true,
+  index: true,
+  default: null,
+},
+
+/*
+ * Usuário profissional responsável
+ * pela indicação deste novo prestador.
+ */
+indicadoPor: {
+  type: Types.ObjectId,
+  ref: 'User',
+  default: null,
+  index: true,
+},
+
+/*
+ * Garante que este cadastro só possa
+ * gerar um bônus de indicação.
+ */
+bonusIndicacaoConcedido: {
+  type: Boolean,
+  default: false,
+},
+
+/*
+ * Quantidade total de indicações
+ * válidas feitas por este profissional.
+ */
+totalIndicacoes: {
+  type: Number,
+  default: 0,
+},
   /* ============================
    * ADMIN
    * ============================ */
