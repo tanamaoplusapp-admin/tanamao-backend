@@ -6,7 +6,534 @@ const Profissional = require('../models/Profissional');
 const generateToken = require('../utils/generateToken');
 const { sendMail } = require('../services/mailer');
 const config = require('../config/env');
+async function enviarEmailBoasVindasProfissional(user) {
+  try {
+    if (!user?.email) {
+      console.warn('⚠️ Boas-vindas não enviado: usuário sem e-mail');
+      return;
+    }
 
+    const nome =
+      user.name ||
+      user.nome ||
+      'Profissional';
+
+    const primeiroNome =
+      nome.trim().split(' ')[0];
+
+    const codigoIndicacao =
+      user.codigoIndicacao ||
+      'Consulte no app';
+
+    const appStoreUrl =
+      'https://apps.apple.com/br/app/tanam%C3%A3o/id6762280487';
+
+    const playStoreUrl =
+      'https://play.google.com/store/apps/details?id=com.tanamao.tanamaoplus';
+
+    const siteUrl =
+      'https://tanamaoplus.com';
+
+    await sendMail({
+      to: user.email,
+
+      subject:
+        'Bem-vindo ao Tanamão+! Seu próximo passo profissional começa aqui 🚀',
+
+      html: `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+
+          <body style="
+            margin:0;
+            padding:0;
+            background:#F5F7F5;
+            font-family:Arial, Helvetica, sans-serif;
+            color:#243124;
+          ">
+
+            <table
+              width="100%"
+              cellpadding="0"
+              cellspacing="0"
+              border="0"
+              style="background:#F5F7F5;padding:24px 12px;"
+            >
+              <tr>
+                <td align="center">
+
+                  <table
+                    width="100%"
+                    cellpadding="0"
+                    cellspacing="0"
+                    border="0"
+                    style="
+                      max-width:620px;
+                      background:#FFFFFF;
+                      border-radius:20px;
+                      overflow:hidden;
+                    "
+                  >
+
+                    <!-- HEADER -->
+                    <tr>
+                      <td
+                        align="center"
+                        style="
+                          background:#2E4F2F;
+                          padding:36px 28px;
+                        "
+                      >
+
+                        <div style="
+                          font-size:30px;
+                          font-weight:800;
+                          color:#FFFFFF;
+                          margin-bottom:8px;
+                        ">
+                          Tanamão<span style="color:#FF9900;">+</span>
+                        </div>
+
+                        <div style="
+                          font-size:16px;
+                          color:#FFFFFF;
+                          line-height:1.5;
+                        ">
+                          Seu trabalho. Sua evolução. Na sua mão.
+                        </div>
+
+                      </td>
+                    </tr>
+
+
+                    <!-- BOAS-VINDAS -->
+                    <tr>
+                      <td style="padding:32px 32px 16px;">
+
+                        <h1 style="
+                          margin:0 0 16px;
+                          color:#2E4F2F;
+                          font-size:26px;
+                          line-height:1.3;
+                        ">
+                          Bem-vindo ao Tanamão+, ${primeiroNome}! 👋
+                        </h1>
+
+                        <p style="
+                          font-size:16px;
+                          line-height:1.7;
+                          margin:0 0 16px;
+                        ">
+                          Que bom ter você com a gente!
+                        </p>
+
+                        <p style="
+                          font-size:16px;
+                          line-height:1.7;
+                          margin:0;
+                        ">
+                          Esperamos que você esteja empolgado com essa nova fase
+                          da sua vida profissional. O Tanamão+ foi criado para ser
+                          muito mais do que um lugar onde clientes encontram
+                          profissionais.
+                        </p>
+
+                        <p style="
+                          font-size:16px;
+                          line-height:1.7;
+                        ">
+                          Queremos ajudar você a
+                          <strong>organizar seu trabalho, conquistar novos clientes
+                          e crescer profissionalmente</strong> — seja usando o
+                          Tanamão+ como parte da sua atividade principal ou como
+                          uma oportunidade de gerar renda extra.
+                        </p>
+
+                      </td>
+                    </tr>
+
+
+                    <!-- PERFIL -->
+                    <tr>
+                      <td style="padding:8px 32px;">
+
+                        <div style="
+                          background:#F7F9F7;
+                          border-radius:16px;
+                          padding:22px;
+                        ">
+
+                          <h2 style="
+                            margin:0 0 10px;
+                            color:#2E4F2F;
+                            font-size:19px;
+                          ">
+                            🚀 Comece deixando seu perfil completo
+                          </h2>
+
+                          <p style="
+                            margin:0;
+                            font-size:15px;
+                            line-height:1.7;
+                          ">
+                            Você pode cadastrar
+                            <strong>até 3 profissões</strong>, adicionar seus
+                            serviços, especialidades e fotos dos seus trabalhos.
+                            Um perfil completo ajuda os clientes a conhecerem
+                            melhor você e o seu trabalho.
+                          </p>
+
+                        </div>
+
+                      </td>
+                    </tr>
+
+
+                    <!-- AGENDA -->
+                    <tr>
+                      <td style="padding:8px 32px;">
+
+                        <div style="
+                          background:#F7F9F7;
+                          border-radius:16px;
+                          padding:22px;
+                        ">
+
+                          <h2 style="
+                            margin:0 0 10px;
+                            color:#2E4F2F;
+                            font-size:19px;
+                          ">
+                            📅 Organize sua rotina com a Agenda
+                          </h2>
+
+                          <p style="
+                            margin:0;
+                            font-size:15px;
+                            line-height:1.7;
+                          ">
+                            Organize seus atendimentos e compromissos em um só
+                            lugar. Cadastre seus clientes e utilize a
+                            <strong>confirmação de agendamento integrada ao
+                            WhatsApp</strong>, facilitando sua comunicação e
+                            deixando sua rotina mais organizada.
+                          </p>
+
+                        </div>
+
+                      </td>
+                    </tr>
+
+
+                    <!-- SOCORRO AUTOMOTIVO -->
+                    <tr>
+                      <td style="padding:8px 32px;">
+
+                        <div style="
+                          background:#F7F9F7;
+                          border-radius:16px;
+                          padding:22px;
+                        ">
+
+                          <h2 style="
+                            margin:0 0 10px;
+                            color:#2E4F2F;
+                            font-size:19px;
+                          ">
+                            🚗 Uma oportunidade para mecânicos e borracheiros
+                          </h2>
+
+                          <p style="
+                            margin:0;
+                            font-size:15px;
+                            line-height:1.7;
+                          ">
+                            Se você trabalha como
+                            <strong>mecânico ou borracheiro</strong>, também pode
+                            atuar através do recurso de
+                            <strong>Socorro Automotivo</strong> do Tanamão+.
+                            Assim, além dos seus serviços tradicionais, você pode
+                            encontrar novas oportunidades atendendo motoristas
+                            que precisam de ajuda.
+                          </p>
+
+                        </div>
+
+                      </td>
+                    </tr>
+
+
+                    <!-- INDIQUE E GANHE -->
+                    <tr>
+                      <td style="padding:8px 32px;">
+
+                        <div style="
+                          background:#FFF6E8;
+                          border:2px solid #FF9900;
+                          border-radius:16px;
+                          padding:24px;
+                        ">
+
+                          <h2 style="
+                            margin:0 0 10px;
+                            color:#2E4F2F;
+                            font-size:20px;
+                          ">
+                            🎁 Indique e Ganhe
+                          </h2>
+
+                          <p style="
+                            font-size:15px;
+                            line-height:1.7;
+                          ">
+                            Convide outros profissionais para fazerem parte do
+                            Tanamão+. Quando um novo prestador se cadastrar
+                            utilizando o seu código de indicação e a indicação
+                            for validada, você ganha
+                            <strong>+3 dias de visibilidade grátis</strong>.
+                          </p>
+
+                          <p style="
+                            font-size:15px;
+                            line-height:1.7;
+                          ">
+                            Indicou 1 profissional?
+                            <strong>+3 dias.</strong><br>
+
+                            Indicou 2 profissionais?
+                            <strong>+6 dias.</strong><br>
+
+                            E assim por diante.
+                          </p>
+
+                          <div style="
+                            margin-top:20px;
+                            background:#FFFFFF;
+                            border-radius:12px;
+                            padding:18px;
+                            text-align:center;
+                          ">
+
+                            <div style="
+                              font-size:13px;
+                              color:#667066;
+                              margin-bottom:7px;
+                            ">
+                              SEU CÓDIGO DE INDICAÇÃO
+                            </div>
+
+                            <div style="
+                              color:#2E4F2F;
+                              font-size:24px;
+                              font-weight:800;
+                              letter-spacing:2px;
+                            ">
+                              ${codigoIndicacao}
+                            </div>
+
+                          </div>
+
+                          <p style="
+                            margin:16px 0 0;
+                            font-size:13px;
+                            line-height:1.6;
+                            color:#5D665D;
+                          ">
+                            Você também encontra seu código e acompanha suas
+                            indicações na área <strong>Indique e Ganhe</strong>
+                            do aplicativo.
+                          </p>
+
+                        </div>
+
+                      </td>
+                    </tr>
+
+
+                    <!-- COMPARTILHAR PERFIL -->
+                    <tr>
+                      <td style="padding:8px 32px;">
+
+                        <div style="
+                          background:#F7F9F7;
+                          border-radius:16px;
+                          padding:22px;
+                        ">
+
+                          <h2 style="
+                            margin:0 0 10px;
+                            color:#2E4F2F;
+                            font-size:19px;
+                          ">
+                            📲 Compartilhe seu perfil profissional
+                          </h2>
+
+                          <p style="
+                            margin:0;
+                            font-size:15px;
+                            line-height:1.7;
+                          ">
+                            Compartilhe seu perfil do Tanamão+ com clientes pelo
+                            WhatsApp, redes sociais e onde mais quiser. Assim,
+                            outras pessoas podem conhecer seus serviços e seu
+                            trabalho.
+                          </p>
+
+                        </div>
+
+                      </td>
+                    </tr>
+
+
+                    <!-- FINAL -->
+                    <tr>
+                      <td
+                        align="center"
+                        style="padding:30px 32px 10px;"
+                      >
+
+                        <h2 style="
+                          color:#2E4F2F;
+                          font-size:22px;
+                          margin:0 0 12px;
+                        ">
+                          🌱 O seu crescimento começa agora
+                        </h2>
+
+                        <p style="
+                          font-size:15px;
+                          line-height:1.7;
+                          margin:0 0 24px;
+                        ">
+                          Explore o aplicativo, complete seu perfil, organize sua
+                          rotina e aproveite as ferramentas disponíveis para
+                          fortalecer sua vida profissional.
+                        </p>
+
+                        <a
+                          href="${siteUrl}"
+                          style="
+                            display:inline-block;
+                            background:#FF9900;
+                            color:#FFFFFF;
+                            text-decoration:none;
+                            font-size:16px;
+                            font-weight:bold;
+                            padding:15px 32px;
+                            border-radius:12px;
+                          "
+                        >
+                          Conhecer o Tanamão+
+                        </a>
+
+                      </td>
+                    </tr>
+
+
+                    <!-- LOJAS -->
+                    <tr>
+                      <td
+                        align="center"
+                        style="padding:24px 32px;"
+                      >
+
+                        <p style="
+                          font-size:13px;
+                          color:#667066;
+                          margin-bottom:12px;
+                        ">
+                          Baixe ou compartilhe o Tanamão+
+                        </p>
+
+                        <a
+                          href="${appStoreUrl}"
+                          style="
+                            color:#2E4F2F;
+                            font-weight:bold;
+                            text-decoration:none;
+                            margin-right:15px;
+                          "
+                        >
+                          App Store
+                        </a>
+
+                        <a
+                          href="${playStoreUrl}"
+                          style="
+                            color:#2E4F2F;
+                            font-weight:bold;
+                            text-decoration:none;
+                          "
+                        >
+                          Google Play
+                        </a>
+
+                      </td>
+                    </tr>
+
+
+                    <!-- FOOTER -->
+                    <tr>
+                      <td
+                        align="center"
+                        style="
+                          background:#2E4F2F;
+                          padding:24px;
+                        "
+                      >
+
+                        <div style="
+                          color:#FFFFFF;
+                          font-weight:bold;
+                          font-size:16px;
+                        ">
+                          Equipe Tanamão+
+                        </div>
+
+                        <div style="
+                          color:#DDE7DD;
+                          font-size:12px;
+                          margin-top:6px;
+                        ">
+                          Seu trabalho. Sua evolução. Na sua mão.
+                        </div>
+
+                      </td>
+                    </tr>
+
+                  </table>
+
+                </td>
+              </tr>
+            </table>
+
+          </body>
+        </html>
+      `,
+    });
+
+    console.log(
+      `📧 E-mail de boas-vindas enviado para ${user.email}`
+    );
+
+  } catch (error) {
+
+    /*
+     * IMPORTANTE:
+     * Uma falha no envio do e-mail NÃO pode
+     * impedir a criação do perfil profissional.
+     */
+    console.error(
+      '❌ Erro ao enviar e-mail de boas-vindas profissional:',
+      error.message
+    );
+
+  }
+}
 const hashToken = (token) =>
   crypto.createHash('sha256').update(token).digest('hex');
 
@@ -92,6 +619,7 @@ if (user.role === 'profissional') {
   user.subscriptionStatus = 'active';
 
   await user.save();
+  await enviarEmailBoasVindasProfissional(user);
 }
 
   const verifyUrl =
@@ -855,6 +1383,8 @@ exports.ativarPerfilProfissional = asyncHandler(async (req, res) => {
   }
 
   await user.save();
+  await enviarEmailBoasVindasProfissional(user);
+  
 
   /* =========================
      RESPOSTA
