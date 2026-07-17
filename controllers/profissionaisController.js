@@ -68,7 +68,38 @@ const resolveProfByUserIdOrId = async (id) => {
 
   return null;
 };
+/* ============================================================================
+ * CÓDIGO DE INDICAÇÃO
+ * ========================================================================== */
 
+const gerarCodigoIndicacao = async (nome) => {
+  const primeiroNome = String(nome || 'PRO')
+    .trim()
+    .split(/\s+/)[0]
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 6);
+
+  let codigo;
+  let existe = true;
+
+  while (existe) {
+    const sufixo = Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase();
+
+    codigo = `${primeiroNome}${sufixo}`;
+
+    existe = await User.exists({
+      codigoIndicacao: codigo,
+    });
+  }
+
+  return codigo;
+};
 /* ============================================================================ 
  * RESUMO
  * ========================================================================== */
@@ -1494,15 +1525,50 @@ exports.getMe = async (req, res) => {
     }
 
     /* ============================
-       BUSCAR DADOS DE INDICAÇÃO
-       NO USER
+       BUSCAR USER
+
+       Aqui usamos documento Mongoose
+       porque talvez seja necessário
+       gerar e salvar o código.
     ============================ */
 
     const user = await User.findById(id)
       .select(
-        'codigoIndicacao totalIndicacoes acessoExpiraEm'
-      )
-      .lean();
+        'name codigoIndicacao totalIndicacoes acessoExpiraEm'
+      );
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        message: 'Usuário não encontrado',
+      });
+    }
+
+    /* ============================
+       GERAR CÓDIGO PARA
+       PROFISSIONAIS ANTIGOS
+    ============================ */
+
+    if (!user.codigoIndicacao) {
+      const nomeParaCodigo =
+        user.name ||
+        prof.name ||
+        'PRO';
+
+      const novoCodigo =
+        await gerarCodigoIndicacao(
+          nomeParaCodigo
+        );
+
+      user.codigoIndicacao =
+        novoCodigo;
+
+      await user.save();
+
+      console.log(
+        `[INDICAÇÃO] Código ${novoCodigo} gerado para profissional antigo: ${id}`
+      );
+    }
 
     /* ============================
        NORMALIZAÇÕES
@@ -1516,23 +1582,28 @@ exports.getMe = async (req, res) => {
         : [];
 
     /* ============================
-       DADOS DO INDIQUE E GANHE
+       INDIQUE E GANHE
     ============================ */
 
     prof.codigoIndicacao =
-      user?.codigoIndicacao || null;
+      user.codigoIndicacao;
 
     prof.totalIndicacoes =
-      user?.totalIndicacoes || 0;
+      Number(
+        user.totalIndicacoes || 0
+      );
 
     prof.diasGanhosIndicacao =
-      (user?.totalIndicacoes || 0) * 3;
+      Number(
+        user.totalIndicacoes || 0
+      ) * 3;
 
-    /* Mantemos disponível caso
-       seja necessário mostrar
-       o acesso atual no frontend */
     prof.acessoExpiraEm =
-      user?.acessoExpiraEm || null;
+      user.acessoExpiraEm || null;
+
+    /* ============================
+       RESPOSTA
+    ============================ */
 
     return res.json({
       ok: true,
