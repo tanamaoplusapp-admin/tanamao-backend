@@ -1471,29 +1471,84 @@ exports.getMe = async (req, res) => {
   try {
     const id = getUserId(req);
 
-    if (!id)
+    if (!id) {
       return res.status(401).json({
         ok: false,
         message: 'Não autenticado',
       });
+    }
 
-    const prof = await Profissional.findOne({ userId: id }).lean();
+    /* ============================
+       BUSCAR PROFISSIONAL
+    ============================ */
 
-    if (!prof)
+    const prof = await Profissional.findOne({
+      userId: id,
+    }).lean();
+
+    if (!prof) {
       return res.status(404).json({
         ok: false,
         message: 'Profissional não encontrado',
       });
-prof.servicosSocorroAutomotivo = Array.isArray(prof.servicosSocorroAutomotivo)
-  ? prof.servicosSocorroAutomotivo
-  : [];
-    return res.json({ ok: true, data: prof });
+    }
+
+    /* ============================
+       BUSCAR DADOS DE INDICAÇÃO
+       NO USER
+    ============================ */
+
+    const user = await User.findById(id)
+      .select(
+        'codigoIndicacao totalIndicacoes acessoExpiraEm'
+      )
+      .lean();
+
+    /* ============================
+       NORMALIZAÇÕES
+    ============================ */
+
+    prof.servicosSocorroAutomotivo =
+      Array.isArray(
+        prof.servicosSocorroAutomotivo
+      )
+        ? prof.servicosSocorroAutomotivo
+        : [];
+
+    /* ============================
+       DADOS DO INDIQUE E GANHE
+    ============================ */
+
+    prof.codigoIndicacao =
+      user?.codigoIndicacao || null;
+
+    prof.totalIndicacoes =
+      user?.totalIndicacoes || 0;
+
+    prof.diasGanhosIndicacao =
+      (user?.totalIndicacoes || 0) * 3;
+
+    /* Mantemos disponível caso
+       seja necessário mostrar
+       o acesso atual no frontend */
+    prof.acessoExpiraEm =
+      user?.acessoExpiraEm || null;
+
+    return res.json({
+      ok: true,
+      data: prof,
+    });
 
   } catch (e) {
-    console.error('profissionais.getMe:', e);
+    console.error(
+      'profissionais.getMe:',
+      e
+    );
+
     return res.status(500).json({
       ok: false,
-      message: 'Erro ao buscar perfil',
+      message:
+        'Erro ao buscar perfil',
     });
   }
 };
