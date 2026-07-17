@@ -62,6 +62,8 @@ const defaultOrigins = [
   'https://tanamao-backend.onrender.com',
   'https://tanamao-backend-plyd.onrender.com',
   'https://tanamao-admin.onrender.com',
+  'https://tanamaoplus.com',
+'https://www.tanamaoplus.com',
 ].filter(Boolean);
 
 const allowMatchers = [
