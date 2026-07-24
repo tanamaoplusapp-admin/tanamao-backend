@@ -51,7 +51,7 @@ const data = [
       'Loja online',
       'Gesseiro',
       'Vidraceiro',
-      'Funeleiro',
+      'Funileiro',
       'Serralheiro',
       'Servente',
       'Reparos simples',
