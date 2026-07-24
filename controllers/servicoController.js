@@ -843,8 +843,19 @@ exports.listByProfissional = async (req, res, next) => {
     }
 
     if (profissionalUser.online !== true) {
-      return res.json({ servicos: [] });
-    }
+  return res.json({
+    servicos: [],
+    resumo: {
+      imediatos: 0,
+      orcamentos: 0,
+      agendamentos: 0,
+      pendentes: 0,
+      aceitos: 0,
+      finalizados: 0,
+      cancelados: 0,
+    },
+  });
+}
 
     const todos = await Servico.find().limit(5);
 
@@ -867,8 +878,51 @@ exports.listByProfissional = async (req, res, next) => {
       .populate('cliente', 'name');
 
     console.log('SERVICOS FILTRADOS:', servicos.length);
+/* =========================
+   RESUMO DO DASHBOARD
+========================= */
 
-    return res.json({ servicos });
+const resumo = {
+  imediatos: servicos.filter(
+    s =>
+      s.tipoServico === 'normal' &&
+      s.status !== 'cancelado'
+  ).length,
+
+  orcamentos: servicos.filter(
+    s =>
+      s.tipoServico === 'orcamento' &&
+      s.status !== 'cancelado'
+  ).length,
+
+  agendamentos: servicos.filter(
+    s =>
+      s.tipoServico === 'agendado' &&
+      s.status !== 'cancelado'
+  ).length,
+
+  pendentes: servicos.filter(
+    s => s.status === 'pendente'
+  ).length,
+
+  aceitos: servicos.filter(
+    s =>
+      s.status === 'aceito' ||
+      s.status === 'em_rota'
+  ).length,
+
+  finalizados: servicos.filter(
+    s => s.status === 'finalizado'
+  ).length,
+
+  cancelados: servicos.filter(
+    s => s.status === 'cancelado'
+  ).length,
+};
+  return res.json({
+  servicos,
+  resumo,
+});
 
   } catch (err) {
     next(err);
