@@ -820,6 +820,7 @@ exports.listByCliente = async (req, res, next) => {
   }
 
 };
+
 /* =====================================================
 LISTAR POR PROFISSIONAL
 GET /api/servicos/profissional/:profissionalId
@@ -838,36 +839,43 @@ exports.listByProfissional = async (req, res, next) => {
 
     if (!profissionalUser) {
       return res.status(404).json({
-        message: 'Profissional não encontrado.'
+        message: 'Profissional não encontrado.',
       });
     }
 
     if (profissionalUser.online !== true) {
-  return res.json({
-    servicos: [],
-    resumo: {
-      imediatos: 0,
-      orcamentos: 0,
-      agendamentos: 0,
-      pendentes: 0,
-      aceitos: 0,
-      finalizados: 0,
-      cancelados: 0,
-    },
-  });
-}
+      return res.json({
+        servicos: [],
+        resumo: {
+          imediatos: 0,
+          orcamentos: 0,
+          agendamentos: 0,
+          pendentes: 0,
+          aceitos: 0,
+          finalizados: 0,
+          cancelados: 0,
+        },
+        listas: {
+          pendente: [],
+          orcamentos: [],
+          agendamentos: [],
+          finalizados: [],
+          cancelados: [],
+        },
+      });
+    }
 
     const todos = await Servico.find().limit(5);
 
-    console.log('TODOS SERVICOS DO BANCO:');
-    todos.forEach(s => {
+
+    todos.forEach((s) => {
       console.log({
         id: s._id,
         cliente: s.cliente,
         profissional: s.profissional,
         empresa: s.empresa,
         status: s.status,
-        categoria: s.categoria
+        categoria: s.categoria,
       });
     });
 
@@ -878,51 +886,84 @@ exports.listByProfissional = async (req, res, next) => {
       .populate('cliente', 'name');
 
     console.log('SERVICOS FILTRADOS:', servicos.length);
-/* =========================
-   RESUMO DO DASHBOARD
-========================= */
 
-const resumo = {
-  imediatos: servicos.filter(
-    s =>
-      s.tipoServico === 'normal' &&
-      s.status !== 'cancelado'
-  ).length,
+    /* =========================
+       CLASSIFICAÇÃO DAS LISTAS
+    ========================= */
 
-  orcamentos: servicos.filter(
-    s =>
-      s.tipoServico === 'orcamento' &&
-      s.status !== 'cancelado'
-  ).length,
+    function classificarServico(servico) {
+      const tipo = servico.tipoServico || servico.tipo;
+      const status = (servico.status || '').toLowerCase();
 
-  agendamentos: servicos.filter(
-    s =>
-      s.tipoServico === 'agendado' &&
-      s.status !== 'cancelado'
-  ).length,
+     if (status === 'cancelado' || status === 'expirado') {
+  return 'cancelados';
+}
+
+if (status === 'finalizado') {
+  return 'finalizados';
+}
+
+      if (tipo === 'normal') {
+        return 'pendente';
+      }
+
+      if (tipo === 'orcamento') {
+        return 'orcamentos';
+      }
+
+      if (tipo === 'agendado') {
+        return 'agendamentos';
+      }
+
+      return null;
+    }
+
+    const listas = {
+      pendente: [],
+      orcamentos: [],
+      agendamentos: [],
+      finalizados: [],
+      cancelados: [],
+    };
+
+    servicos.forEach((servico) => {
+      const grupo = classificarServico(servico);
+
+      if (grupo) {
+        listas[grupo].push(servico);
+      }
+    });
+
+    /* =========================
+       RESUMO DO DASHBOARD
+    ========================= */
+
+   const resumo = {
+  imediatos: listas.pendente.length,
+  orcamentos: listas.orcamentos.length,
+  agendamentos: listas.agendamentos.length,
 
   pendentes: servicos.filter(
-    s => s.status === 'pendente'
+    (s) => s.status === 'pendente'
   ).length,
 
   aceitos: servicos.filter(
-    s =>
+    (s) =>
       s.status === 'aceito' ||
-      s.status === 'em_rota'
+      s.status === 'em_rota' ||
+      s.status === 'pago'
   ).length,
 
-  finalizados: servicos.filter(
-    s => s.status === 'finalizado'
-  ).length,
+  finalizados: listas.finalizados.length,
 
-  cancelados: servicos.filter(
-    s => s.status === 'cancelado'
-  ).length,
+  cancelados: listas.cancelados.length,
 };
-  return res.json({
-  servicos,
-  resumo,
-});
+
+    return res.json({
+      servicos,
+      resumo,
+      listas,
+    });
 
   } catch (err) {
     next(err);
@@ -947,10 +988,6 @@ exports.listServices = async (req, res, next) => {
     next(err);
   }
 };
-/* =====================================================
-SERVIÇO ATIVO DO USUÁRIO
-GET /api/servicos/ativo
-===================================================== */
 
 /* =====================================================
 SERVIÇO ATIVO DO USUÁRIO
@@ -967,7 +1004,12 @@ exports.getServicoAtivo = async (req, res) => {
       });
     }
 
-    const statusAtivos = ['pendente', 'aceito', 'em_andamento'];
+    const statusAtivos = [
+  'pendente',
+  'aceito',
+  'em_rota',
+  'pago',
+];
 
     const servico = await Servico.findOne({
       $or: [
