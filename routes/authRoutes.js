@@ -132,7 +132,11 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
       // Novo padrão de endereço
       endereco,
 
-      profissoes,
+       categoriaId,
+  profissaoId,
+  profissaoNome,
+  profissoes,
+  profissoesDetalhadas,
       banco,
       agencia,
       conta,
@@ -448,10 +452,21 @@ indicadoPor:
         photoUrl ||
         null,
 
-      profissoes:
-        Array.isArray(profissoes)
-          ? profissoes
-          : [],
+      categoriaId,
+
+profissaoId,
+
+profissaoNome,
+
+profissoes:
+  Array.isArray(profissoes)
+    ? profissoes
+    : [],
+
+profissoesDetalhadas:
+  Array.isArray(profissoesDetalhadas)
+    ? profissoesDetalhadas
+    : [],
     };
 
     /*
