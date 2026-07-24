@@ -821,90 +821,178 @@ exports.listByCliente = async (req, res, next) => {
 
 };
 
-/* =========================
-   CLASSIFICAÇÃO DAS LISTAS
-========================= */
+/* =====================================================
+LISTAR POR PROFISSIONAL
+GET /api/servicos/profissional/:profissionalId
+===================================================== */
 
-function classificarServico(servico) {
-  const tipo = (
-    servico.tipoServico ||
-    servico.tipo ||
-    ''
-  ).toLowerCase();
+exports.listByProfissional = async (req, res, next) => {
+  try {
+    const { profissionalId } = req.params;
 
-  const status = (
-    servico.status ||
-    ''
-  ).toLowerCase();
+    console.log('==============================');
+    console.log('LIST BY PROFISSIONAL');
+    console.log('profissionalId:', profissionalId);
 
-  // Finalizados
-  if (status === 'finalizado') {
-    return 'finalizados';
-  }
+    const profissionalUser = await User.findById(profissionalId)
+      .select('online receberServicos acessoExpiraEm');
 
-  // Cancelados
-  if (status === 'cancelado' || status === 'expirado') {
-    return 'cancelados';
-  }
+    if (!profissionalUser) {
+      return res.status(404).json({
+        message: 'Profissional não encontrado.',
+      });
+    }
 
-  // Ainda ativos
-  switch (tipo) {
-    case 'normal':
-      return 'pendente'; // Recebidos
+    if (profissionalUser.online !== true) {
+      return res.json({
+        servicos: [],
+        resumo: {
+          imediatos: 0,
+          orcamentos: 0,
+          agendamentos: 0,
+          pendentes: 0,
+          aceitos: 0,
+          finalizados: 0,
+          cancelados: 0,
+        },
+        listas: {
+          pendente: [],
+          orcamentos: [],
+          agendamentos: [],
+          finalizados: [],
+          cancelados: [],
+        },
+      });
+    }
 
-    case 'orcamento':
-      return 'orcamentos';
+    const todos = await Servico.find().limit(5);
 
-    case 'agendado':
-      return 'agendamentos';
 
-    default:
-      return null;
-  }
+    todos.forEach((s) => {
+      console.log({
+        id: s._id,
+        cliente: s.cliente,
+        profissional: s.profissional,
+        empresa: s.empresa,
+        status: s.status,
+        categoria: s.categoria,
+      });
+    });
+
+    const servicos = await Servico.find({
+      profissional: profissionalId,
+    })
+      .sort({ createdAt: -1 })
+      .populate('cliente', 'name');
+
+    console.log('SERVICOS FILTRADOS:', servicos.length);
+
+    /* =========================
+       CLASSIFICAÇÃO DAS LISTAS
+    ========================= */
+
+    function classificarServico(servico) {
+      const tipo = servico.tipoServico || servico.tipo;
+      const status = (servico.status || '').toLowerCase();
+
+     if (status === 'cancelado' || status === 'expirado') {
+  return 'cancelados';
 }
 
-const listas = {
-  pendente: [],
-  orcamentos: [],
-  agendamentos: [],
-  finalizados: [],
-  cancelados: [],
-};
+if (status === 'finalizado') {
+  return 'finalizados';
+}
 
-servicos.forEach((servico) => {
-  const grupo = classificarServico(servico);
+      if (tipo === 'normal') {
+        return 'pendente';
+      }
 
-  if (grupo) {
-    listas[grupo].push(servico);
-  }
-});
+      if (tipo === 'orcamento') {
+        return 'orcamentos';
+      }
 
-/* =========================
-   RESUMO DO DASHBOARD
-========================= */
+      if (tipo === 'agendado') {
+        return 'agendamentos';
+      }
 
-const resumo = {
-  imediatos: listas.pendente.length,
-  orcamentos: listas.orcamentos.length,
-  agendamentos: listas.agendamentos.length,
+      return null;
+    }
 
-  pendentes: servicos.filter(
-    (s) => (s.status || '').toLowerCase() === 'pendente'
+    const listas = {
+      pendente: [],
+      orcamentos: [],
+      agendamentos: [],
+      finalizados: [],
+      cancelados: [],
+    };
+
+    servicos.forEach((servico) => {
+      const grupo = classificarServico(servico);
+
+      if (grupo) {
+        listas[grupo].push(servico);
+      }
+    });
+
+    /* =========================
+       RESUMO DO DASHBOARD
+    ========================= */
+
+ const resumo = {
+  imediatos: servicos.filter(
+    (s) =>
+      s.tipoServico === 'normal' &&
+      s.status !== 'finalizado' &&
+      s.status !== 'cancelado' &&
+      s.status !== 'expirado'
   ).length,
 
-  aceitos: servicos.filter((s) => {
-    const status = (s.status || '').toLowerCase();
+  orcamentos: servicos.filter(
+    (s) =>
+      s.tipoServico === 'orcamento' &&
+      s.status !== 'finalizado' &&
+      s.status !== 'cancelado' &&
+      s.status !== 'expirado'
+  ).length,
 
-    return (
-      status === 'aceito' ||
-      status === 'em_rota' ||
-      status === 'pago'
-    );
-  }).length,
+  agendamentos: servicos.filter(
+    (s) =>
+      s.tipoServico === 'agendado' &&
+      s.status !== 'finalizado' &&
+      s.status !== 'cancelado' &&
+      s.status !== 'expirado'
+  ).length,
 
-  finalizados: listas.finalizados.length,
+  pendentes: servicos.filter(
+    (s) => s.status === 'pendente'
+  ).length,
 
-  cancelados: listas.cancelados.length,
+  aceitos: servicos.filter(
+    (s) =>
+      s.status === 'aceito' ||
+      s.status === 'em_rota' ||
+      s.status === 'pago'
+  ).length,
+
+  finalizados: servicos.filter(
+    (s) => s.status === 'finalizado'
+  ).length,
+
+  cancelados: servicos.filter(
+    (s) =>
+      s.status === 'cancelado' ||
+      s.status === 'expirado'
+  ).length,
+};
+    return res.json({
+      servicos,
+      resumo,
+      listas,
+    });
+
+  } catch (err) {
+    next(err);
+  }
 };
 /* =====================================================
 LISTAR TODOS SERVIÇOS
