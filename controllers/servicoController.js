@@ -938,10 +938,30 @@ if (status === 'finalizado') {
        RESUMO DO DASHBOARD
     ========================= */
 
-   const resumo = {
-  imediatos: listas.pendente.length,
-  orcamentos: listas.orcamentos.length,
-  agendamentos: listas.agendamentos.length,
+ const resumo = {
+  imediatos: servicos.filter(
+    (s) =>
+      s.tipoServico === 'normal' &&
+      s.status !== 'finalizado' &&
+      s.status !== 'cancelado' &&
+      s.status !== 'expirado'
+  ).length,
+
+  orcamentos: servicos.filter(
+    (s) =>
+      s.tipoServico === 'orcamento' &&
+      s.status !== 'finalizado' &&
+      s.status !== 'cancelado' &&
+      s.status !== 'expirado'
+  ).length,
+
+  agendamentos: servicos.filter(
+    (s) =>
+      s.tipoServico === 'agendado' &&
+      s.status !== 'finalizado' &&
+      s.status !== 'cancelado' &&
+      s.status !== 'expirado'
+  ).length,
 
   pendentes: servicos.filter(
     (s) => s.status === 'pendente'
@@ -954,11 +974,16 @@ if (status === 'finalizado') {
       s.status === 'pago'
   ).length,
 
-  finalizados: listas.finalizados.length,
+  finalizados: servicos.filter(
+    (s) => s.status === 'finalizado'
+  ).length,
 
-  cancelados: listas.cancelados.length,
+  cancelados: servicos.filter(
+    (s) =>
+      s.status === 'cancelado' ||
+      s.status === 'expirado'
+  ).length,
 };
-
     return res.json({
       servicos,
       resumo,
