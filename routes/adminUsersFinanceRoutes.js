@@ -87,15 +87,25 @@ router.patch(
         return res.status(404).json({ error: 'Usuário não encontrado' });
       }
 
-      const agora = new Date();
-      const atual = user.acessoExpiraEm || agora;
+      
+const agora = new Date();
 
-      const novaData = new Date(atual);
-      novaData.setDate(novaData.getDate() + Number(days || 7));
+const atual =
+  user.acessoExpiraEm &&
+  user.acessoExpiraEm > agora
+    ? user.acessoExpiraEm
+    : agora;
 
-      user.acessoExpiraEm = novaData;
+const novaData = new Date(atual);
 
-      await user.save();
+novaData.setDate(
+  novaData.getDate() + Number(days)
+);
+
+user.acessoExpiraEm = novaData;
+user.subscriptionStatus = "active";
+
+await user.save();
 
       res.json({
         success: true,
