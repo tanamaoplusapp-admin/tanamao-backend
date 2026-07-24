@@ -51,10 +51,13 @@ const data = [
       'Loja online',
       'Gesseiro',
       'Vidraceiro',
+      'Funeleiro',
       'Serralheiro',
+      'Servente',
       'Reparos simples',
       'Técnico de ar-condicionado',
       'Técnico em eletrodomésticos',
+      'Toldos e coberturas',
     ],
   },
 
