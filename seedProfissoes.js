@@ -33,7 +33,7 @@ const data = [
   {
     nome: 'Serviços gerais',
     profissões: [
-      'Assitência técnica',
+      'Assistência técnica',
       'Eletricista',
       'Borracheiro',
       'Carpinteiro',
