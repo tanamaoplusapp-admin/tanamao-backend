@@ -33,6 +33,7 @@ const data = [
   {
     nome: 'Serviços gerais',
     profissões: [
+      'Assitência técnica',
       'Eletricista',
       'Borracheiro',
       'Carpinteiro',
@@ -57,6 +58,7 @@ const data = [
       'Reparos simples',
       'Técnico de ar-condicionado',
       'Técnico em eletrodomésticos',
+      'Técnico de segurança eletrônica',
       'Toldos e coberturas',
     ],
   },
@@ -69,7 +71,6 @@ const data = [
     nome: 'Serviços pessoais',
     profissões: [
       'Diarista',
-      'Faxineira',
       'Babá',
       'Cuidador de idosos',
       'Cozinheira',
