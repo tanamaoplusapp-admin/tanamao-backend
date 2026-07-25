@@ -911,28 +911,40 @@ servicos.forEach((s) => {
   const status = s.status;
   const tipo = s.tipoServico || s.tipo;
 
-  // LISTAS POR STATUS
-  if (!['finalizado', 'cancelado', 'expirado', 'recusado'].includes(status)) {
+  // Existe alguma interação no chat?
+  const possuiInteracao =
+    !!s.chatId?.ultimoTexto &&
+    s.chatId.ultimoTexto.trim() !== '';
+
+  // Pendente = ainda não houve interação
+  if (
+    !possuiInteracao &&
+    !['finalizado', 'cancelado', 'expirado', 'recusado'].includes(status)
+  ) {
     listas.pendentes.push(s);
   }
 
+  // Finalizados
   if (status === 'finalizado') {
     listas.finalizados.push(s);
   }
 
+  // Cancelados
   if (['cancelado', 'expirado', 'recusado'].includes(status)) {
     listas.cancelados.push(s);
   }
 
-  // LISTAS POR TIPO
+  // Serviços
   if (tipo === 'normal') {
     listas.servicos.push(s);
   }
 
+  // Orçamentos
   if (tipo === 'orcamento') {
     listas.orcamentos.push(s);
   }
 
+  // Agendamentos
   if (tipo === 'agendado') {
     listas.agendamentos.push(s);
   }
@@ -1002,11 +1014,12 @@ GET /api/servicos
 exports.listServices = async (req, res, next) => {
   try {
 
-    const servicos = await Servico.find()
-      .sort({ createdAt: -1 })
-      .populate('cliente', 'name')
-      .populate('profissional', 'name');
-
+   const servicos = await Servico.find({
+  profissional: profissionalId,
+})
+  .sort({ createdAt: -1 })
+  .populate('cliente', 'name')
+  .populate('chatId', 'ultimoTexto');
     res.json({ servicos });
 
   } catch (err) {
