@@ -906,9 +906,27 @@ exports.listByProfissional = async (req, res, next) => {
 };
 
     servicos.forEach((s) => {
+servicos.forEach((s) => {
+  console.log({
+    id: s._id,
+    status: s.status,
+    tipoServico: s.tipoServico,
+    tipo: s.tipo,
+  });
+});
+const tipo = s.tipoServico || s.tipo;
 
-  const status = (s.status || '').toLowerCase();
-  const tipo = s.tipoServico || s.tipo;
+if (tipo === 'normal') {
+  listas.servicos.push(s);
+}
+
+if (tipo === 'orcamento') {
+  listas.orcamentos.push(s);
+}
+
+if (tipo === 'agendado') {
+  listas.agendamentos.push(s);
+}
 
   // ==========================
   // LISTAS POR STATUS
