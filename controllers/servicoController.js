@@ -887,25 +887,19 @@ exports.listByProfissional = async (req, res, next) => {
       .populate('cliente', 'name');
 
     console.log('SERVICOS FILTRADOS:', servicos.length);
+/* =========================
+   CLASSIFICAÇÃO DAS LISTAS
+========================= */
 
-    /* =========================
-       CLASSIFICAÇÃO DAS LISTAS
-    ========================= */
-
-  
-
-   const listas = {
+const listas = {
   pendentes: [],
-
   finalizados: [],
   cancelados: [],
-
   servicos: [],
   orcamentos: [],
   agendamentos: [],
 };
 
-    servicos.forEach((s) => {
 servicos.forEach((s) => {
   console.log({
     id: s._id,
@@ -913,33 +907,12 @@ servicos.forEach((s) => {
     tipoServico: s.tipoServico,
     tipo: s.tipo,
   });
-});
-const tipo = s.tipoServico || s.tipo;
 
-if (tipo === 'normal') {
-  listas.servicos.push(s);
-}
+  const status = s.status;
+  const tipo = s.tipoServico || s.tipo;
 
-if (tipo === 'orcamento') {
-  listas.orcamentos.push(s);
-}
-
-if (tipo === 'agendado') {
-  listas.agendamentos.push(s);
-}
-
-  // ==========================
   // LISTAS POR STATUS
-  // ==========================
-
-  if (
-    ![
-      'finalizado',
-      'cancelado',
-      'expirado',
-      'recusado'
-    ].includes(status)
-  ) {
+  if (!['finalizado', 'cancelado', 'expirado', 'recusado'].includes(status)) {
     listas.pendentes.push(s);
   }
 
@@ -947,17 +920,11 @@ if (tipo === 'agendado') {
     listas.finalizados.push(s);
   }
 
-  if (
-    ['cancelado', 'expirado', 'recusado']
-      .includes(status)
-  ) {
+  if (['cancelado', 'expirado', 'recusado'].includes(status)) {
     listas.cancelados.push(s);
   }
 
-  // ==========================
   // LISTAS POR TIPO
-  // ==========================
-
   if (tipo === 'normal') {
     listas.servicos.push(s);
   }
@@ -969,7 +936,6 @@ if (tipo === 'agendado') {
   if (tipo === 'agendado') {
     listas.agendamentos.push(s);
   }
-
 });
     /* =========================
        RESUMO DO DASHBOARD
