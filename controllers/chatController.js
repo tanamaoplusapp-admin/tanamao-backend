@@ -9,7 +9,7 @@ const User = require('../models/user');
 const Profissional = require('../models/Profissional');
 const activityEngine = require('../services/tanaEngine/activityEngine');
 const { sendNotification } = require('../services/notificationService');
-
+const Servico = require('../models/Servico');
 const isObjectId = (v) =>
   mongoose.Types.ObjectId.isValid(String(v));
 
@@ -224,7 +224,18 @@ exports.enviarMensagem = async (req, res) => {
       ultimoRemetente: remetenteId,
       $currentDate: { updatedAt: true },
     });
+const servico = await Servico.findOne({
+  chatId: chat._id,
+});
 
+if (
+  servico &&
+  String(servico.profissional) === String(remetenteId) &&
+  !servico.respondidoEm
+) {
+  servico.respondidoEm = new Date();
+  await servico.save();
+}
     const novaMensagem = await Mensagem.findById(mensagemCriada._id)
       .populate('remetente', USER_CHAT_FIELDS)
       .lean();

@@ -908,21 +908,16 @@ servicos.forEach((s) => {
     tipo: s.tipo,
   });
 
-  const status = s.status;
-  const tipo = s.tipoServico || s.tipo;
+const status = s.status;
+const tipo = s.tipoServico || s.tipo;
 
-  // Existe alguma interação no chat?
-  const possuiInteracao =
-    !!s.chatId?.ultimoTexto &&
-    s.chatId.ultimoTexto.trim() !== '';
-
-  // Pendente = ainda não houve interação
-  if (
-    !possuiInteracao &&
-    !['finalizado', 'cancelado', 'expirado', 'recusado'].includes(status)
-  ) {
-    listas.pendentes.push(s);
-  }
+// Pendente = ainda não houve resposta do profissional
+if (
+  !s.respondidoEm &&
+  !['finalizado', 'cancelado', 'expirado', 'recusado'].includes(status)
+) {
+  listas.pendentes.push(s);
+}
 
   // Finalizados
   if (status === 'finalizado') {

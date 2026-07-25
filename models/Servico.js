@@ -212,6 +212,15 @@ payment: {
       ref: 'Chat',
       index: true,
     },
+/* =============================
+   CONTROLE DE VISUALIZAÇÃO
+============================= */
+
+profissionalVisualizou: {
+  type: Boolean,
+  default: false,
+  index: true,
+},
 
     /* =============================
        MÉTRICAS
