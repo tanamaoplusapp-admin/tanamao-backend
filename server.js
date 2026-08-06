@@ -278,6 +278,10 @@ const routes = {
   path: "/api/profile",
   module: "./routes/profileAnalyzerRoutes"
 },
+orcamentoDocumentos: {
+  path: "/api/orcamento-documentos",
+  module: "./routes/orcamentoRoutes",
+},
 };
 
 Object.values(routes).forEach(({ path, module: modPath }) => {
