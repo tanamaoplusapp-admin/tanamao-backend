@@ -8,6 +8,7 @@ module.exports = async function uploadPdf(
   try {
 
     const resultado = await cloudinary.uploader.upload(
+      
       caminhoArquivo,
       {
         resource_type: 'raw',
@@ -25,6 +26,9 @@ module.exports = async function uploadPdf(
     console.log('================ CLOUDINARY PDF ================');
     console.log(resultado);
     console.log('===============================================');
+    console.log('TYPE:', resultado.type);
+console.log('ACCESS MODE:', resultado.access_mode);
+console.log('SECURE URL:', resultado.secure_url);
 
     if (fs.existsSync(caminhoArquivo)) {
       fs.unlinkSync(caminhoArquivo);
