@@ -870,6 +870,8 @@ console.log('Iniciando geração do PDF...');
       orcamento._id
     );
 console.log('PDF gerado com sucesso.');
+console.log('RESULTADO PDF');
+console.log(resultado);
     orcamento.pdf = {
 
       ...(orcamento.pdf || {}),
@@ -889,8 +891,12 @@ console.log('PDF gerado com sucesso.');
 
     };
 
-    await orcamento.save();
+  console.log('Antes do save');
 
+await orcamento.save();
+
+console.log('Depois do save');
+console.log('Enviando resposta');
     return res.json({
 
       success: true,
