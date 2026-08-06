@@ -77,7 +77,9 @@ const upload = await uploadPdf(
 );
 console.log('UPLOAD PDF');
 console.log(upload);
- return {
+return {
+
+  caminho: arquivo,
 
   url: upload.url,
 

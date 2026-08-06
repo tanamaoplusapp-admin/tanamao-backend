@@ -897,17 +897,19 @@ await orcamento.save();
 
 console.log('Depois do save');
 console.log('Enviando resposta');
-    return res.json({
+   return res.json({
 
-      success: true,
+  success: true,
 
-      message: 'PDF gerado com sucesso.',
+  message: 'PDF gerado com sucesso.',
 
-      pdfUrl: resultado.url,
+  pdfUrl: resultado.url,
 
-      orcamento,
+  pdfPath: resultado.caminho,
 
-    });
+  orcamento,
+
+});
 
   } catch (erro) {
 

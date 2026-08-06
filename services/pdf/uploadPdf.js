@@ -29,13 +29,15 @@ module.exports = async function uploadPdf(
     if (fs.existsSync(caminhoArquivo)) {
       fs.unlinkSync(caminhoArquivo);
     }
-
+console.log(resultado.secure_url);
+console.log(resultado.url);
     return {
 
       url: resultado.secure_url,
 
-      downloadUrl:
-        `https://res.cloudinary.com/${resultado.cloud_name}/raw/upload/fl_attachment/v${resultado.version}/${resultado.public_id}`,
+      
+        downloadUrl:
+`https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/raw/upload/fl_attachment/v${resultado.version}/${resultado.public_id}`,
 
       publicId: resultado.public_id,
 
