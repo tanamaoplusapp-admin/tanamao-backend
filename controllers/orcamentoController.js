@@ -1,5 +1,7 @@
-const Orcamento = require('../models/Orcamento');
+
 const Profissional = require('../models/Profissional');
+const gerarOrcamentoPdf = require('../services/pdf/gerarOrcamentoPdf');
+const Orcamento = require('../models/Orcamento');
 
 const {
   gerarNumeroDocumento,
@@ -826,6 +828,95 @@ default:
     return res.status(500).json({
 
       error:'Erro ao compartilhar orçamento.'
+
+    });
+
+  }
+
+};
+/* ============================================================
+   GERAR PDF
+============================================================ */
+
+/* ============================================================
+   GERAR PDF
+============================================================ */
+
+exports.gerarPdf = async (req, res) => {
+
+  try {
+
+    const { orcamentoId } = req.params;
+
+    const orcamento = await Orcamento.findById(
+      orcamentoId
+    );
+
+    if (!orcamento) {
+
+      return res.status(404).json({
+
+        success: false,
+
+        message: 'Orçamento não encontrado.',
+
+      });
+
+    }
+
+    // ⬇️ COLE A PARTE 2 AQUI
+
+    const resultado = await gerarOrcamentoPdf(
+      orcamento._id
+    );
+
+    orcamento.pdf = {
+
+      ...(orcamento.pdf || {}),
+
+      url: resultado.url,
+
+      publicId: resultado.publicId,
+
+      bytes: resultado.bytes,
+
+      format: resultado.format,
+
+      geradoEm: new Date(),
+
+      versao:
+        (orcamento.pdf?.versao || 0) + 1,
+
+    };
+
+    await orcamento.save();
+
+    return res.json({
+
+      success: true,
+
+      message: 'PDF gerado com sucesso.',
+
+      pdfUrl: resultado.url,
+
+      orcamento,
+
+    });
+
+  } catch (erro) {
+
+    console.error(
+      'Erro ao gerar PDF:',
+      erro
+    );
+
+    return res.status(500).json({
+
+      success: false,
+
+      message: 'Erro ao gerar PDF.',
+
+      error: erro.message,
 
     });
 

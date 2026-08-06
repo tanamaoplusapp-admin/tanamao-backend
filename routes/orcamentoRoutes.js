@@ -101,7 +101,11 @@ router.post(
   verifyToken,
   duplicarOrcamento
 );
-
+router.post(
+  '/:orcamentoId/pdf',
+  verifyToken,
+  controller.gerarPdf
+);
 /**
  * Compartilhar orçamento
  */
