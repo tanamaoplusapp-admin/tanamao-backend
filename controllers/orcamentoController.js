@@ -865,11 +865,11 @@ exports.gerarPdf = async (req, res) => {
     }
 
     // ⬇️ COLE A PARTE 2 AQUI
-
+console.log('Iniciando geração do PDF...');
     const resultado = await gerarOrcamentoPdf(
       orcamento._id
     );
-
+console.log('PDF gerado com sucesso.');
     orcamento.pdf = {
 
       ...(orcamento.pdf || {}),
@@ -905,10 +905,11 @@ exports.gerarPdf = async (req, res) => {
 
   } catch (erro) {
 
-    console.error(
-      'Erro ao gerar PDF:',
-      erro
-    );
+   console.error('======================');
+console.error('ERRO GERAR PDF');
+console.error(erro);
+console.error(erro.stack);
+console.error('======================');
 
     return res.status(500).json({
 
