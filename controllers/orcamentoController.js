@@ -750,7 +750,7 @@ exports.compartilharOrcamento = async (
       });
     }
 
-    const { id } = req.params;
+    const { orcamentoId } = req.params;
 
     const {
       destino,

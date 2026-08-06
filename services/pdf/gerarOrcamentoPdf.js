@@ -25,9 +25,9 @@ module.exports = async function gerarOrcamentoPdf(
     '../../tmp'
   );
 
-  if (!fs.existsSync(pasta)) {
-    fs.mkdirSync(pasta);
-  }
+ if (!fs.existsSync(pasta)) {
+  fs.mkdirSync(pasta, { recursive: true });
+}
 
   const arquivo = path.join(
     pasta,
@@ -63,6 +63,11 @@ module.exports = async function gerarOrcamentoPdf(
     );
 
   });
+  const stats = fs.statSync(arquivo);
+
+console.log('PDF GERADO');
+console.log('Arquivo:', arquivo);
+console.log('Tamanho:', stats.size);
 const upload = await uploadPdf(
 
   arquivo,
@@ -70,6 +75,8 @@ const upload = await uploadPdf(
   orcamento.numero
 
 );
+console.log('UPLOAD PDF');
+console.log(upload);
  return {
 
   url: upload.url,

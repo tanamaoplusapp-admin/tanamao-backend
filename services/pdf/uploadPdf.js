@@ -9,6 +9,7 @@ module.exports = async function uploadPdf(
   try {
 
     const resultado = await cloudinary.uploader.upload(
+        
       caminhoArquivo,
       {
 
@@ -22,7 +23,7 @@ module.exports = async function uploadPdf(
 
       }
     );
-
+console.log(resultado);
     if (fs.existsSync(caminhoArquivo)) {
       fs.unlinkSync(caminhoArquivo);
     }
