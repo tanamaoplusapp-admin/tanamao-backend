@@ -5,25 +5,27 @@ module.exports = async function uploadPdf(
   caminhoArquivo,
   numeroOrcamento
 ) {
-
   try {
 
     const resultado = await cloudinary.uploader.upload(
-        
       caminhoArquivo,
       {
-
         resource_type: 'raw',
 
         folder: 'tanamao/orcamentos',
 
-        public_id: numeroOrcamento,
+        public_id: numeroOrcamento.replace('.pdf', ''),
 
         overwrite: true,
 
+        invalidate: true,
       }
     );
-console.log(resultado);
+
+    console.log('================ CLOUDINARY PDF ================');
+    console.log(resultado);
+    console.log('===============================================');
+
     if (fs.existsSync(caminhoArquivo)) {
       fs.unlinkSync(caminhoArquivo);
     }
@@ -32,7 +34,16 @@ console.log(resultado);
 
       url: resultado.secure_url,
 
+      downloadUrl:
+        `https://res.cloudinary.com/${resultado.cloud_name}/raw/upload/fl_attachment/v${resultado.version}/${resultado.public_id}`,
+
       publicId: resultado.public_id,
+
+      assetId: resultado.asset_id,
+
+      version: resultado.version,
+
+      resourceType: resultado.resource_type,
 
       bytes: resultado.bytes,
 
@@ -42,6 +53,9 @@ console.log(resultado);
 
   } catch (erro) {
 
+    console.error('ERRO CLOUDINARY PDF');
+    console.error(erro);
+
     if (fs.existsSync(caminhoArquivo)) {
       fs.unlinkSync(caminhoArquivo);
     }
@@ -49,5 +63,4 @@ console.log(resultado);
     throw erro;
 
   }
-
 };
