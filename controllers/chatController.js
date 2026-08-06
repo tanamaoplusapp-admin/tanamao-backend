@@ -167,7 +167,157 @@ exports.buscarChatsDoUsuario = async (req, res) => {
     });
   }
 };
+/* =========================================================
+   BUSCAR CLIENTES DAS CONVERSAS
+========================================================= */
 
+exports.buscarClientesDasConversas = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Não autenticado',
+      });
+    }
+
+    const buscaOriginal = String(req.query.busca || '').trim();
+
+    if (buscaOriginal.length < 2) {
+      return res.json([]);
+    }
+
+    const termos = buscaOriginal
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const chats = await Chat.find({
+      participantes: userId,
+    })
+      .populate('participantes', USER_CHAT_FIELDS)
+      .sort({
+        atualizadoEm: -1,
+        updatedAt: -1,
+      })
+      .lean();
+
+    const clientes = [];
+    const clientesJaAdicionados = new Set();
+
+    for (const chat of chats) {
+
+      const participante = chat.participantes.find(
+        (p) => String(p._id) !== String(userId)
+      );
+
+      if (!participante) {
+        continue;
+      }
+
+      const nome =
+        participante.nome ||
+        participante.name ||
+        '';
+
+      const nomePesquisa = nome
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+      const corresponde = termos.every((termo) =>
+        nomePesquisa.includes(
+          termo
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+        )
+      );
+
+      if (!corresponde) {
+        continue;
+      }
+
+      if (
+        clientesJaAdicionados.has(
+          String(participante._id)
+        )
+      ) {
+        continue;
+      }
+
+      clientesJaAdicionados.add(
+        String(participante._id)
+      );
+
+      clientes.push({
+
+        tipo: 'tanamao',
+
+        chatId: chat._id,
+
+        clienteId: participante._id,
+
+        nome,
+
+        telefone:
+          participante.telefone ||
+          participante.phone ||
+          participante.celular ||
+          participante.whatsapp ||
+          '',
+
+        avatar:
+          participante.avatar ||
+          participante.fotoPerfil ||
+          participante.foto ||
+          participante.imagemPerfil ||
+          participante.profileImage ||
+          participante.profilePhoto ||
+          participante.photoURL ||
+          participante.photoUrl ||
+          null,
+
+        online:
+          participante.online || false,
+
+        ultimaConversa:
+          chat.atualizadoEm,
+
+      });
+
+    }
+        clientes.sort((a, b) => {
+
+      const dataA = new Date(
+        a.ultimaConversa || 0
+      ).getTime();
+
+      const dataB = new Date(
+        b.ultimaConversa || 0
+      ).getTime();
+
+      return dataB - dataA;
+
+    });
+
+    return res.json(
+      clientes.slice(0, 30)
+    );
+
+  } catch (error) {
+
+    console.error(
+      'buscarClientesDasConversas erro:',
+      error
+    );
+
+    return res.status(500).json({
+      error: 'Erro ao buscar clientes das conversas.',
+    });
+
+  }
+
+};
 /* =========================================================
    ENVIAR MENSAGEM
 ========================================================= */

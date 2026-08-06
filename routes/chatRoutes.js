@@ -32,6 +32,8 @@ const chatController = require('../controllers/chatController');
 const {
   criarChat,
   buscarChatsDoUsuario,
+  buscarClientesDasConversas,
+
   enviarMensagem,
   listarMensagens,
   marcarComoLido,
@@ -163,7 +165,15 @@ router.post(
     }
   }
 );
-
+/**
+ * Buscar clientes das conversas
+ * GET /api/chat/clientes-conversas
+ */
+router.get(
+  '/clientes-conversas',
+  verifyToken,
+  buscarClientesDasConversas
+);
 /**
  * Buscar chat por ID
  * GET /api/chat/:chatId
