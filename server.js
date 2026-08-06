@@ -279,7 +279,7 @@ const routes = {
   module: "./routes/profileAnalyzerRoutes"
 },
 orcamentoDocumentos: {
-  path: "/api/orcamento-documentos",
+  path: "/orcamento-documentos",
   module: "./routes/orcamentoRoutes",
 },
 };
