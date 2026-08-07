@@ -2,7 +2,7 @@
 const Profissional = require('../models/Profissional');
 const gerarOrcamentoPdf = require('../services/pdf/gerarOrcamentoPdf');
 const Orcamento = require('../models/Orcamento');
-
+const uploadPdf = require('../services/cloudinary/uploadPdf');
 const {
   gerarNumeroDocumento,
 } = require('../services/counterService');
@@ -322,13 +322,12 @@ exports.buscarOrcamento = async (req, res) => {
       });
     }
 
-    const { id } = req.params;
+  const { orcamentoId } = req.params;
 
     const orcamento =
       await Orcamento.findOne({
 
-        _id:id,
-
+       _id: orcamentoId,
         profissionalId:profissional._id,
 
         ativo:true,
@@ -407,7 +406,7 @@ const {id}=req.params;
 
 const orcamento=await Orcamento.findOne({
 
-_id:id,
+_id: orcamentoId,
 
 profissionalId:profissional._id,
 
@@ -591,10 +590,10 @@ exports.excluirOrcamento = async (req, res) => {
       });
     }
 
-    const { id } = req.params;
+    const { orcamentoId } = req.params;
 
     const orcamento = await Orcamento.findOne({
-      _id: id,
+     _id: orcamentoId,
       profissionalId: profissional._id,
       ativo: true,
       deletedAt: null,
@@ -654,10 +653,10 @@ exports.duplicarOrcamento = async (req, res) => {
       });
     }
 
-    const { id } = req.params;
+   const { orcamentoId } = req.params;
 
     const original = await Orcamento.findOne({
-      _id: id,
+    _id: orcamentoId,
       profissionalId: profissional._id,
       ativo: true,
       deletedAt: null,
@@ -759,7 +758,7 @@ exports.compartilharOrcamento = async (
     const orcamento =
       await Orcamento.findOne({
 
-        _id:id,
+        _id: orcamentoId,
 
         profissionalId:profissional._id,
 
@@ -839,35 +838,48 @@ default:
 /* ============================================================
    GERAR PDF
 ============================================================ */
-
 exports.gerarPdf = async (req, res) => {
   try {
     const { orcamentoId } = req.params;
 
-    // gera o pdf
-    const pdf = await gerarOrcamentoPdf(
-      orcamentoId
-    );
+    // Gera o PDF
+    const pdf = await gerarOrcamentoPdf(orcamentoId);
 
-    // envia ao cloudinary
+    // Faz upload para o Cloudinary
     const upload = await uploadPdf(
       pdf.caminho,
       pdf.orcamento.numero
     );
 
-    return res.json({
+    // Salva as informações do PDF no orçamento
+    pdf.orcamento.pdf = {
+      ...pdf.orcamento.pdf,
+      url: upload.secureUrl,
+      publicId: upload.publicId,
+      versao: pdf.orcamento.pdf?.versao || 1,
+      atualizadoEm: new Date(),
+    };
+
+    await pdf.orcamento.save();
+
+    return res.status(200).json({
       success: true,
+      message: 'PDF gerado com sucesso.',
       pdfUrl: upload.secureUrl,
       downloadUrl: upload.downloadUrl,
       publicId: upload.publicId,
     });
 
   } catch (erro) {
+    console.error('==============================');
+    console.error('ERRO AO GERAR PDF');
     console.error(erro);
+    console.error('==============================');
 
     return res.status(500).json({
       success: false,
-      message: erro.message,
+      message: 'Erro ao gerar PDF.',
+      error: erro.message,
     });
   }
 };
