@@ -841,45 +841,33 @@ default:
 ============================================================ */
 
 exports.gerarPdf = async (req, res) => {
-
   try {
-
     const { orcamentoId } = req.params;
 
-    const orcamento = await Orcamento.findById(orcamentoId);
-
-    if (!orcamento) {
-      return res.status(404).json({
-        success: false,
-        message: 'Orçamento não encontrado.',
-      });
-    }
-
-    console.log('Iniciando geração do PDF...');
-
-    const resultado = await gerarOrcamentoPdf(orcamento);
-
-    console.log('PDF gerado com sucesso.');
-
-    return res.download(
-      resultado.caminho,
-      `orcamento-${orcamento.numero}.pdf`
+    // gera o pdf
+    const pdf = await gerarOrcamentoPdf(
+      orcamentoId
     );
 
-  } catch (erro) {
+    // envia ao cloudinary
+    const upload = await uploadPdf(
+      pdf.caminho,
+      pdf.orcamento.numero
+    );
 
-    console.error('======================');
-    console.error('ERRO GERAR PDF');
+    return res.json({
+      success: true,
+      pdfUrl: upload.secureUrl,
+      downloadUrl: upload.downloadUrl,
+      publicId: upload.publicId,
+    });
+
+  } catch (erro) {
     console.error(erro);
-    console.error(erro.stack);
-    console.error('======================');
 
     return res.status(500).json({
       success: false,
-      message: 'Erro ao gerar PDF.',
-      error: erro.message,
+      message: erro.message,
     });
-
   }
-
 };
