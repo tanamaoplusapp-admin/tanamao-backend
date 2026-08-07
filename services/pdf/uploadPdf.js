@@ -35,27 +35,28 @@ console.log('SECURE URL:', resultado.secure_url);
     }
 console.log(resultado.secure_url);
 console.log(resultado.url);
-    return {
+  return {
 
-      url: resultado.secure_url,
+  url: resultado.secure_url,
 
-      
-        downloadUrl:
+  secureUrl: resultado.secure_url,
+
+  downloadUrl:
 `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/raw/upload/fl_attachment/v${resultado.version}/${resultado.public_id}`,
 
-      publicId: resultado.public_id,
+  publicId: resultado.public_id,
 
-      assetId: resultado.asset_id,
+  assetId: resultado.asset_id,
 
-      version: resultado.version,
+  version: resultado.version,
 
-      resourceType: resultado.resource_type,
+  resourceType: resultado.resource_type,
 
-      bytes: resultado.bytes,
+  bytes: resultado.bytes,
 
-      format: resultado.format,
+  format: resultado.format,
 
-    };
+};
 
   } catch (erro) {
 

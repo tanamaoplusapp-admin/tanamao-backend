@@ -834,9 +834,7 @@ default:
   }
 
 };
-/* ============================================================
-   GERAR PDF
-============================================================ */
+
 
 /* ============================================================
    GERAR PDF
@@ -848,85 +846,38 @@ exports.gerarPdf = async (req, res) => {
 
     const { orcamentoId } = req.params;
 
-    const orcamento = await Orcamento.findById(
-      orcamentoId
-    );
+    const orcamento = await Orcamento.findById(orcamentoId);
 
     if (!orcamento) {
-
       return res.status(404).json({
-
         success: false,
-
         message: 'Orçamento não encontrado.',
-
       });
-
     }
 
-    // ⬇️ COLE A PARTE 2 AQUI
-console.log('Iniciando geração do PDF...');
-    const resultado = await gerarOrcamentoPdf(
-      orcamento._id
+    console.log('Iniciando geração do PDF...');
+
+    const resultado = await gerarOrcamentoPdf(orcamento);
+
+    console.log('PDF gerado com sucesso.');
+
+    return res.download(
+      resultado.caminho,
+      `orcamento-${orcamento.numero}.pdf`
     );
-console.log('PDF gerado com sucesso.');
-console.log('RESULTADO PDF');
-console.log(resultado);
-    orcamento.pdf = {
-
-      ...(orcamento.pdf || {}),
-
-      url: resultado.url,
-
-      publicId: resultado.publicId,
-
-      bytes: resultado.bytes,
-
-      format: resultado.format,
-
-      geradoEm: new Date(),
-
-      versao:
-        (orcamento.pdf?.versao || 0) + 1,
-
-    };
-
-  console.log('Antes do save');
-
-await orcamento.save();
-
-console.log('Depois do save');
-console.log('Enviando resposta');
-   return res.json({
-
-  success: true,
-
-  message: 'PDF gerado com sucesso.',
-
-  pdfUrl: resultado.url,
-
-  pdfPath: resultado.caminho,
-
-  orcamento,
-
-});
 
   } catch (erro) {
 
-   console.error('======================');
-console.error('ERRO GERAR PDF');
-console.error(erro);
-console.error(erro.stack);
-console.error('======================');
+    console.error('======================');
+    console.error('ERRO GERAR PDF');
+    console.error(erro);
+    console.error(erro.stack);
+    console.error('======================');
 
     return res.status(500).json({
-
       success: false,
-
       message: 'Erro ao gerar PDF.',
-
       error: erro.message,
-
     });
 
   }

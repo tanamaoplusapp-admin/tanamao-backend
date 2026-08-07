@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
-const uploadPdf = require('./uploadPdf');
+
 const Orcamento = require('../../models/Orcamento');
 
 const desenharTemplate = require('./templates/orcamentoTemplate');
@@ -68,29 +68,13 @@ module.exports = async function gerarOrcamentoPdf(
 console.log('PDF GERADO');
 console.log('Arquivo:', arquivo);
 console.log('Tamanho:', stats.size);
-const upload = await uploadPdf(
-
-  arquivo,
-
-  orcamento.numero
-
-);
-console.log('UPLOAD PDF');
-console.log(upload);
 return {
 
   caminho: arquivo,
-
-  url: upload.url,
-
-  publicId: upload.publicId,
-
-  bytes: upload.bytes,
-
-  format: upload.format,
 
   orcamento,
 
 };
 
 };
+
