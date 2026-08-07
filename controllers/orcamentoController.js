@@ -2,7 +2,7 @@
 const Profissional = require('../models/Profissional');
 const gerarOrcamentoPdf = require('../services/pdf/gerarOrcamentoPdf');
 const Orcamento = require('../models/Orcamento');
-const uploadPdf = require('../services/cloudinary/uploadPdf');
+const uploadPdf = require('../services/pdf/uploadPdf');
 const {
   gerarNumeroDocumento,
 } = require('../services/counterService');
