@@ -6,7 +6,11 @@ module.exports = async function uploadPdf(
   numeroOrcamento
 ) {
   try {
+const stats = fs.statSync(caminhoArquivo);
 
+console.log('ANTES DO UPLOAD');
+console.log('Arquivo:', caminhoArquivo);
+console.log('Tamanho:', stats.size);
     const resultado = await cloudinary.uploader.upload(
       
       caminhoArquivo,
@@ -22,7 +26,7 @@ module.exports = async function uploadPdf(
         invalidate: true,
       }
     );
-
+console.log('BYTES NO CLOUDINARY:', resultado.bytes);
     console.log('================ CLOUDINARY PDF ================');
     console.log(resultado);
     console.log('===============================================');
