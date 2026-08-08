@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const controller = require('../controllers/agendaController');
+
 const verifyToken = require('../middleware/verifyToken');
 
 // CRIAR AGENDAMENTO
@@ -21,5 +22,15 @@ router.put('/:id', verifyToken, controller.editar);
 
 // CANCELAR
 router.delete('/:id', verifyToken, controller.cancelar);
+router.post(
+  '/:id/confirmar',
+  verifyToken,
+  controller.confirmar
+);
 
+router.post(
+  '/:id/recusar',
+  verifyToken,
+  controller.recusar
+);
 module.exports = router;

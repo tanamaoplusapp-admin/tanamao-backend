@@ -1,7 +1,11 @@
 const agendaService = require('../services/agendaService');
-const User = require('../models/user');
 const Agenda = require('../models/Agenda');
+const Mensagem = require('../models/Mensagem');
 const Chat = require('../models/Chat');
+const User = require('../models/user');
+
+const { sendNotification } =
+  require('../services/notificationService');
 // Remove tudo que não for número
 function limparTelefone(telefone = '') {
   return String(telefone).replace(/\D/g, '');
@@ -149,23 +153,41 @@ exports.criar = async (req, res) => {
     const profissionalId = req.user.id;
 
     const {
+      clienteId,
+      chatId,
+
       clienteNome,
       clienteTelefone,
+
       data,
       horaInicio,
       horaFim,
+
       categoria,
       servicoNome,
+
+      origem = 'manual',
     } = req.body;
 
-    if (!clienteNome || !clienteTelefone || !data || !horaInicio || !horaFim) {
+    if (
+      !clienteNome ||
+      !clienteTelefone ||
+      !data ||
+      !horaInicio ||
+      !horaFim
+    ) {
       return res.status(400).json({
-        erro: 'clienteNome, clienteTelefone, data, horaInicio e horaFim são obrigatórios',
+        erro:
+          'clienteNome, clienteTelefone, data, horaInicio e horaFim são obrigatórios',
       });
     }
 
-    // 🔥 limpa telefone
-    const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
+    /* =====================================================
+       TELEFONE
+    ===================================================== */
+
+    const telefoneLimpo = String(clienteTelefone)
+      .replace(/\D/g, '');
 
     if (!telefoneLimpo) {
       return res.status(400).json({
@@ -173,50 +195,208 @@ exports.criar = async (req, res) => {
       });
     }
 
-    // 🔥 GERA TOKEN ÚNICO
-    const conviteToken = crypto.randomBytes(32).toString('hex');
+    /* =====================================================
+       VERIFICA SE É CLIENTE TANAMÃO+
+    ===================================================== */
 
-    // 🔥 EXPIRA EM 24H (ajustável depois)
-    const conviteExpiraEm = new Date(Date.now() + 1000 * 60 * 60 * 24);
+    const ehClienteTanamao =
+      !!clienteId &&
+      !!chatId;
 
-    // 🔥 CRIA AGENDAMENTO
+    /* =====================================================
+       CONVITE
+       Cliente externo recebe convite.
+       Cliente Tanamão+ recebe diretamente pelo chat.
+    ===================================================== */
+
+    let conviteToken = null;
+    let conviteExpiraEm = null;
+    let conviteStatus = 'pendente';
+    let conviteEnviadoEm = null;
+
+    if (!ehClienteTanamao) {
+      conviteToken = crypto
+        .randomBytes(32)
+        .toString('hex');
+
+      conviteExpiraEm = new Date(
+        Date.now() + 1000 * 60 * 60 * 24
+      );
+
+      conviteEnviadoEm = new Date();
+    } else {
+      conviteStatus = 'aceito';
+    }
+
+    /* =====================================================
+       CRIA AGENDAMENTO
+    ===================================================== */
+
     const agendamento = await agendaService.criar({
       profissionalId,
-      clienteId: null, // 🔥 NUNCA tenta adivinhar mais
+
+      clienteId:
+        ehClienteTanamao
+          ? clienteId
+          : null,
+
+      chatId:
+        ehClienteTanamao
+          ? chatId
+          : null,
+
       clienteNome,
+
       clienteTelefone: telefoneLimpo,
-      clienteTelefoneOriginal: clienteTelefone,
+
+      clienteTelefoneOriginal:
+        clienteTelefone,
+
       data,
       horaInicio,
       horaFim,
+
       categoria,
       servicoNome,
 
       conviteToken,
       conviteExpiraEm,
-      conviteStatus: 'pendente',
-      conviteEnviadoEm: new Date(),
+      conviteStatus,
+      conviteEnviadoEm,
+
+      origem:
+        ehClienteTanamao
+          ? 'cliente_app'
+          : origem,
     });
 
-    // 🔥 LINK DE CONVITE (DEEP LINK + WEB)
-    const deepLink = `tanamao://agenda/confirmar/${conviteToken}`;
-    const webLink = `https://tanamao.com.br/agenda/confirmar/${conviteToken}`;
+    /* =====================================================
+       💬 ENVIA PARA O CHAT TANAMÃO+
+    ===================================================== */
+
+    let mensagem = null;
+
+    if (ehClienteTanamao) {
+      try {
+        mensagem = await Mensagem.create({
+          chatId: agendamento.chatId,
+
+          remetente: profissionalId,
+
+          type: 'agendamento',
+
+          texto: `📅 Novo agendamento: ${
+            agendamento.servicoNome ||
+            agendamento.categoria ||
+            'Agendamento'
+          }`,
+
+          agendamentoId:
+            agendamento._id,
+
+          agendamentoData:
+            agendamento.data,
+
+          agendamentoHoraInicio:
+            agendamento.horaInicio,
+
+          agendamentoHoraFim:
+            agendamento.horaFim,
+
+          agendamentoServico:
+            agendamento.servicoNome ||
+            agendamento.categoria ||
+            'Agendamento',
+
+          lidoPor: [profissionalId],
+        });
+
+        console.log(
+          '📅 AGENDAMENTO ENVIADO PARA O CHAT:',
+          mensagem._id
+        );
+
+      } catch (erroMensagem) {
+        console.error(
+          '❌ ERRO AO ENVIAR AGENDAMENTO PARA O CHAT:',
+          erroMensagem
+        );
+
+        /*
+          O agendamento foi criado normalmente.
+          Não vamos apagar o agendamento se a
+          criação da mensagem falhar.
+        */
+      }
+    }
+
+    /* =====================================================
+       RESPOSTA CLIENTE TANAMÃO+
+    ===================================================== */
+
+    if (ehClienteTanamao) {
+      return res.status(201).json({
+        success: true,
+
+        agendamento,
+
+        mensagem,
+
+        chatId:
+          agendamento.chatId,
+
+        clienteTanamao: true,
+
+        message:
+          'Agendamento criado e enviado para o chat.',
+      });
+    }
+
+    /* =====================================================
+       RESPOSTA CLIENTE EXTERNO
+    ===================================================== */
+
+    const deepLink =
+      `tanamao://agenda/confirmar/${conviteToken}`;
+
+    const webLink =
+      `https://tanamao.com.br/agenda/confirmar/${conviteToken}`;
 
     return res.status(201).json({
-      ...agendamento.toObject(),
+      success: true,
+
+      agendamento:
+        agendamento.toObject(),
+
+      clienteTanamao: false,
 
       convite: {
-        token: conviteToken,
-        expiraEm: conviteExpiraEm,
+        token:
+          conviteToken,
+
+        expiraEm:
+          conviteExpiraEm,
+
         deepLink,
+
         webLink,
       },
 
-      mensagemSugestao: `Olá ${clienteNome}! Seu horário foi agendado para ${data} às ${horaInicio}. Acompanhe pelo app: ${webLink}`,
+      mensagemSugestao:
+        `Olá ${clienteNome}! ` +
+        `Seu horário foi agendado para ${data} ` +
+        `às ${horaInicio}. ` +
+        `Acompanhe pelo app: ${webLink}`,
     });
 
   } catch (error) {
+    console.log(
+      '❌ ERRO AO CRIAR AGENDAMENTO:',
+      error
+    );
+
     return res.status(400).json({
+      success: false,
       erro: error.message,
     });
   }
@@ -234,11 +414,13 @@ exports.aceitarConvite = async (req, res) => {
       });
     }
 
-    if (agenda.status !== 'ativo') {
-      return res.status(400).json({
-        erro: 'Este agendamento não está ativo',
-      });
-    }
+   if (
+  !['pendente', 'confirmado'].includes(agenda.status)
+) {
+  return res.status(400).json({
+    erro: 'Este agendamento não está disponível',
+  });
+}
 
     if (agenda.conviteStatus === 'aceito' && agenda.clienteId) {
       return res.json({
@@ -287,10 +469,15 @@ exports.aceitarConvite = async (req, res) => {
       });
     }
 
-    agenda.clienteId = clienteId;
-    agenda.chatId = chat._id;
-    agenda.conviteStatus = 'aceito';
-    agenda.conviteAceitoEm = new Date();
+ agenda.clienteId = clienteId;
+agenda.chatId = chat._id;
+
+agenda.status = 'pendente';
+
+agenda.conviteStatus = 'aceito';
+agenda.conviteAceitoEm = new Date();
+
+await agenda.save();
 
     await agenda.save();
 
@@ -419,160 +606,177 @@ exports.cancelar = async (req, res) => {
 };
 exports.abrirChatCliente = async (req, res) => {
   try {
-    const usuarioLogadoId = String(req.user.id);
-    const { id } = req.params;
-
-    const agenda = await Agenda.findById(id);
-
-    if (!agenda) {
-      return res.status(404).json({
-        erro: 'Agendamento não encontrado',
-      });
-    }
-
-    const profissionalId = String(agenda.profissionalId || '');
-    let clienteIdFinal = agenda.clienteId ? String(agenda.clienteId) : '';
-
-    console.log('ABRIR CHAT AGENDA:', {
-      agendaId: String(agenda._id),
-      usuarioLogadoId,
-      clienteIdAgenda: clienteIdFinal,
-      profissionalId,
-      clienteTelefone: agenda.clienteTelefone,
-      chatIdAgenda: agenda.chatId ? String(agenda.chatId) : null,
-    });
-
-    const pertenceAoProfissional = profissionalId === usuarioLogadoId;
-    const pertenceAoCliente = clienteIdFinal === usuarioLogadoId;
-
-    if (!pertenceAoCliente && !pertenceAoProfissional) {
-      return res.status(403).json({
-        erro: 'Sem permissão para abrir este chat',
-      });
-    }
-
-    // 🔥 Se não tem clienteId, tenta vincular pelo telefone
-    if (!clienteIdFinal) {
-      const cliente = await buscarClientePorTelefone(
-        agenda.clienteTelefone,
-        profissionalId
-      );
-
-      if (cliente?._id) {
-        clienteIdFinal = String(cliente._id);
-        agenda.clienteId = cliente._id;
-        await agenda.save();
-
-        console.log('CLIENTE VINCULADO PELO TELEFONE:', clienteIdFinal);
-      }
-    }
-
-    if (!clienteIdFinal) {
-      return res.status(400).json({
-        erro: 'Este cliente ainda não tem conta no app vinculada a este telefone. Use WhatsApp ou peça para ele se cadastrar com o mesmo número.',
-      });
-    }
-
-    if (String(clienteIdFinal) === String(profissionalId)) {
-      return res.status(400).json({
-        erro: 'Agendamento inválido: cliente e prestador são o mesmo usuário.',
-      });
-    }
-
-    // 🔥 Se agenda já tem chatId, só reaproveita se o chat for realmente cliente + prestador
-    if (agenda.chatId) {
-      const chatDaAgenda = await Chat.findById(agenda.chatId);
-
-      if (chatDaAgenda) {
-        const participantes = (chatDaAgenda.participantes || []).map((p) =>
-          String(p)
-        );
-
-        const unicos = [...new Set(participantes)];
-
-        const chatDaAgendaValido =
-          unicos.length === 2 &&
-          unicos.includes(String(clienteIdFinal)) &&
-          unicos.includes(String(profissionalId));
-
-        if (chatDaAgendaValido) {
-          return res.json({
-            chatId: chatDaAgenda._id,
-            clienteId: clienteIdFinal,
-            profissionalId,
-            agendaId: agenda._id,
-            participantes: chatDaAgenda.participantes,
-          });
-        }
-
-        // 🔥 chatId contaminado/errado: limpa para recriar corretamente
-        agenda.chatId = null;
-        await agenda.save();
-
-        console.log('CHAT DA AGENDA ERA INVÁLIDO E FOI LIMPO:', {
-          agendaId: String(agenda._id),
-          chatIdAntigo: String(chatDaAgenda._id),
-          participantes,
-          clienteIdFinal,
-          profissionalId,
-        });
-      }
-    }
-
-    // 🔥 Busca somente chats onde o cliente participa
-    const chatsPossiveis = await Chat.find({
-      participantes: clienteIdFinal,
-    });
-
-    let chat = null;
-
-    for (const c of chatsPossiveis) {
-      const participantes = (c.participantes || []).map((p) => String(p));
-      const unicos = [...new Set(participantes)];
-
-      const chatCorreto =
-        unicos.length === 2 &&
-        unicos.includes(String(clienteIdFinal)) &&
-        unicos.includes(String(profissionalId));
-
-      if (chatCorreto) {
-        chat = c;
-        break;
-      }
-    }
-
-    // 🔥 Se não existe chat correto, cria
-    if (!chat) {
-      chat = await Chat.create({
-        participantes: [clienteIdFinal, profissionalId],
-        ultimoTexto: '',
-        atualizadoEm: new Date(),
-      });
-    }
-
-    agenda.clienteId = clienteIdFinal;
-    agenda.chatId = chat._id;
-    await agenda.save();
-
-    console.log('CHAT ABERTO PELA AGENDA:', {
-      chatId: String(chat._id),
-      clienteId: String(clienteIdFinal),
-      profissionalId: String(profissionalId),
-      participantes: chat.participantes.map((p) => String(p)),
-    });
-
-    return res.json({
-      chatId: chat._id,
-      clienteId: clienteIdFinal,
-      profissionalId,
-      agendaId: agenda._id,
-      participantes: chat.participantes,
-    });
+    // ...
   } catch (error) {
     console.log('ERRO AO ABRIR CHAT DA AGENDA:', error.message);
 
     return res.status(500).json({
       erro: error.message,
+    });
+  }
+
+}; 
+/* =====================================================
+CONFIRMAR AGENDAMENTO
+===================================================== */
+
+exports.confirmar = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const usuarioId =
+      req.user?.id ||
+      req.user?._id;
+
+    const agendamento =
+      await Agenda.findById(id);
+
+    if (!agendamento) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agendamento não encontrado.',
+      });
+    }
+
+    // Apenas o cliente do agendamento pode confirmar
+    if (
+      !agendamento.clienteId ||
+      String(agendamento.clienteId) !==
+        String(usuarioId)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Você não tem permissão para confirmar este agendamento.',
+      });
+    }
+
+    if (agendamento.status === 'cancelado') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Este agendamento foi cancelado.',
+      });
+    }
+
+    if (agendamento.status === 'finalizado') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Este agendamento já foi finalizado.',
+      });
+    }
+
+    agendamento.status = 'confirmado';
+    agendamento.confirmadoEm = new Date();
+    agendamento.confirmadoPor = usuarioId;
+
+    if (agendamento.conviteStatus === 'pendente') {
+      agendamento.conviteStatus = 'aceito';
+      agendamento.conviteAceitoEm = new Date();
+    }
+
+    await agendamento.save();
+
+    return res.json({
+      success: true,
+      message: 'Agendamento confirmado com sucesso.',
+      agendamento,
+    });
+
+  } catch (error) {
+    console.error(
+      '❌ ERRO AO CONFIRMAR AGENDAMENTO:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Não foi possível confirmar o agendamento.',
+    });
+  }
+};
+
+
+/* =====================================================
+RECUSAR AGENDAMENTO
+===================================================== */
+
+exports.recusar = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const usuarioId =
+      req.user?.id ||
+      req.user?._id;
+
+    const agendamento =
+      await Agenda.findById(id);
+
+    if (!agendamento) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agendamento não encontrado.',
+      });
+    }
+
+    // Apenas o cliente do agendamento pode recusar
+    if (
+      !agendamento.clienteId ||
+      String(agendamento.clienteId) !==
+        String(usuarioId)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Você não tem permissão para recusar este agendamento.',
+      });
+    }
+
+    if (agendamento.status === 'cancelado') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Este agendamento já foi cancelado.',
+      });
+    }
+
+    if (agendamento.status === 'finalizado') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Este agendamento já foi finalizado.',
+      });
+    }
+
+    agendamento.status = 'cancelado';
+
+    if (
+      agendamento.conviteStatus === 'pendente' ||
+      agendamento.conviteStatus === 'aceito'
+    ) {
+      agendamento.conviteStatus = 'cancelado';
+    }
+
+    await agendamento.save();
+
+    return res.json({
+      success: true,
+      message: 'Agendamento recusado.',
+      agendamento,
+    });
+
+  } catch (error) {
+    console.error(
+      '❌ ERRO AO RECUSAR AGENDAMENTO:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Não foi possível recusar o agendamento.',
     });
   }
 };

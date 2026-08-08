@@ -78,12 +78,27 @@ const AgendaSchema = new mongoose.Schema(
       type: Date,
     },
 
-    status: {
-      type: String,
-      enum: ['ativo', 'cancelado', 'finalizado'],
-      default: 'ativo',
-      index: true,
-    },
+  status: {
+  type: String,
+  enum: [
+    'pendente',
+    'confirmado',
+    'cancelado',
+    'finalizado',
+  ],
+  default: 'pendente',
+  index: true,
+},
+confirmadoEm: {
+  type: Date,
+  default: null,
+},
+
+confirmadoPor: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'User',
+  default: null,
+},
 
     conviteToken: {
       type: String,

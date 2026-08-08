@@ -46,6 +46,7 @@ const mensagemSchema = new mongoose.Schema(
     'location',
     'system',
     'orcamento',
+    'agendamento',
   ],
   default: 'text',
   index: true,
@@ -65,6 +66,39 @@ orcamentoNumero: {
 
 orcamentoTotal: {
   type: Number,
+  default: null,
+},
+/* ================= AGENDAMENTO ================= */
+
+agendaId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Agenda',
+  default: null,
+  index: true,
+},
+
+agendaData: {
+  type: String,
+  default: null,
+},
+
+agendaHoraInicio: {
+  type: String,
+  default: null,
+},
+
+agendaHoraFim: {
+  type: String,
+  default: null,
+},
+
+agendaServicoNome: {
+  type: String,
+  default: null,
+},
+
+agendaStatus: {
+  type: String,
   default: null,
 },
     /* ================= CONTROLE ================= */
@@ -117,17 +151,20 @@ mensagemSchema.pre('validate', function (next) {
   if (this.localizacao) {
     this.type = 'location';
   }
+if (
+  this.type !== 'system' &&
+  this.type !== 'orcamento' &&
+  this.type !== 'agendamento'
+) {
+  const temConteudo =
+    this.texto ||
+    this.imagemUrl ||
+    this.localizacao;
 
-  if (this.type !== 'system') {
-    const temConteudo =
-      this.texto ||
-      this.imagemUrl ||
-      this.localizacao;
-
-    if (!temConteudo) {
-      return next(new Error('Mensagem vazia.'));
-    }
+  if (!temConteudo) {
+    return next(new Error('Mensagem vazia.'));
   }
+}
 
   return next();
 });
