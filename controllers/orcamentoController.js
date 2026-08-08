@@ -867,7 +867,8 @@ exports.compartilharOrcamento = async (
           imagemUrl: null,
 
           type: 'orcamento',
-
+orcamentoNumero: orcamento.numero,
+orcamentoTotal: orcamento.total,
           orcamentoId:
             orcamento._id,
 

@@ -56,6 +56,17 @@ orcamentoId: {
   default: null,
   index: true,
 },
+
+
+orcamentoNumero: {
+  type: String,
+  default: null,
+},
+
+orcamentoTotal: {
+  type: Number,
+  default: null,
+},
     /* ================= CONTROLE ================= */
 
     lidoPor: [
