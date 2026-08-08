@@ -2,6 +2,8 @@
 const Profissional = require('../models/Profissional');
 const gerarOrcamentoPdf = require('../services/pdf/gerarOrcamentoPdf');
 const Orcamento = require('../models/Orcamento');
+const Mensagem = require('../models/Mensagem');
+const Chat = require('../models/Chat');
 const uploadPdf = require('../services/pdf/uploadPdf');
 const {
   gerarNumeroDocumento,
@@ -753,80 +755,343 @@ exports.compartilharOrcamento = async (
 
     const {
       destino,
-    } = req.body;
+      chatId,
+    } = req.body || {};
 
     const orcamento =
       await Orcamento.findOne({
-
         _id: orcamentoId,
-
-        profissionalId:profissional._id,
-
-        ativo:true,
-
-        deletedAt:null
-
+        profissionalId: profissional._id,
+        ativo: true,
+        deletedAt: null,
       });
 
-    if(!orcamento){
-
+    if (!orcamento) {
       return res.status(404).json({
+        error: 'Orçamento não encontrado.',
+      });
+    }
 
-        error:'Orçamento não encontrado.'
+    /* =================================================
+       CHAT TANAMÃO+
+    ================================================= */
+
+    if (destino === 'chat') {
+
+      if (!chatId) {
+        return res.status(400).json({
+          error:
+            'chatId é obrigatório para enviar o orçamento pelo Tanamão+.',
+        });
+      }
+
+      const chat =
+        await Chat.findById(chatId);
+
+      if (!chat) {
+        return res.status(404).json({
+          error: 'Chat não encontrado.',
+        });
+      }
+
+      /* ===============================================
+         GARANTE QUE O PROFISSIONAL ESTÁ NO CHAT
+      =============================================== */
+
+      const participa =
+        chat.participantes.some(
+          (participanteId) =>
+            String(participanteId) ===
+            String(userId)
+        );
+
+      if (!participa) {
+        return res.status(403).json({
+          error:
+            'Você não participa deste chat.',
+        });
+      }
+
+      /* ===============================================
+         EVITA DUPLICAR MENSAGEM
+      =============================================== */
+
+      if (orcamento.mensagemId) {
+
+        orcamento.compartilhamentos.chat =
+          true;
+
+        orcamento.chatId = chatId;
+
+        orcamento.status =
+          'compartilhado';
+
+        await orcamento.save();
+
+        return res.json({
+          success: true,
+
+          message:
+            'Orçamento já enviado para este chat.',
+
+          mensagemId:
+            orcamento.mensagemId,
+
+          compartilhamentos:
+            orcamento.compartilhamentos,
+
+          orcamento,
+        });
+      }
+
+      /* ===============================================
+         TEXTO DA MENSAGEM
+      =============================================== */
+
+      const textoMensagem =
+        `📄 Novo orçamento ${orcamento.numero}`;
+
+      /* ===============================================
+         CRIA MENSAGEM
+      =============================================== */
+
+      const mensagemCriada =
+        await Mensagem.create({
+
+          chatId,
+
+          remetente: userId,
+
+          texto: textoMensagem,
+
+          imagemUrl: null,
+
+          type: 'orcamento',
+
+          orcamentoId:
+            orcamento._id,
+
+          enviadoEm:
+            new Date(),
+
+          lidoPor: [
+            userId,
+          ],
+
+        });
+
+      /* ===============================================
+         ATUALIZA ORÇAMENTO
+      =============================================== */
+
+      orcamento.chatId =
+        chatId;
+
+      orcamento.mensagemId =
+        mensagemCriada._id;
+
+      orcamento.compartilhamentos.chat =
+        true;
+
+      orcamento.status =
+        'compartilhado';
+
+      await orcamento.save();
+
+      /* ===============================================
+         ATUALIZA ÚLTIMA MENSAGEM DO CHAT
+      =============================================== */
+
+      await Chat.findByIdAndUpdate(
+        chatId,
+        {
+          ultimoTexto:
+            textoMensagem,
+
+          atualizadoEm:
+            new Date(),
+
+          ultimoRemetente:
+            userId,
+
+          $currentDate: {
+            updatedAt: true,
+          },
+        }
+      );
+
+      /* ===============================================
+         POPULA REMETENTE
+      =============================================== */
+
+      const novaMensagem =
+        await Mensagem.findById(
+          mensagemCriada._id
+        )
+          .populate(
+            'remetente',
+            'name nome email phone photoUrl'
+          )
+          .lean();
+
+      /* ===============================================
+         SOCKET
+      =============================================== */
+
+      try {
+
+        const io =
+          req.app.get('io');
+
+        if (
+          io &&
+          novaMensagem
+        ) {
+
+          io.to(
+            String(chatId)
+          ).emit(
+            'nova_mensagem',
+            novaMensagem
+          );
+
+          chat.participantes.forEach(
+            (participanteId) => {
+
+              if (
+                String(participanteId) !==
+                String(userId)
+              ) {
+
+                io.to(
+                  String(participanteId)
+                ).emit(
+                  'nova_mensagem',
+                  novaMensagem
+                );
+
+              }
+
+            }
+          );
+
+        }
+
+      } catch (socketError) {
+
+        console.error(
+          '[Orcamento][Socket]',
+          socketError?.message ||
+          socketError
+        );
+
+      }
+
+      /* ===============================================
+         RESPOSTA
+      =============================================== */
+
+      return res.json({
+
+        success: true,
+
+        message:
+          'Orçamento enviado para o chat.',
+
+        mensagemId:
+          mensagemCriada._id,
+
+        compartilhamentos:
+          orcamento.compartilhamentos,
+
+        orcamento,
+
+        mensagem:
+          novaMensagem,
 
       });
 
     }
 
-    switch(destino){
+    /* =================================================
+       OUTROS DESTINOS
+    ================================================= */
 
-      case 'chat':
-        orcamento.compartilhamentos.chat=true;
-        break;
+    switch (destino) {
 
       case 'whatsapp':
-        orcamento.compartilhamentos.whatsapp=true;
+
+        orcamento
+          .compartilhamentos
+          .whatsapp = true;
+
         break;
 
       case 'email':
-        orcamento.compartilhamentos.email=true;
+
+        orcamento
+          .compartilhamentos
+          .email = true;
+
         break;
 
       case 'download':
-        orcamento.compartilhamentos.download=true;
+
+        orcamento
+          .compartilhamentos
+          .download = true;
+
         break;
-default:
-  return res.status(400).json({
-    error: 'Destino inválido.',
-  });
+
+      default:
+
+        return res.status(400).json({
+          error:
+            'Destino inválido.',
+        });
+
     }
 
-  if (destino !== 'download') {
-  orcamento.status = 'compartilhado';
-}
+    if (
+      destino !==
+      'download'
+    ) {
+
+      orcamento.status =
+        'compartilhado';
+
+    }
 
     await orcamento.save();
 
     return res.json({
 
-      success:true,
+      success: true,
 
-      message:'Compartilhamento registrado.',
+      message:
+        'Compartilhamento registrado.',
 
       compartilhamentos:
-      orcamento.compartilhamentos,
+        orcamento.compartilhamentos,
 
-      orcamento
+      orcamento,
 
     });
 
-  }catch(err){
+  } catch (err) {
 
-    console.error(err);
+    console.error(
+      'ERRO AO COMPARTILHAR ORÇAMENTO:',
+      err
+    );
 
     return res.status(500).json({
 
-      error:'Erro ao compartilhar orçamento.'
+      error:
+        'Erro ao compartilhar orçamento.',
+
+      details:
+        err.message,
 
     });
 

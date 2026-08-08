@@ -38,13 +38,24 @@ const mensagemSchema = new mongoose.Schema(
 
     /* ================= TIPO ================= */
 
-    type: {
-      type: String,
-      enum: ['text', 'image', 'location', 'system'],
-      default: 'text',
-      index: true,
-    },
-
+   type: {
+  type: String,
+  enum: [
+    'text',
+    'image',
+    'location',
+    'system',
+    'orcamento',
+  ],
+  default: 'text',
+  index: true,
+},
+orcamentoId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Orcamento',
+  default: null,
+  index: true,
+},
     /* ================= CONTROLE ================= */
 
     lidoPor: [
