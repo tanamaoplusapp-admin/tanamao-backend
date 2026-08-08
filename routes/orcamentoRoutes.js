@@ -15,7 +15,9 @@ try {
 }
 
 if (typeof verifyToken !== 'function') {
-  throw new Error('[orcamentoRoutes] Middleware verifyToken não encontrado.');
+  throw new Error(
+    '[orcamentoRoutes] Middleware verifyToken não encontrado.'
+  );
 }
 
 /* ================= CONTROLLER ================= */
@@ -30,19 +32,25 @@ const {
   excluirOrcamento,
   duplicarOrcamento,
   compartilharOrcamento,
+  favoritarOrcamento,
+  desfavoritarOrcamento,
+  gerarPdf,
 } = controller;
 
 /* ================= PARAM ================= */
 
-router.param('orcamentoId', (req, res, next, value) => {
-  if (!Types.ObjectId.isValid(String(value))) {
-    return res.status(400).json({
-      error: 'orcamentoId inválido',
-    });
-  }
+router.param(
+  'orcamentoId',
+  (req, res, next, value) => {
+    if (!Types.ObjectId.isValid(String(value))) {
+      return res.status(400).json({
+        error: 'orcamentoId inválido',
+      });
+    }
 
-  next();
-});
+    next();
+  }
+);
 
 /* =====================================================
    ROTAS
@@ -101,11 +109,16 @@ router.post(
   verifyToken,
   duplicarOrcamento
 );
+
+/**
+ * Gerar PDF
+ */
 router.post(
   '/:orcamentoId/pdf',
   verifyToken,
-  controller.gerarPdf
+  gerarPdf
 );
+
 /**
  * Compartilhar orçamento
  */
@@ -113,6 +126,24 @@ router.post(
   '/:orcamentoId/compartilhar',
   verifyToken,
   compartilharOrcamento
+);
+
+/**
+ * Favoritar orçamento
+ */
+router.patch(
+  '/:orcamentoId/favorito',
+  verifyToken,
+  favoritarOrcamento
+);
+
+/**
+ * Desfavoritar orçamento
+ */
+router.delete(
+  '/:orcamentoId/favorito',
+  verifyToken,
+  desfavoritarOrcamento
 );
 
 module.exports = router;

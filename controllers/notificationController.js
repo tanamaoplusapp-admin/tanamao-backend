@@ -256,22 +256,21 @@ exports.markRead = async (req, res) => {
         message: 'Notificação não encontrada.',
       });
     }
+if (!notification.read) {
+  notification.read = true;
+  await notification.save();
 
-    if (!notification.read) {
-      notification.read = true;
-      await notification.save();
+  const user = await User.findById(userId).select('unreadNotifications');
 
-      await User.updateOne(
-        {
-          _id: userId,
-          unreadNotifications: { $gt: 0 },
-        },
-        {
-          $inc: { unreadNotifications: -1 },
-        }
-      );
+  if (user) {
+    const atual = Number(user.unreadNotifications) || 0;
+
+    if (atual > 0) {
+      user.unreadNotifications = atual - 1;
+      await user.save();
     }
-
+  }
+}
     return res.json({ ok: true });
   } catch (err) {
     console.error('notification.markRead error', err);

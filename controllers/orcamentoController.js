@@ -402,7 +402,7 @@ error:'Profissional não encontrado.'
 
 }
 
-const {id}=req.params;
+const { orcamentoId } = req.params;
 
 const orcamento=await Orcamento.findOne({
 
@@ -834,7 +834,124 @@ default:
 
 };
 
+/* =====================================================
+   FAVORITAR
+===================================================== */
 
+exports.favoritarOrcamento = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Usuário não autenticado.',
+      });
+    }
+
+    const profissional = await Profissional.findOne({
+      userId,
+    });
+
+    if (!profissional) {
+      return res.status(404).json({
+        error: 'Profissional não encontrado.',
+      });
+    }
+
+    const { orcamentoId } = req.params;
+
+    const orcamento = await Orcamento.findOne({
+      _id: orcamentoId,
+      profissionalId: profissional._id,
+      ativo: true,
+      deletedAt: null,
+    });
+
+    if (!orcamento) {
+      return res.status(404).json({
+        error: 'Orçamento não encontrado.',
+      });
+    }
+
+    orcamento.favorito = true;
+
+    await orcamento.save();
+
+    return res.json({
+      success: true,
+      message: 'Orçamento adicionado aos favoritos.',
+      favorito: true,
+      orcamento,
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      error: 'Erro ao favoritar orçamento.',
+    });
+  }
+};
+
+
+/* =====================================================
+   DESFAVORITAR
+===================================================== */
+
+exports.desfavoritarOrcamento = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Usuário não autenticado.',
+      });
+    }
+
+    const profissional = await Profissional.findOne({
+      userId,
+    });
+
+    if (!profissional) {
+      return res.status(404).json({
+        error: 'Profissional não encontrado.',
+      });
+    }
+
+    const { orcamentoId } = req.params;
+
+    const orcamento = await Orcamento.findOne({
+      _id: orcamentoId,
+      profissionalId: profissional._id,
+      ativo: true,
+      deletedAt: null,
+    });
+
+    if (!orcamento) {
+      return res.status(404).json({
+        error: 'Orçamento não encontrado.',
+      });
+    }
+
+    orcamento.favorito = false;
+
+    await orcamento.save();
+
+    return res.json({
+      success: true,
+      message: 'Orçamento removido dos favoritos.',
+      favorito: false,
+      orcamento,
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      error: 'Erro ao remover orçamento dos favoritos.',
+    });
+  }
+};
 /* ============================================================
    GERAR PDF
 ============================================================ */
