@@ -17,6 +17,12 @@ const STATUS_ATIVOS = [
   'confirmado',
 ];
 
+const FILTRO_STATUS_ATIVOS = {
+  $or: [
+    { status: 'pendente' },
+    { status: 'confirmado' },
+  ],
+};
 /* =====================================================
    CRIAR
 ===================================================== */
@@ -45,13 +51,11 @@ exports.criar = async ({
   origem = 'manual',
 }) => {
 
-  const agendamentos = await Agenda.find({
-    profissionalId,
-    data,
-    status: {
-      $in: STATUS_ATIVOS,
-    },
-  });
+const agendamentos = await Agenda.find({
+  profissionalId,
+  data,
+  ...FILTRO_STATUS_ATIVOS,
+});
 
   for (const ag of agendamentos) {
     if (
@@ -158,11 +162,9 @@ exports.listarPorCliente = async (
     String(t || '').replace(/\D/g, '')
   );
 
-  const todos = await Agenda.find({
-    status: {
-      $in: STATUS_ATIVOS,
-    },
-  })
+ const todos = await Agenda.find({
+  ...FILTRO_STATUS_ATIVOS,
+})
     .populate(
       'profissionalId',
       'name nome telefone celular whatsapp phone profissao profissaoNome categoria especialidade'
@@ -204,16 +206,13 @@ exports.listar = async (
   profissionalId
 ) => {
 
-  return await Agenda.find({
-    profissionalId,
-
-    status: {
-      $in: STATUS_ATIVOS,
-    },
-  }).sort({
-    data: 1,
-    horaInicio: 1,
-  });
+ return await Agenda.find({
+  profissionalId,
+  ...FILTRO_STATUS_ATIVOS,
+}).sort({
+  data: 1,
+  horaInicio: 1,
+});
 };
 
 /* =====================================================
@@ -226,16 +225,13 @@ exports.listarComFiltro = async (
   fim
 ) => {
 
-  const agendamentos = await Agenda.find({
-    profissionalId,
-
-    status: {
-      $in: STATUS_ATIVOS,
-    },
-  }).sort({
-    data: 1,
-    horaInicio: 1,
-  });
+const agendamentos = await Agenda.find({
+  profissionalId,
+  ...FILTRO_STATUS_ATIVOS,
+}).sort({
+  data: 1,
+  horaInicio: 1,
+});
 
   if (!inicio || !fim) {
     return agendamentos;
@@ -289,20 +285,17 @@ exports.editar = async (
      VERIFICAR CONFLITOS
   ===================================================== */
 
-  const agendamentos =
-    await Agenda.find({
-      profissionalId,
+ const agendamentos =
+  await Agenda.find({
+    profissionalId,
+    data: novaData,
 
-      data: novaData,
+    ...FILTRO_STATUS_ATIVOS,
 
-      status: {
-        $in: STATUS_ATIVOS,
-      },
-
-      _id: {
-        $ne: id,
-      },
-    });
+    _id: {
+      $ne: id,
+    },
+  });
 
   for (const ag of agendamentos) {
 
