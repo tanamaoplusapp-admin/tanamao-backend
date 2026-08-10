@@ -27,7 +27,7 @@ const getHoraFormatada = (date) => {
 };
 
 /* =========================================================
-   ENVIAR PARA DESTINATÁRIOS
+   ENVIAR LEMBRETE PARA OS DESTINATÁRIOS
 ========================================================= */
 
 const enviarParaDestinatarios = async ({
@@ -72,6 +72,7 @@ const enviarParaDestinatarios = async ({
 
         payload: {
           destinatarioTipo: 'profissional',
+
           profissionalId:
             String(agenda.profissionalId),
 
@@ -147,7 +148,7 @@ const enviarParaDestinatarios = async ({
 };
 
 /* =========================================================
-   PROCESSAR LEMBRETES
+   PROCESSAR LEMBRETES DA AGENDA
 ========================================================= */
 
 const processarLembretesAgenda = async () => {
@@ -176,45 +177,65 @@ const processarLembretesAgenda = async () => {
         WINDOW_MINUTES * 60 * 1000
     );
 
-    const agendas1h =
-      await Agenda.find()
-        .where('dataHoraInicio')
-        .gte(inicio1h)
-        .lte(fim1h)
-        .where('status')
-        .in(['pendente', 'confirmado'])
-        .or([
-          { lembrete1hEnviado: false },
+    /*
+     * IMPORTANTE:
+     * mongoose.trusted() permite que os operadores
+     * do MongoDB sejam utilizados mesmo com
+     * sanitizeFilter habilitado no projeto.
+     */
+
+    const agendas1h = await Agenda.find(
+      mongoose.trusted({
+        dataHoraInicio: {
+          $gte: inicio1h,
+          $lte: fim1h,
+        },
+
+        status: {
+          $in: [
+            'pendente',
+            'confirmado',
+          ],
+        },
+
+        $or: [
           {
-            lembrete1hEnviado:
-              mongoose.trusted({
-                $exists: false,
-              }),
+            lembrete1hEnviado: false,
           },
-        ]);
+          {
+            lembrete1hEnviado: {
+              $exists: false,
+            },
+          },
+        ],
+      })
+    );
 
     for (const agenda of agendas1h) {
       try {
-        /* =================================================
-           TRAVA ATÔMICA
-        ================================================= */
+        /*
+         * 🔒 TRAVA ATÔMICA
+         *
+         * Só um processo pode marcar o lembrete
+         * como enviado.
+         */
 
         const atualizado =
           await Agenda.findOneAndUpdate(
-            {
+            mongoose.trusted({
               _id: agenda._id,
 
               $or: [
                 {
                   lembrete1hEnviado: false,
                 },
-                mongoose.trusted({
+                {
                   lembrete1hEnviado: {
                     $exists: false,
                   },
-                }),
+                },
               ],
-            },
+            }),
             {
               $set: {
                 lembrete1hEnviado: true,
@@ -225,7 +246,9 @@ const processarLembretesAgenda = async () => {
             }
           );
 
-        if (!atualizado) continue;
+        if (!atualizado) {
+          continue;
+        }
 
         await enviarParaDestinatarios({
           agenda: atualizado,
@@ -262,47 +285,55 @@ const processarLembretesAgenda = async () => {
         WINDOW_MINUTES * 60 * 1000
     );
 
-    const agendas30min =
-      await Agenda.find()
-        .where('dataHoraInicio')
-        .gte(inicio30min)
-        .lte(fim30min)
-        .where('status')
-        .in(['pendente', 'confirmado'])
-        .or([
+    const agendas30min = await Agenda.find(
+      mongoose.trusted({
+        dataHoraInicio: {
+          $gte: inicio30min,
+          $lte: fim30min,
+        },
+
+        status: {
+          $in: [
+            'pendente',
+            'confirmado',
+          ],
+        },
+
+        $or: [
           {
             lembrete30minEnviado: false,
           },
           {
-            lembrete30minEnviado:
-              mongoose.trusted({
-                $exists: false,
-              }),
+            lembrete30minEnviado: {
+              $exists: false,
+            },
           },
-        ]);
+        ],
+      })
+    );
 
     for (const agenda of agendas30min) {
       try {
-        /* =================================================
-           TRAVA ATÔMICA
-        ================================================= */
+        /*
+         * 🔒 TRAVA ATÔMICA
+         */
 
         const atualizado =
           await Agenda.findOneAndUpdate(
-            {
+            mongoose.trusted({
               _id: agenda._id,
 
               $or: [
                 {
                   lembrete30minEnviado: false,
                 },
-                mongoose.trusted({
+                {
                   lembrete30minEnviado: {
                     $exists: false,
                   },
-                }),
+                },
               ],
-            },
+            }),
             {
               $set: {
                 lembrete30minEnviado: true,
@@ -313,7 +344,9 @@ const processarLembretesAgenda = async () => {
             }
           );
 
-        if (!atualizado) continue;
+        if (!atualizado) {
+          continue;
+        }
 
         await enviarParaDestinatarios({
           agenda: atualizado,
