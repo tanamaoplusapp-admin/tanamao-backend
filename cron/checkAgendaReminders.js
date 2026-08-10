@@ -1,4 +1,3 @@
-const mongoose = require('mongoose');
 const Agenda = require('../models/Agenda');
 
 const {
@@ -27,7 +26,7 @@ const getHoraFormatada = (date) => {
 };
 
 /* =========================================================
-   ENVIAR LEMBRETE PARA OS DESTINATÁRIOS
+   ENVIAR LEMBRETE
 ========================================================= */
 
 const enviarParaDestinatarios = async ({
@@ -148,7 +147,7 @@ const enviarParaDestinatarios = async ({
 };
 
 /* =========================================================
-   PROCESSAR LEMBRETES DA AGENDA
+   PROCESSAR LEMBRETES
 ========================================================= */
 
 const processarLembretesAgenda = async () => {
@@ -178,64 +177,57 @@ const processarLembretesAgenda = async () => {
     );
 
     /*
-     * IMPORTANTE:
-     * mongoose.trusted() permite que os operadores
-     * do MongoDB sejam utilizados mesmo com
-     * sanitizeFilter habilitado no projeto.
+     * Usamos aggregate() aqui de propósito.
+     *
+     * Isso evita que o sanitizeFilter do Mongoose
+     * tente converter $gte, $lte, $in, $or e
+     * $exists em valores dos campos do Schema.
      */
 
-    const agendas1h = await Agenda.find(
-      mongoose.trusted({
-        dataHoraInicio: {
-          $gte: inicio1h,
-          $lte: fim1h,
-        },
-
-        status: {
-          $in: [
-            'pendente',
-            'confirmado',
-          ],
-        },
-
-        $or: [
-          {
-            lembrete1hEnviado: false,
+    const agendas1h = await Agenda.aggregate([
+      {
+        $match: {
+          dataHoraInicio: {
+            $gte: inicio1h,
+            $lte: fim1h,
           },
-          {
-            lembrete1hEnviado: {
-              $exists: false,
-            },
+
+          status: {
+            $in: [
+              'pendente',
+              'confirmado',
+            ],
           },
-        ],
-      })
-    );
+
+          $expr: {
+            $eq: [
+              {
+                $ifNull: [
+                  '$lembrete1hEnviado',
+                  false,
+                ],
+              },
+              false,
+            ],
+          },
+        },
+      },
+    ]);
 
     for (const agenda of agendas1h) {
       try {
         /*
-         * 🔒 TRAVA ATÔMICA
+         * 🔒 MARCA COMO ENVIADO
          *
-         * Só um processo pode marcar o lembrete
-         * como enviado.
+         * Aqui usamos somente _id no filtro.
+         * Não usamos $ne, $or, $exists etc.
          */
 
         const atualizado =
           await Agenda.findOneAndUpdate(
-            mongoose.trusted({
+            {
               _id: agenda._id,
-
-              $or: [
-                {
-                  lembrete1hEnviado: false,
-                },
-                {
-                  lembrete1hEnviado: {
-                    $exists: false,
-                  },
-                },
-              ],
-            }),
+            },
             {
               $set: {
                 lembrete1hEnviado: true,
@@ -285,55 +277,48 @@ const processarLembretesAgenda = async () => {
         WINDOW_MINUTES * 60 * 1000
     );
 
-    const agendas30min = await Agenda.find(
-      mongoose.trusted({
-        dataHoraInicio: {
-          $gte: inicio30min,
-          $lte: fim30min,
-        },
+    const agendas30min =
+      await Agenda.aggregate([
+        {
+          $match: {
+            dataHoraInicio: {
+              $gte: inicio30min,
+              $lte: fim30min,
+            },
 
-        status: {
-          $in: [
-            'pendente',
-            'confirmado',
-          ],
-        },
+            status: {
+              $in: [
+                'pendente',
+                'confirmado',
+              ],
+            },
 
-        $or: [
-          {
-            lembrete30minEnviado: false,
-          },
-          {
-            lembrete30minEnviado: {
-              $exists: false,
+            $expr: {
+              $eq: [
+                {
+                  $ifNull: [
+                    '$lembrete30minEnviado',
+                    false,
+                  ],
+                },
+                false,
+              ],
             },
           },
-        ],
-      })
-    );
+        },
+      ]);
 
     for (const agenda of agendas30min) {
       try {
         /*
-         * 🔒 TRAVA ATÔMICA
+         * 🔒 MARCA COMO ENVIADO
          */
 
         const atualizado =
           await Agenda.findOneAndUpdate(
-            mongoose.trusted({
+            {
               _id: agenda._id,
-
-              $or: [
-                {
-                  lembrete30minEnviado: false,
-                },
-                {
-                  lembrete30minEnviado: {
-                    $exists: false,
-                  },
-                },
-              ],
-            }),
+            },
             {
               $set: {
                 lembrete30minEnviado: true,
