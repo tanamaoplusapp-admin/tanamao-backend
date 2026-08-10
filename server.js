@@ -328,15 +328,32 @@ app.use('/', privacyRoutes);
 ===================================================== */
 
 cron.schedule('0 7 5 * *', async () => {
-  try { await cobrarMensalidades(); }
-  catch (e) { console.error('❌ Erro ao cobrar mensalidades:', e); }
-}, { timezone: process.env.CRON_TZ || 'America/Sao_Paulo' });
+  try {
+    await cobrarMensalidades();
+  } catch (e) {
+    console.error('❌ Erro ao cobrar mensalidades:', e);
+  }
+}, {
+  timezone: process.env.CRON_TZ || 'America/Sao_Paulo'
+});
 
 if (process.env.ENABLE_CRONS !== 'false') {
-  try { require('./cron/checkExpiredPix').startPixCron(); }
-  catch (e) { console.error('❌ Falha ao iniciar cron PIX:', e); }
-}
+  try {
+    require('./cron/checkExpiredPix').startPixCron();
+  } catch (e) {
+    console.error('❌ Falha ao iniciar cron PIX:', e);
+  }
 
+  try {
+    require('./cron/checkAgendaReminders')
+      .startAgendaReminderCron();
+  } catch (e) {
+    console.error(
+      '❌ Falha ao iniciar cron de lembretes da agenda:',
+      e
+    );
+  }
+}
 /* =====================================================
    SOCKET.IO (SEM ALTERAR ESTRUTURA)
 ===================================================== */

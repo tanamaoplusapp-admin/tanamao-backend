@@ -77,6 +77,17 @@ const AgendaSchema = new mongoose.Schema(
     dataHoraFim: {
       type: Date,
     },
+    lembrete1hEnviado: {
+  type: Boolean,
+  default: false,
+  index: true,
+},
+
+lembrete30minEnviado: {
+  type: Boolean,
+  default: false,
+  index: true,
+},
 
   status: {
   type: String,
@@ -140,7 +151,6 @@ confirmadoPor: {
     timestamps: true,
   }
 );
-
 AgendaSchema.index({
   profissionalId: 1,
   data: 1,
@@ -159,6 +169,14 @@ AgendaSchema.index({
 
 AgendaSchema.index({
   categoria: 1,
+});
+
+// 🔔 ÍNDICE PARA BUSCAR AGENDAMENTOS PRÓXIMOS
+AgendaSchema.index({
+  dataHoraInicio: 1,
+  status: 1,
+  lembrete1hEnviado: 1,
+  lembrete30minEnviado: 1,
 });
 
 AgendaSchema.index(

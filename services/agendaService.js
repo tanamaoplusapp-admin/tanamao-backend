@@ -347,33 +347,58 @@ exports.editar = async (
       dados.clienteTelefoneOriginal;
   }
 
-  /* =====================================================
-     ATUALIZAR DATETIME
-  ===================================================== */
+// =====================================================
+// ATUALIZAR DATETIME
+// =====================================================
 
-  if (
-    dados.data !== undefined ||
-    dados.horaInicio !== undefined
-  ) {
+if (
+  dados.data !== undefined ||
+  dados.horaInicio !== undefined
+) {
+  agendamento.dataHoraInicio =
+    new Date(
+      `${novaData}T${novaHoraInicio}:00`
+    );
+}
 
-    agendamento.dataHoraInicio =
-      new Date(
-        `${novaData}T${novaHoraInicio}:00`
-      );
-  }
+if (
+  dados.data !== undefined ||
+  dados.horaFim !== undefined
+) {
+  agendamento.dataHoraFim =
+    new Date(
+      `${novaData}T${novaHoraFim}:00`
+    );
+}
 
-  if (
-    dados.data !== undefined ||
-    dados.horaFim !== undefined
-  ) {
+// 🔔 Se a data ou horário mudou,
+// os lembretes precisam ser enviados novamente.
+if (
+  dados.data !== undefined ||
+  dados.horaInicio !== undefined ||
+  dados.horaFim !== undefined
+) {
+  agendamento.lembrete1hEnviado = false;
+  agendamento.lembrete30minEnviado = false;
+}
 
-    agendamento.dataHoraFim =
-      new Date(
-        `${novaData}T${novaHoraFim}:00`
-      );
-  }
+await agendamento.save();
 
-  await agendamento.save();
+// =====================================================
+// 🔔 RESETAR LEMBRETES SE DATA/HORÁRIO MUDOU
+// =====================================================
+
+if (
+  dados.data !== undefined ||
+  dados.horaInicio !== undefined ||
+  dados.horaFim !== undefined
+) {
+  agendamento.lembrete1hEnviado = false;
+  agendamento.lembrete30minEnviado = false;
+}
+
+await agendamento.save();
+
 
   return agendamento;
 };

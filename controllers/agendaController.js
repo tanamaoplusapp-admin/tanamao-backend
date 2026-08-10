@@ -477,7 +477,7 @@ agenda.status = 'pendente';
 agenda.conviteStatus = 'aceito';
 agenda.conviteAceitoEm = new Date();
 
-await agenda.save();
+
 
     await agenda.save();
 

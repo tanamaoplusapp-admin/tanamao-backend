@@ -274,7 +274,21 @@ function getNotificationContent({ type, title, message, payload = {} }) {
         title: 'Agendamento cancelado',
         message: 'Um agendamento foi cancelado.',
       };
+case 'AGENDAMENTO_LEMBRETE_1H':
+  return {
+    title: 'Lembrete de agendamento',
+    message: nomeCliente
+      ? `Você tem um agendamento com ${nomeCliente} daqui a 1 hora.`
+      : 'Você tem um agendamento daqui a 1 hora.',
+  };
 
+case 'AGENDAMENTO_LEMBRETE_30MIN':
+  return {
+    title: 'Agendamento em 30 minutos',
+    message: nomeCliente
+      ? `Seu agendamento com ${nomeCliente} começa em 30 minutos.`
+      : 'Seu agendamento começa em 30 minutos.',
+  };
     /* =========================
        ORÇAMENTO
     ========================= */
@@ -867,7 +881,52 @@ exports.notifyProfissionalNovaMensagem = async ({
     payload,
   });
 };
+/* =========================================================
+   AGENDA: LEMBRETE DE AGENDAMENTO
+========================================================= */
 
+exports.notifyLembreteAgendamento = async ({
+  userId,
+  agendamentoId,
+  tipoLembrete,
+  titulo,
+  mensagem,
+  payload = {},
+}) => {
+  if (!userId || !agendamentoId || !tipoLembrete) {
+    console.warn(
+      '[notificationService.notifyLembreteAgendamento] dados ausentes',
+      {
+        userId,
+        agendamentoId,
+        tipoLembrete,
+      }
+    );
+
+    return null;
+  }
+
+  const type =
+    tipoLembrete === '1h'
+      ? 'AGENDAMENTO_LEMBRETE_1H'
+      : 'AGENDAMENTO_LEMBRETE_30MIN';
+
+  return exports.sendNotification({
+    userId,
+    type,
+    title: titulo,
+    message: mensagem,
+    relatedId: agendamentoId,
+    agendamentoId,
+    payload: {
+      notificationKind: 'agenda',
+      abrir: 'agenda',
+      tipoLembrete,
+      agendamentoId: stringifyId(agendamentoId),
+      ...payload,
+    },
+  });
+};
 /* =========================================================
    EXPORT AUXILIAR
 ========================================================= */
