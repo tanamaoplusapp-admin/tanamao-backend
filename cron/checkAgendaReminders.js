@@ -141,9 +141,10 @@ const processarLembretesAgenda = async () => {
         $nin: ['cancelado', 'finalizado'],
       },
 
-      lembrete1hEnviado: {
-        $ne: true,
-      },
+     $or: [
+  { lembrete1hEnviado: false },
+  { lembrete1hEnviado: { $exists: false } },
+],
     });
 
     for (const agenda of agendas1h) {
@@ -152,9 +153,10 @@ const processarLembretesAgenda = async () => {
         const atualizado = await Agenda.findOneAndUpdate(
           {
             _id: agenda._id,
-            lembrete1hEnviado: {
-              $ne: true,
-            },
+           $or: [
+  { lembrete1hEnviado: false },
+  { lembrete1hEnviado: { $exists: false } },
+],
           },
           {
             $set: {
@@ -211,9 +213,10 @@ const processarLembretesAgenda = async () => {
         $nin: ['cancelado', 'finalizado'],
       },
 
-      lembrete30minEnviado: {
-        $ne: true,
-      },
+     $or: [
+  { lembrete30minEnviado: false },
+  { lembrete30minEnviado: { $exists: false } },
+],
     });
 
     for (const agenda of agendas30min) {
@@ -222,9 +225,10 @@ const processarLembretesAgenda = async () => {
         const atualizado = await Agenda.findOneAndUpdate(
           {
             _id: agenda._id,
-            lembrete30minEnviado: {
-              $ne: true,
-            },
+            $or: [
+  { lembrete30minEnviado: false },
+  { lembrete30minEnviado: { $exists: false } },
+],
           },
           {
             $set: {
