@@ -1009,15 +1009,34 @@ GET /api/servicos
 exports.listServices = async (req, res, next) => {
   try {
 
-   const servicos = await Servico.find({
-  profissional: profissionalId,
-})
-  .sort({ createdAt: -1 })
-  .populate('cliente', 'name')
-  .populate('chatId', 'ultimoTexto');
-    res.json({ servicos });
+    console.log('==============================');
+    console.log('LISTAR TODOS OS SERVIÇOS');
+    console.log('GET /api/servicos');
+    console.log('==============================');
+
+    const servicos = await Servico.find()
+      .sort({ createdAt: -1 })
+      .populate('cliente', 'name email telefone')
+      .populate('profissional', 'name email telefone')
+      .populate('empresa', 'name')
+      .populate('chatId', 'ultimoTexto');
+
+    console.log(
+      'SERVIÇOS ENCONTRADOS:',
+      servicos.length
+    );
+
+    return res.status(200).json({
+      servicos,
+    });
 
   } catch (err) {
+
+    console.error(
+      '❌ ERRO listServices:',
+      err
+    );
+
     next(err);
   }
 };
