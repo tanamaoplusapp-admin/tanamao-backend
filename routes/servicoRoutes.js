@@ -14,6 +14,15 @@ const checkProfessionalAccess = require('../middleware/checkProfessionalAccess')
    ORDEM IMPORTA!
    Rotas específicas antes de /:id
 ===================================================== */
+/**
+ * 📋 LISTAR TODOS OS SERVIÇOS
+ * Usado principalmente pelo painel administrativo
+ */
+router.get(
+  '/',
+  verifyToken,
+  ctrl.listServices
+);
 router.patch(
   '/:id/cancelar',
   verifyToken,
