@@ -1312,6 +1312,32 @@ if (principal) {
 
 if (req.body.tipoAtendimento !== undefined)
   updateData.tipoAtendimento = req.body.tipoAtendimento;
+/* ============================
+   PREFERÊNCIA DE ATENDIMENTO
+   SALVA NO USER
+============================ */
+
+if (req.body.preferenciaAtendimento !== undefined) {
+  const preferenciasValidas = [
+    'todos',
+    'somente_mulheres',
+    'somente_homens',
+  ];
+
+  if (
+    !preferenciasValidas.includes(
+      req.body.preferenciaAtendimento
+    )
+  ) {
+    return res.status(400).json({
+      ok: false,
+      message: 'Preferência de atendimento inválida.',
+    });
+  }
+
+  user.preferenciaAtendimento =
+    req.body.preferenciaAtendimento;
+}
     /* ============================
        FLAGS
     ============================ */
@@ -1454,6 +1480,7 @@ if (socorristaFinal && servicosSocorroFinal.length === 0) {
   { $set: updateData },
   { new: true, runValidators: true }
 );
+await user.save();
 
 console.log('SALVO NO BANCO:', updated);
 await activityEngine.register(
@@ -1466,7 +1493,16 @@ await activityEngine.register(
 return res.json({
   ok: true,
   message: 'Perfil atualizado com sucesso',
-  profissional: updated,
+
+  profissional: {
+    ...updated.toObject(),
+
+    genero:
+      user.genero || 'nao_informado',
+
+    preferenciaAtendimento:
+      user.preferenciaAtendimento || 'todos',
+  },
 });
 
   } catch (error) {
@@ -1551,9 +1587,9 @@ exports.getMe = async (req, res) => {
     ============================ */
 
     const user = await User.findById(id)
-      .select(
-        'name codigoIndicacao totalIndicacoes acessoExpiraEm'
-      );
+  .select(
+    'name codigoIndicacao totalIndicacoes acessoExpiraEm genero preferenciaAtendimento'
+  );
 
     if (!user) {
       return res.status(404).json({
@@ -1618,7 +1654,15 @@ exports.getMe = async (req, res) => {
 
     prof.acessoExpiraEm =
       user.acessoExpiraEm || null;
+/* ============================
+   PREFERÊNCIA DE ATENDIMENTO
+============================ */
 
+prof.genero =
+  user.genero || 'nao_informado';
+
+prof.preferenciaAtendimento =
+  user.preferenciaAtendimento || 'todos';
     /* ============================
        RESPOSTA
     ============================ */
