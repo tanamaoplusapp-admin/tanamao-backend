@@ -122,6 +122,7 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
       email,
       telefone,
       cpf,
+      genero,
       senha,
       codigoIndicacaoUsado,
 
@@ -293,6 +294,8 @@ indicadoPor:
   null,
       phone: telefone,
       cpf: cpfLimpo,
+      genero:
+    genero || 'nao_informado',
 
       cidade: cidadeFinal,
       estado: estadoFinal,
