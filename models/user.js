@@ -37,7 +37,30 @@ const userSchema = new Schema(
     validate:[validator.isEmail,'E-mail inválido'],
     index:true
   },
-
+genero: {
+  type: String,
+  enum: ['feminino', 'masculino', 'outro', 'nao_informado'],
+  default: 'nao_informado',
+},
+preferenciaAtendimento: {
+  type: String,
+  enum: [
+    'todos',
+    'somente_mulheres',
+    'somente_homens'
+  ],
+  default: 'todos',
+},
+// Preferência do cliente sobre o gênero do profissional
+preferenciaProfissional: {
+  type: String,
+  enum: [
+    'todos',
+    'somente_mulheres',
+    'somente_homens'
+  ],
+  default: 'todos',
+},
   password:{
     type:String,
     required:[true,'Senha é obrigatória'],

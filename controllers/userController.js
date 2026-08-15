@@ -806,6 +806,53 @@ ATUALIZAR PERFIL
 ===================================================== */
 
 exports.updateMe = asyncHandler(async (req, res) => {
+  const usuarioAtual = await User.findById(req.user._id)
+  .select('temPerfilProfissional role');
+
+if (!usuarioAtual) {
+  res.status(404);
+  throw new Error('Usuário não encontrado');
+}
+const preferenciasValidas = [
+  'todos',
+  'somente_mulheres',
+  'somente_homens',
+];
+
+if (
+  req.body.preferenciaProfissional !== undefined &&
+  !preferenciasValidas.includes(
+    req.body.preferenciaProfissional
+  )
+) {
+  return res.status(400).json({
+    success: false,
+    message: 'Preferência de profissional inválida.',
+  });
+}
+
+if (
+  req.body.preferenciaAtendimento !== undefined
+) {
+  if (!usuarioAtual.temPerfilProfissional) {
+    return res.status(403).json({
+      success: false,
+      message:
+        'Apenas profissionais podem alterar a preferência de atendimento.',
+    });
+  }
+
+  if (
+    !preferenciasValidas.includes(
+      req.body.preferenciaAtendimento
+    )
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: 'Preferência de atendimento inválida.',
+    });
+  }
+}
   const allow = [
     'name',
     'phone',
@@ -816,7 +863,9 @@ exports.updateMe = asyncHandler(async (req, res) => {
     'cidade',
     'estado',
     'geo',
-    'notificacoesAtivas'
+    'notificacoesAtivas',
+    'preferenciaAtendimento',
+    'preferenciaProfissional'
   ];
 
   const patch = {};
@@ -844,8 +893,8 @@ exports.updateMe = asyncHandler(async (req, res) => {
         coordinates: [e.longitude, e.latitude],
       };
     }
-  }
 
+}
   const me = await User.findByIdAndUpdate(
     req.user._id,
     { $set: patch },
@@ -1024,7 +1073,11 @@ exports.ativarPerfilProfissional = asyncHandler(async (req, res) => {
       user.temPerfilProfissional = true;
       await user.save();
     }
-
+// Preferência inicial do profissional.
+// Ao ativar o perfil, começa aceitando todos.
+if (!user.preferenciaAtendimento) {
+  user.preferenciaAtendimento = 'todos';
+}
     return res.json({
       ok: true,
       jaExistia: true,

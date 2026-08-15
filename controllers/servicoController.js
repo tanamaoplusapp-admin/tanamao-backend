@@ -58,6 +58,48 @@ async function updateProfessionalServiceStats(profissionalIdentifier) {
     }
   );
 }
+/**
+ * ==========================================================
+ * 🔐 COMPATIBILIDADE DE ATENDIMENTO
+ * ==========================================================
+ *
+ * Verifica se o cliente pode solicitar o profissional
+ * de acordo com a preferência de atendimento definida
+ * pelo profissional.
+ */
+
+function clientePodeContratarProfissional(
+  cliente,
+  profissional
+) {
+  if (!cliente || !profissional) {
+    return false;
+  }
+
+  const preferencia =
+    profissional.preferenciaAtendimento || 'todos';
+
+  // Profissional aceita qualquer cliente
+  if (preferencia === 'todos') {
+    return true;
+  }
+
+  const generoCliente =
+    cliente.genero || 'nao_informado';
+
+  // Profissional atende somente mulheres
+  if (preferencia === 'somente_mulheres') {
+    return generoCliente === 'feminino';
+  }
+
+  // Profissional atende somente homens
+  if (preferencia === 'somente_homens') {
+    return generoCliente === 'masculino';
+  }
+
+  // Qualquer valor desconhecido é bloqueado
+  return false;
+}
 /* =====================================================
 CRIAR SERVIÇO
 POST /api/servicos
@@ -107,7 +149,14 @@ console.log("BODY:", req.body)
       return res.status(400).json({
         message: 'clienteId ausente.',
       });
+const clienteUsuario = await User.findById(cliente)
+  .select('genero');
 
+if (!clienteUsuario) {
+  return res.status(404).json({
+    message: 'Cliente não encontrado',
+  });
+}
 /* =========================
    VERIFICAR CRÉDITOS
 ========================= */
@@ -116,23 +165,40 @@ let profissional = null;
 
 if (profissionalId) {
 
-profissional = await User.findById(profissionalId)
-.select(
-'receberServicos acessoExpiraEm'
-)
+  profissional = await User.findById(profissionalId)
+    .select(
+      'receberServicos acessoExpiraEm genero preferenciaAtendimento'
+    );
 
-if (!profissional){
-return res.status(404).json({
-message:'Profissional não encontrado'
-})
+  if (!profissional) {
+    return res.status(404).json({
+      message: 'Profissional não encontrado'
+    });
+  }
+
+
+
+ const podeContratar =
+  clientePodeContratarProfissional(
+    clienteUsuario,
+    profissional
+  );
+
+if (!podeContratar) {
+  return res.status(403).json({
+    success: false,
+    code: 'PROFISSIONAL_NAO_ATENDE_ESTE_CLIENTE',
+    message:
+      'Este profissional não está disponível para o seu perfil de atendimento.',
+  });
 }
 
-// bloqueio manual
-if(profissional.receberServicos === false){
-return res.status(403).json({
-message:'Profissional indisponível'
-})
-}
+  // bloqueio manual
+  if (profissional.receberServicos === false) {
+    return res.status(403).json({
+      message: 'Profissional indisponível'
+    });
+  }
 
 }
 
@@ -185,22 +251,18 @@ if (!chat && profissionalId) {
   const clienteId = String(cliente);
   const profissionalIdStr = String(profissionalId);
 
-if (!chat && profissionalId) {
-  const clienteId = String(cliente);
-  const profissionalIdStr = String(profissionalId);
+  const mongoose = require('mongoose');
 
- const mongoose = require('mongoose');
-
-chat = await Chat.findOne({
-  $and: [
-    {
-      participantes: new mongoose.Types.ObjectId(clienteId),
-    },
-    {
-      participantes: new mongoose.Types.ObjectId(profissionalIdStr),
-    },
-  ],
-});
+  chat = await Chat.findOne({
+    $and: [
+      {
+        participantes: new mongoose.Types.ObjectId(clienteId),
+      },
+      {
+        participantes: new mongoose.Types.ObjectId(profissionalIdStr),
+      },
+    ],
+  });
 
   // Garante que seja um chat apenas entre essas duas pessoas
   if (chat && chat.participantes.length !== 2) {
@@ -214,7 +276,6 @@ chat = await Chat.findOne({
       atualizadoEm: new Date(),
     });
   }
-}
 }
 
 
@@ -430,8 +491,8 @@ if (filtrosCompatibilidade.length > 0) {
     await Profissional.find(filtro)
       .populate({
         path: 'userId',
-        select:
-          'acessoExpiraEm receberServicos online',
+      select:
+  'acessoExpiraEm receberServicos online genero preferenciaAtendimento'
       })
       .lean();
 
@@ -499,7 +560,9 @@ if (filtrosCompatibilidade.length > 0) {
     profissaoId:
       req.body.profissaoId ||
       null,
-
+clienteGenero: clienteUsuario?.genero || 'nao_informado',
+preferenciaProfissional:
+  clienteUsuario?.preferenciaProfissional || 'todos',
     servicoNome:
       servicoNome ||
       descricao ||

@@ -186,7 +186,100 @@ function sameId(first, second) {
 
   return firstId === secondId;
 }
+/* ============================================================
+   ELEGIBILIDADE DE ATENDIMENTO
+============================================================ */
 
+/**
+ * Verifica se o profissional aceita atender este cliente.
+ *
+ * A preferência de atendimento é uma regra de elegibilidade,
+ * não um fator de pontuação do TanaMatch.
+ */
+function profissionalPodeAtenderCliente(
+  profissional,
+  context = {}
+) {
+  /* =====================================================
+     GÊNERO DO CLIENTE
+  ===================================================== */
+
+  const generoCliente =
+    context?.clienteGenero ||
+    'nao_informado';
+
+  /* =====================================================
+     PREFERÊNCIA DA PROFISSIONAL
+  ===================================================== */
+
+  const preferenciaProfissional =
+    profissional?.userId?.preferenciaAtendimento ||
+    profissional?.preferenciaAtendimento ||
+    'todos';
+
+  /* =====================================================
+     REGRA DA PROFISSIONAL
+  ===================================================== */
+
+  if (
+    preferenciaProfissional ===
+    'somente_mulheres' &&
+    generoCliente !== 'feminino'
+  ) {
+    return false;
+  }
+
+  if (
+    preferenciaProfissional ===
+    'somente_homens' &&
+    generoCliente !== 'masculino'
+  ) {
+    return false;
+  }
+
+  /* =====================================================
+     GÊNERO DA PROFISSIONAL
+  ===================================================== */
+
+  const generoProfissional =
+    profissional?.userId?.genero ||
+    profissional?.genero ||
+    'nao_informado';
+
+  /* =====================================================
+     PREFERÊNCIA DO CLIENTE
+  ===================================================== */
+
+  const preferenciaCliente =
+    context?.preferenciaProfissional ||
+    'todos';
+
+  /* =====================================================
+     REGRA DO CLIENTE
+  ===================================================== */
+
+  if (
+    preferenciaCliente ===
+    'somente_mulheres' &&
+    generoProfissional !== 'feminino'
+  ) {
+    return false;
+  }
+
+  if (
+    preferenciaCliente ===
+    'somente_homens' &&
+    generoProfissional !== 'masculino'
+  ) {
+    return false;
+  }
+
+  /* =====================================================
+     COMPATÍVEL DOS DOIS LADOS
+  ===================================================== */
+
+  return true;
+}
 /* ============================================================
    GEOLOCALIZAÇÃO
 ============================================================ */
@@ -1191,9 +1284,22 @@ function selectBestCandidates(
     minimumScore = 0,
   } = options;
 
+  // 🔐 Primeiro removemos profissionais incompatíveis
+  // com a preferência de atendimento.
+  //
+  // Somente os profissionais elegíveis entram
+  // no cálculo/ranking do TanaMatch.
+  const profissionaisElegiveis =
+    profissionais.filter((profissional) =>
+      profissionalPodeAtenderCliente(
+        profissional,
+        context
+      )
+    );
+
   const sorted =
     sortProfessionalsByMatch(
-      profissionais,
+      profissionaisElegiveis,
       context
     );
 

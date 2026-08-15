@@ -556,6 +556,7 @@ exports.registerGeneric = async (req,res)=>{
   password,
   role = 'cliente',
   cpf,
+  genero,
   telefone,
   nascimento,
   cidade,
@@ -593,6 +594,7 @@ exports.registerGeneric = async (req,res)=>{
 
   // 🔥 NOVOS CAMPOS
   cpf,
+  genero,
   phone: telefone,
   cidade,
   estado,
