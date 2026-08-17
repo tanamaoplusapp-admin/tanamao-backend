@@ -320,6 +320,15 @@ Object.values(routes).forEach(({ path, module: modPath }) => {
   }
 });
 const privacyRoutes = require('./routes/privacy');
+
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Disallow: /
+Allow: /privacy
+`);
+});
+
 app.use('/', privacyRoutes);
 
 
