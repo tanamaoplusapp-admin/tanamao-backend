@@ -1032,24 +1032,66 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
   if (!user) {
     return res.status(404).json({
       ok: false,
-      message: 'Usuário não encontrado',
+      message: 'Usuário não encontrado.',
     });
   }
 
-  // Se for profissional, remove também o perfil profissional
-  if (user.role === 'profissional' || user.temPerfilProfissional === true) {
-    await Profissional.deleteOne({
-      userId: userId,
+  // Normaliza o CPF do usuário
+  const cpf = String(user.cpf || '').replace(/\D/g, '');
+
+  /*
+   * PROFISSIONAL
+   *
+   * Remove o perfil profissional pelo userId
+   * e também pelo CPF, para cobrir perfis antigos
+   * que ficaram órfãos ou foram criados sem vínculo correto.
+   */
+  if (
+    user.role === 'profissional' ||
+    user.temPerfilProfissional === true
+  ) {
+    const filtros = [
+      { userId: user._id },
+    ];
+
+    if (cpf) {
+      filtros.push({ cpf });
+    }
+
+    const resultadoProfissional =
+      await Profissional.deleteMany({
+        $or: filtros,
+      });
+
+    console.log(
+      `🗑️ Profissionais removidos: ${resultadoProfissional.deletedCount}`
+    );
+  }
+
+  /*
+   * Remove a conta principal.
+   *
+   * Isso libera o e-mail e o CPF armazenados no User.
+   */
+  const resultadoUser =
+    await User.deleteOne({
+      _id: user._id,
+    });
+
+  if (resultadoUser.deletedCount !== 1) {
+    return res.status(500).json({
+      ok: false,
+      message: 'Não foi possível excluir a conta.',
     });
   }
 
-  // Cliente, profissional e demais tipos:
-  // remove o registro principal da conta.
-  await User.findByIdAndDelete(userId);
+  console.log(
+    `🗑️ User removido: ${user.email}`
+  );
 
-  return res.json({
+  return res.status(200).json({
     ok: true,
-    message: 'Conta excluída com sucesso',
+    message: 'Conta excluída com sucesso.',
   });
 });
 /* =====================================================
