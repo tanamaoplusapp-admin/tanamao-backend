@@ -1026,13 +1026,31 @@ exports.updateUserAvailability = async (req, res) => {
 exports.deleteAccount = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
+  // Busca o usuário antes de excluir
+  const user = await User.findById(userId);
+
+  if (!user) {
+    return res.status(404).json({
+      ok: false,
+      message: 'Usuário não encontrado',
+    });
+  }
+
+  // Se for profissional, remove também o perfil profissional
+  if (user.role === 'profissional' || user.temPerfilProfissional === true) {
+    await Profissional.deleteOne({
+      userId: userId,
+    });
+  }
+
+  // Cliente, profissional e demais tipos:
+  // remove o registro principal da conta.
   await User.findByIdAndDelete(userId);
 
-  res.json({
+  return res.json({
     ok: true,
-    message: "Conta excluída com sucesso"
+    message: 'Conta excluída com sucesso',
   });
-  
 });
 /* =====================================================
 ATIVAR PERFIL PROFISSIONAL
