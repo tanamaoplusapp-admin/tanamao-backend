@@ -156,7 +156,42 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
         message: 'Dados obrigatórios ausentes',
       });
     }
+/* =========================
+   VALIDAÇÃO
+========================= */
 
+if (!nome || !email || !cpf || !telefone || !senha) {
+  return res.status(400).json({
+    ok: false,
+    message: 'Dados obrigatórios ausentes',
+  });
+}
+
+/* =========================
+   VALIDAR CATEGORIA E PROFISSÃO
+========================= */
+
+if (
+  !categoriaId ||
+  !profissaoId ||
+  !String(profissaoNome || '').trim()
+) {
+  return res.status(400).json({
+    ok: false,
+    message: 'Categoria e profissão são obrigatórias',
+  });
+}
+
+/* =========================
+   NORMALIZAÇÃO
+========================= */
+
+const emailNorm = String(email)
+  .trim()
+  .toLowerCase();
+
+const cpfLimpo = String(cpf)
+  .replace(/\D/g, '');
     const emailNorm = String(email)
       .trim()
       .toLowerCase();
@@ -602,13 +637,15 @@ if (
       error
     );
 
-    return res.status(500).json({
-      ok: false,
-      message:
-        'Erro ao cadastrar profissional',
-      details:
-        error.message,
-    });
+    console.error(
+  'register-profissional error:',
+  error
+);
+
+return res.status(500).json({
+  ok: false,
+  message: 'Erro ao cadastrar profissional',
+});
   }
 });
 
