@@ -33,7 +33,12 @@ exports.registerComplete = async (req, res) => {
       nascimento,
       endereco
     } = req.body;
-
+if (!String(genero || '').trim()) {
+  return res.status(400).json({
+    ok: false,
+    message: 'Gênero é obrigatório',
+  });
+}
     /* ================= VALIDATION ================= */
 
     if (!name || !email || !password) {

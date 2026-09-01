@@ -160,13 +160,38 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
    VALIDAÇÃO
 ========================= */
 
-if (!nome || !email || !cpf || !telefone || !senha) {
+if (
+  !nome ||
+  !email ||
+  !cpf ||
+  !telefone ||
+  !senha ||
+  !genero
+) {
   return res.status(400).json({
     ok: false,
-    message: 'Dados obrigatórios ausentes',
+    message: 'Nome, e-mail, CPF, telefone, senha e gênero são obrigatórios',
   });
 }
+/* =========================
+   VALIDAR GÊNERO
+========================= */
 
+const generosPermitidos = [
+  'homem_cis',
+  'mulher_cis',
+  'homem_trans',
+  'mulher_trans',
+  'nao_binario',
+  'outro',
+];
+
+if (!generosPermitidos.includes(genero)) {
+  return res.status(400).json({
+    ok: false,
+    message: 'Selecione um gênero válido',
+  });
+}
 /* =========================
    VALIDAR CATEGORIA E PROFISSÃO
 ========================= */
@@ -181,23 +206,12 @@ if (
     message: 'Categoria e profissão são obrigatórias',
   });
 }
-
-/* =========================
-   NORMALIZAÇÃO
-========================= */
-
 const emailNorm = String(email)
   .trim()
   .toLowerCase();
 
 const cpfLimpo = String(cpf)
   .replace(/\D/g, '');
-    const emailNorm = String(email)
-      .trim()
-      .toLowerCase();
-
-    const cpfLimpo = String(cpf)
-      .replace(/\D/g, '');
 
     /* =========================
        VERIFICAR E-MAIL
