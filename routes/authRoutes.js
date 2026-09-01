@@ -178,10 +178,8 @@ if (
 ========================= */
 
 const generosPermitidos = [
-  'homem_cis',
-  'mulher_cis',
-  'homem_trans',
-  'mulher_trans',
+  'homem',
+  'mulher',
   'nao_binario',
   'outro',
 ];
