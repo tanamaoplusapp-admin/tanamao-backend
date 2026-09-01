@@ -61,7 +61,31 @@ const asNumber = (v) => {
 };
 
 const objectId = Joi.string().hex().length(24);
+/* =====================================================
+   PLANOS TANAMÃO+
+===================================================== */
 
+const PLANOS = {
+  '1_dia': {
+    dias: 1,
+    valor: 9.99
+  },
+
+  '7_dias': {
+    dias: 7,
+    valor: 14.99
+  },
+
+  '15_dias': {
+    dias: 15,
+    valor: 29.99
+  },
+
+  '30_dias': {
+    dias: 30,
+    valor: 59.99
+  }
+};
 /* =====================================================
    VALIDATION PIX (CORRIGIDO)
 ===================================================== */
@@ -294,37 +318,21 @@ ACESSO POR DIAS
 
 else if(plano){
 
-switch(plano){
+const planoInfo = PLANOS[plano]
 
-case '1_dia':
-valor = 29.90
-dias = 1
-type = 'access'
-break
-
-case '7_dias':
-valor = 49.90
-dias = 7
-type = 'access'
-break
-
-case '15_dias':
-valor = 79.90
-dias = 15
-type = 'access'
-break
-
-default:
+if(!planoInfo){
 return res.status(400).json({
 error:'Plano inválido'
 })
-
 }
+
+valor = planoInfo.valor
+dias = planoInfo.dias
+type = 'access'
 
 description = `Acesso ${dias} dias Tanamão+`
 
 }
-
 else{
 
 return res.status(400).json({
@@ -411,8 +419,10 @@ async (req,res)=>{
 
 try{
 
-const valor = 129.90
-const dias = 30
+const planoInfo = PLANOS['30_dias']
+
+const valor = planoInfo.valor
+const dias = planoInfo.dias
 console.log(
 'WEBHOOK URL:',
 `${process.env.API_URL}/api/payment/webhook`
@@ -740,40 +750,24 @@ router.post(
 
     try {
 
-      const {
-        plano,
-        quantidade,
-        value
-      } = req.body || {}
+     const {
+  plano
+} = req.body || {}
 
-      const amount = Number(value)
-      const dias = Number(quantidade)
+const planoInfo = PLANOS[plano]
 
-      /* =========================
-      VALIDAÇÕES
-      ========================= */
+if(!planoInfo){
 
-      if (
-        !Number.isFinite(amount) ||
-        amount <= 0
-      ) {
+return res.status(400).json({
+  error: 'Plano inválido'
+})
 
-        return res.status(400).json({
-          error: 'Valor inválido'
-        })
+}
 
-      }
+const amount = planoInfo.valor
+const dias = planoInfo.dias
 
-      if (
-        !Number.isFinite(dias) ||
-        dias <= 0
-      ) {
 
-        return res.status(400).json({
-          error: 'Dias inválidos'
-        })
-
-      }
 
       /* =========================
       TIPO PLANO

@@ -42,6 +42,33 @@ function baseStatement() {
   return (config.mercadoPago?.statementDescriptor || 'TANAMAO+').slice(0, 22)
 }
 
+/* =========================================================
+   PLANOS TANAMÃO+
+   ========================================================= */
+
+const PLANOS = {
+  '1_dia': {
+    dias: 1,
+    valor: 9.99
+  },
+
+  '7_dias': {
+    dias: 7,
+    valor: 14.99
+  },
+
+  '15_dias': {
+    dias: 15,
+    valor: 29.99
+  },
+
+  '30_dias': {
+    dias: 30,
+    valor: 59.99
+  }
+}
+
+
     /* =============================
     PIX
     ============================= */
