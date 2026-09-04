@@ -83,6 +83,7 @@ const data = [
       'Cozinheira',
       'Passadeira',
       'Caseiro',
+      'Tarot',
       'Passeador de cães',
 'Cuidador de pets',
 'Motorista particular',

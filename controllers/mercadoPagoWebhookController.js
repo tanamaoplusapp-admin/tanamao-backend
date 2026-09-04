@@ -95,10 +95,10 @@ function inferExpectedAmount(planInfo) {
   if (!planInfo) return null;
 
   const prices = {
-    1: 49.90,
-    7: 79.90,
-    15: 99.90,
-    30: 129.90,
+    1: 9.99,
+    7: 14.99,
+    15: 29.99,
+    30: 59.99,
   };
 
   return prices[planInfo.dias] || null;

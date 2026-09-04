@@ -157,7 +157,7 @@ export const pagos = {
   // PIX com split (empresaId obrigatório)
   // Exemplo de payload:
   // {
-  //   value: 129.90,
+  //   value: 59.99,
   //   payer: { email, first_name, last_name, identification?: { type: 'CPF', number } },
   //   products: [{ productId, nome, quantidade, preco }],
   //   empresaId: '...',
