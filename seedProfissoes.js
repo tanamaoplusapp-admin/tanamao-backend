@@ -55,7 +55,6 @@ const data = [
       'Limpeza pós-obra',
       'Limpeza de estofados',
       'Piscineiro',
-      
       'Gesseiro',
       'Vidraceiro',
       'Funileiro',
@@ -83,10 +82,27 @@ const data = [
       'Cozinheira',
       'Passadeira',
       'Caseiro',
-      'Tarot',
       'Passeador de cães',
-'Cuidador de pets',
-'Motorista particular',
+      'Cuidador de pets',
+      'Motorista particular',
+    ],
+  },
+
+  /* =========================
+     🔮 ORÁCULOS E ESPIRITUALIDADE
+  ========================= */
+
+  {
+    nome: 'Oráculos e Espiritualidade',
+    profissões: [
+      'Oraculista',
+      'Tarólogo(a)',
+      'Cartomante',
+      'Leitor(a) de Baralho Cigano',
+      'Numerólogo(a)',
+      'Astrólogo(a)',
+      'Leitor(a) de Runas',
+      'Terapeuta holístico',
     ],
   },
 
@@ -108,11 +124,11 @@ const data = [
       'Depiladora',
       'Micropigmentador',
       'Trancista',
-'Colorista',
-'Extensionista de cílios',
-'Bronzeamento artificial',
-'Tatuador',
-'Body Piercer',
+      'Colorista',
+      'Extensionista de cílios',
+      'Bronzeamento artificial',
+      'Tatuador',
+      'Body Piercer',
     ],
   },
 
@@ -133,10 +149,9 @@ const data = [
       'Projetista',
       'Despachante',
       'Topógrafo',
-'Técnico em edificações',
-'Perito judicial',
-'Avaliador de imóveis',
-      
+      'Técnico em edificações',
+      'Perito judicial',
+      'Avaliador de imóveis',
       'Corretor de imóveis',
       'Consultor',
     ],
@@ -169,13 +184,12 @@ const data = [
       'Editor de vídeo',
       'Social media',
       'Gestor de tráfego',
-    
       'Desenvolvedor',
       'Programador',
       'Web designer',
       'Copywriter',
       'Fotógrafo',
-'Filmaker',
+      'Filmaker',
     ],
   },
 
@@ -233,15 +247,41 @@ async function run() {
     );
 
     /* =====================================================
-       PERCORRER CATEGORIAS
+       CATEGORIAS PRESENTES NO SEED
+    ===================================================== */
+
+    const categoriasDoSeed = data.map(
+      (cat) => ({
+        nome: cat.nome,
+        slug: slugify(cat.nome),
+      })
+    );
+
+    /* =====================================================
+       PROFISSÕES PRESENTES NO SEED
+       
+       Guarda categoria + profissão para saber
+       exatamente o que deve existir no banco.
+    ===================================================== */
+
+    const profissoesDoSeed = [];
+
+    for (const cat of data) {
+      for (const nomeProf of cat.profissões) {
+        profissoesDoSeed.push({
+          categoriaNome: cat.nome,
+          categoriaSlug: slugify(cat.nome),
+          nome: nomeProf,
+        });
+      }
+    }
+
+    /* =====================================================
+       CRIAR / ATUALIZAR CATEGORIAS
     ===================================================== */
 
     for (const cat of data) {
       const slugCategoria = slugify(cat.nome);
-
-      /* ===================================================
-         BUSCAR CATEGORIA EXISTENTE
-      =================================================== */
 
       let categoria =
         await Categoria.findOne({
@@ -254,10 +294,6 @@ async function run() {
             },
           ],
         });
-
-      /* ===================================================
-         CRIAR SOMENTE SE NÃO EXISTIR
-      =================================================== */
 
       if (!categoria) {
         categoria = await Categoria.create({
@@ -297,31 +333,21 @@ async function run() {
       }
 
       /* ===================================================
-         PERCORRER PROFISSÕES DA CATEGORIA
+         CRIAR PROFISSÕES DA CATEGORIA
       =================================================== */
 
       for (const nomeProf of cat.profissões) {
-
-        /* =================================================
-           BUSCAR PROFISSÃO EXISTENTE NA CATEGORIA
-        ================================================= */
-
-        let profissao =
+        const profissao =
           await Profissao.findOne({
             nome: nomeProf,
             categoriaId: categoria._id,
           });
 
-        /* =================================================
-           CRIAR SOMENTE SE NÃO EXISTIR
-        ================================================= */
-
         if (!profissao) {
-          profissao =
-            await Profissao.create({
-              nome: nomeProf,
-              categoriaId: categoria._id,
-            });
+          await Profissao.create({
+            nome: nomeProf,
+            categoriaId: categoria._id,
+          });
 
           console.log(
             `   🆕 ${nomeProf}`
@@ -333,6 +359,109 @@ async function run() {
         }
       }
     }
+
+    /* =====================================================
+       REMOVER PROFISSÕES QUE SAÍRAM DO SEED
+       
+       IMPORTANTE:
+       A comparação é feita considerando:
+       - nome da profissão
+       - categoria
+       
+       Assim, se uma profissão for retirada do seed,
+       ela será removida automaticamente.
+    ===================================================== */
+
+    const todasProfissoes =
+      await Profissao.find({}).populate(
+        'categoriaId'
+      );
+
+    for (const profissao of todasProfissoes) {
+      const categoria =
+        profissao.categoriaId;
+
+      if (!categoria) {
+        console.log(
+          `🗑️ Removendo profissão sem categoria: ${profissao.nome}`
+        );
+
+        await Profissao.deleteOne({
+          _id: profissao._id,
+        });
+
+        continue;
+      }
+
+      const existeNoSeed =
+        profissoesDoSeed.some(
+          (prof) =>
+            prof.nome === profissao.nome &&
+            (
+              prof.categoriaNome ===
+                categoria.nome ||
+              prof.categoriaSlug ===
+                categoria.slug
+            )
+        );
+
+      if (!existeNoSeed) {
+        console.log(
+          `🗑️ Removendo profissão retirada do seed: ${profissao.nome} → ${categoria.nome}`
+        );
+
+        await Profissao.deleteOne({
+          _id: profissao._id,
+        });
+      }
+    }
+
+    /* =====================================================
+       REMOVER CATEGORIAS QUE SAÍRAM DO SEED
+       
+       Se futuramente você retirar uma categoria inteira
+       do "data", ela também será removida do banco,
+       juntamente com suas profissões.
+    ===================================================== */
+
+    const todasCategorias =
+      await Categoria.find({});
+
+    for (const categoria of todasCategorias) {
+      const existeNoSeed =
+        categoriasDoSeed.some(
+          (cat) =>
+            cat.nome === categoria.nome ||
+            cat.slug === categoria.slug
+        );
+
+      if (!existeNoSeed) {
+        console.log(
+          `🗑️ Removendo categoria retirada do seed: ${categoria.nome}`
+        );
+
+        const resultadoProfissoes =
+          await Profissao.deleteMany({
+            categoriaId: categoria._id,
+          });
+
+        if (
+          resultadoProfissoes.deletedCount > 0
+        ) {
+          console.log(
+            `   🗑️ ${resultadoProfissoes.deletedCount} profissão(ões) removida(s)`
+          );
+        }
+
+        await Categoria.deleteOne({
+          _id: categoria._id,
+        });
+      }
+    }
+
+    /* =====================================================
+       FINAL
+    ===================================================== */
 
     console.log('');
     console.log(
@@ -349,6 +478,14 @@ async function run() {
 
     console.log(
       '✅ Novas categorias e profissões foram adicionadas.'
+    );
+
+    console.log(
+      '🗑️ Profissões removidas do seed foram excluídas automaticamente.'
+    );
+
+    console.log(
+      '🗑️ Categorias removidas do seed foram excluídas automaticamente.'
     );
 
   } catch (err) {
