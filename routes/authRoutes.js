@@ -39,6 +39,33 @@ async function gerarCodigoIndicacao(nome) {
 
   return codigo;
 }
+function normalizarGenero(valor) {
+  const genero = String(valor || '')
+    .trim()
+    .toLowerCase();
+
+  const mapa = {
+    // padrão atual do app
+    feminino: 'feminino',
+    masculino: 'masculino',
+    outro: 'outro',
+    nao_informado: 'nao_informado',
+
+    // compatibilidade com versões antigas
+    mulher: 'feminino',
+    homem: 'masculino',
+
+    // compatibilidade extra
+    female: 'feminino',
+    male: 'masculino',
+
+    nao_binario: 'outro',
+    'não informado': 'nao_informado',
+    'nao informado': 'nao_informado',
+  };
+
+  return mapa[genero] || null;
+}
 /* ===== Controller NOVO ===== */
 
 const { registerComplete } = require('../controllers/authCompleteController');
@@ -146,20 +173,7 @@ router.post('/register-profissional', createLimiter(100), async (req, res) => {
       photoUrl,
     } = req.body || {};
 
-    /* =========================
-       VALIDAÇÃO
-    ========================= */
-
-    if (!nome || !email || !cpf || !telefone || !senha) {
-      return res.status(400).json({
-        ok: false,
-        message: 'Dados obrigatórios ausentes',
-      });
-    }
-/* =========================
-   VALIDAÇÃO
-========================= */
-
+  
 if (
   !nome ||
   !email ||
@@ -170,21 +184,18 @@ if (
 ) {
   return res.status(400).json({
     ok: false,
-    message: 'Nome, e-mail, CPF, telefone, senha e gênero são obrigatórios',
+    message:
+      'Nome, e-mail, CPF, telefone, senha e gênero são obrigatórios',
   });
 }
 /* =========================
    VALIDAR GÊNERO
 ========================= */
 
-const generosPermitidos = [
-  'homem',
-  'mulher',
-  'nao_binario',
-  'outro',
-];
+const generoNormalizado =
+  normalizarGenero(genero);
 
-if (!generosPermitidos.includes(genero)) {
+if (!generoNormalizado) {
   return res.status(400).json({
     ok: false,
     message: 'Selecione um gênero válido',
@@ -341,8 +352,7 @@ indicadoPor:
   null,
       phone: telefone,
       cpf: cpfLimpo,
-      genero:
-    genero || 'nao_informado',
+   genero: generoNormalizado,
 
       cidade: cidadeFinal,
       estado: estadoFinal,

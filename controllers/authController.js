@@ -91,7 +91,27 @@ function safeUserResponse(u, options = {}) {
     role,
     companyId: companyId || null,
     isVerified: u?.isVerified,
+temPerfilProfissional:
+  !!u?.temPerfilProfissional,
 
+genero:
+  u?.genero ||
+  'nao_informado',
+
+phone:
+  u?.phone,
+
+avatar:
+  u?.avatar,
+
+cidade:
+  u?.cidade,
+
+estado:
+  u?.estado,
+
+enderecoSelecionado:
+  u?.enderecoSelecionado,
     perfilAtivo: u?.perfilAtivo,
     acessoLiberado: u?.acessoLiberado,
     planoAtivo: u?.planoAtivo,

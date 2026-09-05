@@ -541,7 +541,30 @@ const normalizeEmail = (email) =>
   String(email || '').trim().toLowerCase();
 
 const MIN_PASS = 6;
+function normalizarGenero(valor) {
+  const genero = String(valor || '')
+    .trim()
+    .toLowerCase();
 
+  const mapa = {
+    feminino: 'feminino',
+    masculino: 'masculino',
+    outro: 'outro',
+    nao_informado: 'nao_informado',
+
+    mulher: 'feminino',
+    homem: 'masculino',
+
+    female: 'feminino',
+    male: 'masculino',
+
+    nao_binario: 'outro',
+    'não informado': 'nao_informado',
+    'nao informado': 'nao_informado',
+  };
+
+  return mapa[genero] || null;
+}
 /* =====================================================
 JWT
 ===================================================== */
@@ -1152,13 +1175,23 @@ if (!user.preferenciaAtendimento) {
      DADOS RECEBIDOS
   ========================= */
 
-  const {
-    cpf,
-    telefone,
-    cidade,
-    estado,
-    endereco,
-  } = req.body || {};
+ const {
+  cpf,
+  telefone,
+
+  genero,
+
+  cidade,
+  estado,
+  endereco,
+
+  categoriaId,
+  profissaoId,
+  profissaoNome,
+
+  profissoes,
+  profissoesDetalhadas,
+} = req.body || {};
 
   const cpfFinal =
     cpf ||
@@ -1167,7 +1200,20 @@ if (!user.preferenciaAtendimento) {
   const telefoneFinal =
     telefone ||
     user.phone;
+const generoNormalizado =
+  normalizarGenero(
+    genero ||
+    user.genero ||
+    'nao_informado'
+  );
 
+if (!generoNormalizado) {
+  res.status(400);
+
+  throw new Error(
+    'Gênero inválido.'
+  );
+}
   if (!cpfFinal) {
     res.status(400);
     throw new Error(
@@ -1181,7 +1227,17 @@ if (!user.preferenciaAtendimento) {
       'Informe seu telefone para ativar o perfil profissional.'
     );
   }
+if (
+  !categoriaId ||
+  !profissaoId ||
+  !String(profissaoNome || '').trim()
+) {
+  res.status(400);
 
+  throw new Error(
+    'Categoria e profissão são obrigatórias.'
+  );
+}
   /* =========================
      VERIFICAR CPF
   ========================= */
@@ -1353,7 +1409,25 @@ if (!user.preferenciaAtendimento) {
 
     cpf: cpfLimpo,
     phone: telefoneFinal,
+categoriaId,
+profissaoId,
 
+profissaoNome:
+  String(
+    profissaoNome || ''
+  ).trim(),
+
+profissoes:
+  Array.isArray(profissoes)
+    ? profissoes
+    : [],
+
+profissoesDetalhadas:
+  Array.isArray(
+    profissoesDetalhadas
+  )
+    ? profissoesDetalhadas
+    : [],
     endereco: {
       cep,
       logradouro,
@@ -1438,7 +1512,8 @@ if (!user.preferenciaAtendimento) {
     user.phone =
       telefoneFinal;
   }
-
+user.genero =
+  generoNormalizado;
   /*
    * Sincroniza a localização do
    * User com o endereço usado para
