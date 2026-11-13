@@ -7,6 +7,25 @@ const { Schema, Types } = mongoose;
 const isBcryptHash = (s) => /^\$2[aby]\$/.test(String(s || ''));
 const onlyDigits = (s) => String(s || '').replace(/\D+/g, '');
 
+// Compatibilidade entre os valores usados nas diferentes telas do aplicativo.
+// O banco armazena sempre os valores padronizados do enum.
+const normalizarGenero = (valor) => {
+  const chave = String(valor || 'nao_informado').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_');
+  const mapa = {
+    mulher_cis: 'feminino', homem_cis: 'masculino',
+    mulher: 'feminino', homem: 'masculino',
+    feminino: 'feminino', masculino: 'masculino',
+    female: 'feminino', male: 'masculino',
+    nao_binario: 'outro', nao_binaria: 'outro',
+    outro: 'outro', outra: 'outro',
+    nao_informado: 'nao_informado',
+    prefiro_nao_informar: 'nao_informado',
+  };
+  return mapa[chave] ?? chave;
+};
+
 const slugify = (str) =>
   String(str || '')
     .normalize('NFD')
@@ -41,6 +60,12 @@ genero: {
   type: String,
   enum: ['feminino', 'masculino', 'outro', 'nao_informado'],
   default: 'nao_informado',
+  set: normalizarGenero,
+},
+// O formulário do cliente também envia a data de nascimento.
+nascimento: {
+  type: String,
+  trim: true,
 },
 preferenciaAtendimento: {
   type: String,

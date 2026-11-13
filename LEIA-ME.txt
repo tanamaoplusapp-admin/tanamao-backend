@@ -1,0 +1,20 @@
+CORRECAO DO CADASTRO DE CLIENTES TANAMAO+ (13/11/2026)
+
+Arquivos prontos para SUBSTITUIR NO BACKEND (repositorio implantado no Render):
+  controllers/authCompleteController.js -> controllers/authCompleteController.js
+  models/user.js                   -> models/user.js
+
+1. Faca backup dos 2 arquivos atuais antes de substituir.
+2. Substitua-os nas pastas controllers e models do backend, preservando os nomes.
+3. Salve/commit e publique um novo deploy do servico tanamao-backend no Render.
+4. Apos o deploy, teste o cadastro com um e-mail de teste INEDITO.
+5. Confira em Logs se POST /api/auth/register-complete devolve 201, nao 500.
+
+IMPORTANTE:
+- O arquivo authCompleteController.js original NAO foi anexado. Esta e uma
+  implementacao substituta compativel com o endpoint e com o modelo fornecido.
+  Confirme antes que ele nao possuia regras adicionais exclusivas da sua base.
+- Nao e necessario atualizar o app para corrigir esse erro do backend.
+- O fluxo register-profissional usa outra rota, que nao foi modificada aqui.
+- O cadastro nao foi testado contra seu banco de dados real; foram feitos testes
+  de logica e sintaxe locais.

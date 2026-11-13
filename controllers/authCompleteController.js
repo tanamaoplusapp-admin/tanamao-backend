@@ -1,213 +1,187 @@
-const bcrypt = require('bcryptjs');
+'use strict';
+
+/**
+ * Cadastro completo do cliente (POST /api/auth/register-complete).
+ * Compatível com CadastroClienteScreen.js e models/user.js.
+ * Não modifica o cadastro de profissionais nem o fluxo de login.
+ */
 const jwt = require('jsonwebtoken');
-
 const User = require('../models/user');
-const Address = require('../models/address');
 
-/* ===================== HELPERS ===================== */
+const somenteDigitos = (valor) => String(valor || '').replace(/\D/g, '');
+const texto = (valor) => String(valor || '').trim();
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function sign(user) {
-  return jwt.sign(
-    {
-      sub: user._id,
-      userId: user._id,
-      role: user.role,
-      email: user.email,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: '30d' }
-  );
+function normalizarGenero(valor) {
+  const chave = texto(valor || 'nao_informado').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_');
+
+  const mapa = {
+    mulher_cis: 'feminino',
+    homem_cis: 'masculino',
+    mulher: 'feminino',
+    homem: 'masculino',
+    feminino: 'feminino',
+    masculino: 'masculino',
+    female: 'feminino',
+    male: 'masculino',
+    nao_binario: 'outro',
+    nao_binaria: 'outro',
+    outro: 'outro',
+    outra: 'outro',
+    nao_informado: 'nao_informado',
+    prefiro_nao_informar: 'nao_informado',
+  };
+  return mapa[chave] ?? null;
 }
 
-/* ===================== REGISTER COMPLETE ===================== */
+function coordenadasValidas(endereco) {
+  const latitude = endereco?.latitude;
+  const longitude = endereco?.longitude;
+  if (latitude === undefined || latitude === null || latitude === '' ||
+      longitude === undefined || longitude === null || longitude === '') return null;
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
+      lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
+function criarEnderecoRecebido(body) {
+  const endereco = body.endereco && typeof body.endereco === 'object' &&
+    !Array.isArray(body.endereco) ? body.endereco : {};
+
+  const logradouro = texto(endereco.logradouro || endereco.rua);
+  const cidade = texto(endereco.cidade || body.cidade);
+  const estado = texto(endereco.estado || body.estado);
+  const numero = texto(endereco.numero);
+  const bairro = texto(endereco.bairro);
+  const cep = texto(endereco.cep);
+  const pais = texto(endereco.pais);
+  const enderecoCompleto = texto(endereco.enderecoCompleto) ||
+    [logradouro, numero, texto(endereco.complemento), bairro, cidade, estado, cep, pais]
+      .filter(Boolean).join(', ');
+  const geo = coordenadasValidas(endereco);
+
+  const selecionado = {
+    label: texto(endereco.label) || 'Principal',
+    rua: logradouro,
+    logradouro,
+    numero,
+    bairro,
+    cidade,
+    estado,
+    cep,
+    pais,
+    enderecoCompleto,
+  };
+  if (geo) {
+    selecionado.latitude = geo.lat;
+    selecionado.longitude = geo.lng;
+  }
+  return { selecionado, cidade, estado, geo };
+}
 
 exports.registerComplete = async (req, res) => {
   try {
+    const body = req.body || {};
+    const name = texto(body.name || body.nome);
+    const email = texto(body.email).toLowerCase();
+    const password = String(body.password ?? body.senha ?? '');
+    const genero = normalizarGenero(body.genero);
 
-    const {
+    if (name.length < 2) {
+      return res.status(400).json({ ok: false, message: 'Informe seu nome completo.' });
+    }
+    if (!EMAIL_REGEX.test(email)) {
+      return res.status(400).json({ ok: false, message: 'Informe um e-mail válido.' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ ok: false, message: 'A senha precisa ter pelo menos 6 caracteres.' });
+    }
+    if (!genero) {
+      return res.status(400).json({ ok: false, message: 'Selecione uma opção de gênero válida.' });
+    }
+    if (!process.env.JWT_SECRET) {
+      console.error('[registerComplete] JWT_SECRET não configurado.');
+      return res.status(500).json({ ok: false, message: 'Falha de configuração do servidor.' });
+    }
+
+    const jaExiste = await User.exists({ email });
+    if (jaExiste) {
+      return res.status(409).json({ ok: false, message: 'E-mail já cadastrado.' });
+    }
+
+    const endereco = criarEnderecoRecebido(body);
+    const cadastro = {
       name,
       email,
-      password,
-      cpf,
-      telefone,
-      nascimento,
-      endereco
-    } = req.body;
-if (!String(genero || '').trim()) {
-  return res.status(400).json({
-    ok: false,
-    message: 'Gênero é obrigatório',
-  });
-}
-    /* ================= VALIDATION ================= */
+      password, // O hash é feito pelo middleware pre('save') do modelo User.
+      role: 'cliente',
+      isVerified: true, // Mantém o fluxo atual: login automático após o cadastro.
+      genero,
+      phone: somenteDigitos(body.telefone || body.phone) || undefined,
+      cpf: somenteDigitos(body.cpf) || undefined,
+      cidade: endereco.cidade || undefined,
+      estado: endereco.estado || undefined,
+    };
 
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        ok: false,
-        message: 'Nome, email e senha são obrigatórios'
-      });
+    // Preserva o endereço do cadastro para a busca por profissionais na mesma cidade.
+    if (endereco.cidade || endereco.estado || endereco.selecionado.logradouro) {
+      cadastro.enderecoSelecionado = endereco.selecionado;
+      cadastro.enderecos = [endereco.selecionado];
+    }
+    if (endereco.geo) {
+      cadastro.geo = {
+        type: 'Point',
+        coordinates: [endereco.geo.lng, endereco.geo.lat],
+      };
     }
 
-    const emailNorm = String(email).trim().toLowerCase();
+    // O campo nascimento é opcional e só é persistido se constar no schema User.
+    if (texto(body.nascimento)) cadastro.nascimento = texto(body.nascimento);
 
-    const exists = await User.findOne({ email: emailNorm });
+    const user = await User.create(cadastro);
+    const userId = String(user._id);
+    const token = jwt.sign({
+      sub: userId,
+      userId,
+      id: userId,
+      role: 'cliente',
+      tipo: 'cliente',
+      email: user.email,
+    }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
-    if (exists) {
-      return res.status(400).json({
-        ok: false,
-        message: 'E-mail já cadastrado'
-      });
-    }
-
-/* ================= PREPARAR ENDEREÇO ================= */
-
-const latitude =
-  endereco?.latitude !== undefined &&
-  endereco?.latitude !== null
-    ? Number(endereco.latitude)
-    : null;
-
-const longitude =
-  endereco?.longitude !== undefined &&
-  endereco?.longitude !== null
-    ? Number(endereco.longitude)
-    : null;
-
-const temCoordenadas =
-  Number.isFinite(latitude) &&
-  Number.isFinite(longitude);
-
-const logradouro =
-  endereco?.logradouro ||
-  endereco?.rua ||
-  '';
-
-const enderecoCompleto =
-  endereco?.enderecoCompleto ||
-  [
-    logradouro,
-    endereco?.numero,
-    endereco?.bairro,
-    endereco?.cidade,
-    endereco?.estado,
-    endereco?.cep,
-    endereco?.pais,
-  ]
-    .filter(Boolean)
-    .join(', ');
-
-/* ================= CREATE USER ================= */
-
-const hash = await bcrypt.hash(password, 10);
-
-const userData = {
-  name,
-  email: emailNorm,
-  password: hash,
-  role: 'cliente',
-
-  cpf,
-  phone: telefone,
-
-  cidade: endereco?.cidade || '',
-  estado: endereco?.estado || '',
-
-  enderecoSelecionado: {
-    label: endereco?.label || 'Principal',
-
-    // compatibilidade com telas antigas
-    rua: logradouro,
-
-    // novo padrão
-    logradouro,
-
-    numero: endereco?.numero || '',
-    bairro: endereco?.bairro || '',
-    cidade: endereco?.cidade || '',
-    estado: endereco?.estado || '',
-    cep: endereco?.cep || '',
-    pais: endereco?.pais || '',
-    enderecoCompleto,
-
-    latitude: temCoordenadas
-      ? latitude
-      : undefined,
-
-    longitude: temCoordenadas
-      ? longitude
-      : undefined,
-  },
-
-  isVerified: true,
-};
-
-/*
- * GeoJSON usa:
- * [longitude, latitude]
- */
-if (temCoordenadas) {
-  userData.geo = {
-    type: 'Point',
-    coordinates: [
-      longitude,
-      latitude,
-    ],
-  };
-}
-
-const user = await User.create(userData);
-
-/* ================= CREATE ADDRESS ================= */
-
-if (endereco) {
-  await Address.create({
-    userId: user._id,
-
-    cep: endereco.cep || '',
-
-    // mantém o padrão atual do model Address
-    rua: logradouro,
-
-    numero: endereco.numero || '',
-    complemento: endereco.complemento || '',
-    bairro: endereco.bairro || '',
-    cidade: endereco.cidade || '',
-    estado: endereco.estado || '',
-
-    pais: endereco.pais || '',
-    enderecoCompleto,
-
-    latitude: temCoordenadas
-      ? latitude
-      : undefined,
-
-    longitude: temCoordenadas
-      ? longitude
-      : undefined,
-  });
-}
-    /* ================= TOKEN ================= */
-
-    const token = sign(user);
-
-    return res.json({
+    return res.status(201).json({
       ok: true,
       token,
       user: {
-        id: user._id,
+        id: userId,
+        _id: userId,
         name: user.name,
         email: user.email,
-        role: user.role
-      }
+        role: 'cliente',
+        isVerified: true,
+        temPerfilProfissional: false,
+        genero: user.genero,
+        phone: user.phone,
+        cpf: user.cpf,
+        cidade: user.cidade,
+        estado: user.estado,
+        enderecoSelecionado: user.enderecoSelecionado || null,
+        geo: user.geo || null,
+      },
     });
-
   } catch (err) {
-
-    console.error('[registerComplete]', err);
-
-    return res.status(500).json({
-      ok: false,
-      message: 'Erro ao criar conta'
-    });
+    if (err?.code === 11000) {
+      return res.status(409).json({ ok: false, message: 'E-mail já cadastrado.' });
+    }
+    if (err?.name === 'ValidationError' || err?.name === 'CastError') {
+      console.error('[registerComplete] Validação:', err.message);
+      return res.status(400).json({ ok: false, message: 'Dados inválidos no cadastro. Confira seus dados e tente novamente.' });
+    }
+    console.error('[registerComplete] Erro:', err);
+    return res.status(500).json({ ok: false, message: 'Não foi possível criar sua conta. Tente novamente.' });
   }
 };
