@@ -41,7 +41,16 @@ async function dispatchOne(app,jobId){
   emit(app,p.userId,'oferta:nova',{id:String(job._id),servico:job.servico,origem:job.origem,destino:job.destino,precoCentavos:job.valorCentavos,distanciaAteColetaKm:Math.round(km*100)/100,expiraEm:updated.ofertaExpiraEm});
   // Reutiliza Firebase Push do backend atual; a oferta tambem fica disponivel por GET.
   // O push nao contem endereco, telefone ou dados pessoais do passageiro.
-  Promise.resolve().then(()=>enviarPushParaUsuario(p.userId,{title:'Nova solicitacao Tanamao+',body:'Uma viagem ou entrega esta disponivel. Abra o app para responder.',type:'MOBILIDADE_OFERTA',data:{mobilidadeSolicitacaoId:String(job._id),expiraEm:updated.ofertaExpiraEm.toISOString()}})).catch(e=>console.warn('[mobilidade] push nao entregue:',e.message));
+  Promise.resolve().then(()=>enviarPushParaUsuario(p.userId,{
+    title:job.servico?.startsWith('corrida') ? 'Nova corrida no Tanamão+' : 'Nova solicitação no Tanamão+',
+    body:'Você tem uma solicitação. Toque para ver e responder antes que expire.',
+    type:'MOBILIDADE_OFERTA',
+    data:{
+      mobilidadeSolicitacaoId:String(job._id),
+      expiraEm:updated.ofertaExpiraEm.toISOString(),
+      servico:job.servico,
+    },
+  })).catch(e=>console.warn('[mobilidade] push nao entregue:',e.message));
   emit(app,job.clienteId,'solicitacao:status',{id:String(job._id),status:'ofertada'});
   return updated;
  }

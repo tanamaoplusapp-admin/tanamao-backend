@@ -52,6 +52,14 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
         ? unreadNotifications
         : 1;
 
+    const isMobilidadeOferta = payload.type === 'MOBILIDADE_OFERTA' || payload.data?.type === 'MOBILIDADE_OFERTA';
+    const expiraEm = new Date(payload.data?.expiraEm || 0).getTime();
+    // TTL restante: evita entregar alertas atrasados de ofertas de 25 segundos.
+    if (isMobilidadeOferta && (!Number.isFinite(expiraEm) || expiraEm <= Date.now())) {
+      return false; // Não enviar alertas de corridas já encerradas.
+    }
+    const restanteMs = Number.isFinite(expiraEm) && expiraEm > Date.now()
+      ? Math.max(1000, Math.min(25000, expiraEm - Date.now())) : 25000;
     const normalizedData = normalizeDataPayload({
       ...(payload.data || {}),
 
@@ -104,8 +112,9 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
 
       android: {
         priority: 'high',
+        ...(isMobilidadeOferta ? { ttl: restanteMs } : {}),
         notification: {
-          channelId: 'default',
+          channelId: isMobilidadeOferta ? 'tanamao-corridas-v1' : 'default',
           sound: 'default',
           priority: 'high',
           icon: 'ic_notification',
@@ -116,6 +125,10 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
       apns: {
         headers: {
           'apns-priority': '10',
+          ...(isMobilidadeOferta ? {
+            'apns-push-type': 'alert',
+            'apns-expiration': String(Math.floor((Date.now() + restanteMs) / 1000)),
+          } : {}),
         },
         payload: {
           aps: {
