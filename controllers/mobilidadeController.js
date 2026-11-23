@@ -146,7 +146,7 @@ async function uploadDocument(req,res){
  const stream=bucket.openUploadStream(`doc-${Date.now()}`,{contentType:req.file.mimetype,metadata:{ownerId:String(req.userId),tipo}});
  await new Promise((resolve,reject)=>{const src=Readable.from(req.file.buffer);src.on('error',reject);stream.on('error',reject);stream.on('finish',resolve);src.pipe(stream);});
  let doc;
- try{doc=await Document.create({userId:own(req),tipo,veiculoId,arquivoId:stream.id,mime:req.file.mimetype,nome:asText(req.file.originalname,100),tamanho:req.file.size});}
+ try{doc=await Document.create({userId:own(req),tipo,veiculoId:vehicleId,arquivoId:stream.id,mime:req.file.mimetype,nome:asText(req.file.originalname,100),tamanho:req.file.size});}
  catch(e){await bucket.delete(stream.id).catch(()=>{});throw e;}
  if(tipo.startsWith('cnh')){profile.cnh.status='pendente';profile.status='em_analise';profile.online=false;profile.servicosAprovados=[];profile.servicosAtivos=[];await profile.save();}
  if(vehicleId){await Vehicle.updateOne({_id:vehicleId,userId:own(req)},{$set:{status:'pendente'}});profile.online=false;profile.servicosAtivos=[];await profile.save();}
