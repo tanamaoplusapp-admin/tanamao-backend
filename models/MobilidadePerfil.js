@@ -10,6 +10,7 @@ const schema = new S({
   servicosAprovados: [{ type: String, enum: SERVICES }],
   servicosAtivos: [{ type: String, enum: SERVICES }],
   aprovacaoRestrita: { type: Boolean, default: false },
+  liberacaoManual: { type: Boolean, default: false },
   status: { type: String, enum: ['incompleto','em_analise','aprovado','reprovado','suspenso'], default:'incompleto', index:true },
   cnh: {
     numeroCriptografado: { type: String, select: false },

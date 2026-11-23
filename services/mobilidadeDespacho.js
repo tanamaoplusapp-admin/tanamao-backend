@@ -10,6 +10,7 @@ const User=require('../models/user');
 const Vehicle=require('../models/MobilidadeVeiculo');
 const Job=require('../models/MobilidadeSolicitacao');
 const {kilometers,validCnh,validVehicle,cnhSupportsVehicle}=require('./mobilidadeCalculo');
+const {serviceVehicleCompatible}=require('../config/mobilidade');
 const PoliticaMoto=require('./mobilidadePoliticaMoto');
 const {emit}=require('./mobilidadeSocket');
 const {enviarPushParaUsuario}=require('./pushService');
@@ -30,10 +31,10 @@ async function dispatchOne(app,jobId){
  // Mesma regra de acesso por plano usada na descoberta dos demais prestadores.
  const accessRows=await User.find({_id:trust({$in:profiles.map(p=>p.userId)}),status:trust({$ne:'blocked'}),acessoExpiraEm:trust({$gt:new Date()}),subscriptionStatus:trust({$nin:['overdue','blocked']})}).select('_id genero preferenciaAtendimento').lean();
  const accessEnabled=new Map(accessRows.map(u=>[String(u._id),u]));
- const candidates=profiles.filter(p=>betaAllowed(p.userId)&&methodEnabled.has(String(p.profissionalId))&&accessEnabled.has(String(p.userId))&&compativel(job,accessEnabled.get(String(p.userId)))&&validCnh(p)&&p.localizacao?.coordinates?.length===2).map(p=>({p,km:kilometers({lat:p.localizacao.coordinates[1],lng:p.localizacao.coordinates[0]},job.origem)})).filter(x=>x.km<=LIMIT).sort((a,b)=>a.km-b.km);
+ const candidates=profiles.filter(p=>betaAllowed(p.userId)&&methodEnabled.has(String(p.profissionalId))&&accessEnabled.has(String(p.userId))&&compativel(job,accessEnabled.get(String(p.userId)))&&(p.liberacaoManual||validCnh(p))&&p.localizacao?.coordinates?.length===2).map(p=>({p,km:kilometers({lat:p.localizacao.coordinates[1],lng:p.localizacao.coordinates[0]},job.origem)})).filter(x=>x.km<=LIMIT).sort((a,b)=>a.km-b.km);
  for(const {p,km} of candidates){
   const vehicle=await Vehicle.findOne({_id:p.veiculoAtivoId,userId:p.userId}).lean();
-  if(!cnhSupportsVehicle(p.cnh.categoria,vehicle?.tipo)||!validVehicle(vehicle,job.servico,job.passageiros,job.carga,job.tipoVeiculo))continue;
+  if((!p.liberacaoManual&&!cnhSupportsVehicle(p.cnh?.categoria,vehicle?.tipo))||!(p.liberacaoManual?(vehicle&&serviceVehicleCompatible(job.servico,vehicle.tipo)&&(!job.tipoVeiculo||job.tipoVeiculo===vehicle.tipo)&&(!job.servico.startsWith('corrida')||vehicle.lugares>job.passageiros)):validVehicle(vehicle,job.servico,job.passageiros,job.carga,job.tipoVeiculo)))continue;
   // Compare-and-swap: uma unica oferta por solicitacao, mesmo com dois workers.
   const updated=await Job.findOneAndUpdate({_id:job._id,status:'procurando',tentativas:trust({$lt:MAX_ATTEMPTS})},{$set:{status:'ofertada',ofertaMotoristaId:p.userId,ofertaVeiculoId:vehicle._id,ofertaExpiraEm:new Date(Date.now()+OFFER_SECONDS*1000)},$inc:{tentativas:1}},{new:true});
   if(!updated)return null;

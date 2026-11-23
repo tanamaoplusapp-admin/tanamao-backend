@@ -93,8 +93,8 @@ async function setCNH(req,res){
  if(!/^\d{11}$/.test(numero))error(400,'Numero da CNH invalido');
  if(!['A','B','AB','C','AC','D','AD','E','AE'].includes(categoria))error(400,'Categoria da CNH invalida');
  if(validade<=new Date())error(400,'CNH ja vencida');
- if(typeof req.body.ear!=='boolean')error(400,'Informe se a CNH possui EAR');
- profile.cnh={numeroCriptografado:encrypt(numero),ultimos4:numero.slice(-4),categoria,validade,ear:req.body.ear,enviadoEm:new Date(),status:'pendente'};
+ // EAR e informacao facultativa no cadastro; so verdadeiro se confirmado explicitamente.
+ profile.cnh={numeroCriptografado:encrypt(numero),ultimos4:numero.slice(-4),categoria,validade,ear:req.body.ear===true,enviadoEm:new Date(),status:'pendente'};
  profile.status='em_analise';profile.online=false;profile.servicosAprovados=[];profile.servicosAtivos=[];
  await profile.save();await audit(req,'cnh.enviada',profile._id);
  res.json({ok:true,mensagem:'CNH registrada e aguardando verificacao manual',perfil:publicProfile(profile)});
@@ -128,7 +128,7 @@ async function updateVehicle(req,res){
 }
 async function selectVehicle(req,res){
  const {profile}=await ownedProfile(req);assertIdle(profile);const v=await getVehicle(req);
- if(v.status!=='aprovado')error(403,'Veiculo ainda nao aprovado');
+ if(v.status!=='aprovado'&&!profile.liberacaoManual)error(403,'Veiculo ainda nao aprovado');
  profile.veiculoAtivoId=v._id;profile.online=false;profile.servicosAtivos=[];await profile.save();
  res.json({ok:true,perfil:publicProfile(profile)});
 }
@@ -158,7 +158,7 @@ async function getAvailability(req,res){const {profile}=await ownedProfile(req);
 async function setLocation(req,res){
  const p=calc.point({...req.body,endereco:'gps',cidade:'GPS',uf:'MS'});
  const {profile}=await ownedProfile(req);
- if(profile.status!=='aprovado'||!calc.validCnh(profile))error(403,'Aprovacao do motorista e CNH valida obrigatorias');
+ if(profile.status!=='aprovado'||(!profile.liberacaoManual&&!calc.validCnh(profile)))error(403,'Perfil nao aprovado ou CNH pendente de aprovacao manual');
  const updated=await Profile.findOneAndUpdate({_id:profile._id},{$set:{localizacao:{type:'Point',coordinates:[p.lng,p.lat]},ultimaLocalizacaoEm:new Date()}},{new:true});
  res.json({ok:true,ultimaLocalizacaoEm:updated.ultimaLocalizacaoEm});
  if(profile.emViagemId){const job=await Job.findOne({_id:profile.emViagemId,motoristaId:own(req)}).lean();if(job&&['aceita','no_local','em_andamento'].includes(job.status))emit(req.app,job.clienteId,'viagem:localizacao',{id:String(job._id),latitude:p.lat,longitude:p.lng,atualizadoEm:updated.ultimaLocalizacaoEm});}
@@ -172,17 +172,17 @@ async function setAvailability(req,res){
  const {prof}=await ownedProfile(req);
  if(!Pagamento.listarFormas(prof).length)error(409,'Ative Pix, Cartao ou Dinheiro em Formas de pagamento do perfil profissional');
  const usuario=await User.findById(own(req)).select('acessoExpiraEm subscriptionStatus status avatar').lean();
- if(!fotoAprovada(profile,usuario))error(403,'Foto do motorista ausente, alterada ou ainda nao aprovada. Envie a foto e aguarde a analise no painel');
+ if(!profile.liberacaoManual&&!fotoAprovada(profile,usuario))error(403,'Foto do motorista ausente, alterada ou ainda nao aprovada. Envie a foto e aguarde a analise no painel');
  if(!usuario||usuario.status==='blocked'||['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo. Regularize o acesso como os demais prestadores');
- if(profile.status!=='aprovado'||!calc.validCnh(profile))error(403,'CNH/perfil de mobilidade nao aprovado ou vencido');
+ if(profile.status!=='aprovado'||(!profile.liberacaoManual&&!calc.validCnh(profile)))error(403,'Perfil nao aprovado ou CNH pendente de aprovacao manual');
  if(!profile.veiculoAtivoId)error(400,'Selecione um veiculo aprovado');
  const vehicle=await Vehicle.findOne({_id:profile.veiculoAtivoId,userId:own(req)}).lean();
- if(!vehicle||vehicle.status!=='aprovado')error(403,'Veiculo nao aprovado');
+ if(!vehicle||(!profile.liberacaoManual&&vehicle.status!=='aprovado'))error(403,'Veiculo nao aprovado');
  if(!profile.ultimaLocalizacaoEm||new Date(profile.ultimaLocalizacaoEm).getTime()<Date.now()-120000)error(409,'Envie localizacao atual antes de ficar online');
  const services=arrayServices(req.body.servicosAtivos);
  for(const svc of services){
   if(!profile.servicosAprovados.includes(svc))error(403,`Modalidade nao aprovada: ${svc}`);
-  if(!calc.cnhSupportsVehicle(profile.cnh.categoria,vehicle.tipo)||!calc.validVehicle(vehicle,svc,1))error(403,`Veiculo incompatível: ${svc}`);
+  if((!profile.liberacaoManual&&!calc.cnhSupportsVehicle(profile.cnh?.categoria,vehicle.tipo))||!(profile.liberacaoManual?serviceVehicleCompatible(svc,vehicle.tipo):calc.validVehicle(vehicle,svc,1)))error(403,`Veiculo incompatível: ${svc}`);
  }
  // A elegibilidade geografica da moto e checada na origem de cada corrida,
  // nao na cidade de cadastro (o motorista pode atender varias cidades).
@@ -342,16 +342,16 @@ async function acceptOffer(req,res){
  if(!job)error(409,'Oferta expirada ou indisponivel');
  const usuario=await User.findById(user).select('acessoExpiraEm subscriptionStatus status genero preferenciaAtendimento avatar').lean();
  if(!usuario||usuario.status==='blocked')error(403,'Conta bloqueada');
- if(!fotoAprovada(profile,usuario))error(403,'Foto do motorista nao aprovada ou alterada');
+ if(!profile.liberacaoManual&&!fotoAprovada(profile,usuario))error(403,'Foto do motorista nao aprovada ou alterada');
   if(['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo');
- if(profile.status!=='aprovado'||!calc.validCnh(profile))error(403,'Motorista indisponivel ou sem CNH aprovada');
+ if(profile.status!=='aprovado'||(!profile.liberacaoManual&&!calc.validCnh(profile)))error(403,'Perfil nao aprovado ou CNH pendente de aprovacao manual');
  if(!profile.online||profile.emViagemId)error(403,'Motorista indisponivel');
  if(!profile.servicosAtivos.includes(job.servico)||!profile.servicosAprovados.includes(job.servico))error(403,'Modalidade nao autorizada');
  if(job.servico==='corrida_moto'){const policy=await PoliticaMoto.consultar(job.origem);if(!policy.permitida)error(403,policy.mensagem);}
  if(!Preferencias.compativel(job,usuario))error(403,'Preferencia de atendimento incompativel');
  const prof=await Pagamento.buscarPreferencias(profile.profissionalId);if(!Pagamento.aceitaForma(prof,job.pagamento?.metodo))error(403,'Forma de pagamento nao aceita');
  const vehicle=await Vehicle.findOne({_id:profile.veiculoAtivoId,userId:user}).lean();
- if(!calc.cnhSupportsVehicle(profile.cnh.categoria,vehicle?.tipo)||!calc.validVehicle(vehicle,job.servico,job.passageiros,job.carga,job.tipoVeiculo))error(403,'Veiculo nao compativel com esta viagem');
+ if((!profile.liberacaoManual&&!calc.cnhSupportsVehicle(profile.cnh?.categoria,vehicle?.tipo))||!(profile.liberacaoManual?(vehicle&&serviceVehicleCompatible(job.servico,vehicle.tipo)&&(!job.tipoVeiculo||job.tipoVeiculo===vehicle.tipo)&&(!job.servico.startsWith('corrida')||vehicle.lugares>job.passageiros)):calc.validVehicle(vehicle,job.servico,job.passageiros,job.carga,job.tipoVeiculo)))error(403,'Veiculo nao compativel com esta viagem');
  const reserva={_id:profile._id,emViagemId:null,online:true,status:'aprovado'};
  const reserved=await Profile.findOneAndUpdate(reserva,{$set:{emViagemId:job._id}},{new:true});
  if(!reserved)error(409,'Voce ja possui viagem ativa ou nao esta disponivel');
