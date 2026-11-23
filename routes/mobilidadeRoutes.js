@@ -1,12 +1,13 @@
 'use strict';
 const express=require('express');const {verifyToken}=require('../middleware/verifyToken');
 const rateLimit=require('express-rate-limit');const {asyncHandler,guardEnabled,betaGuard,privateError}=require('../middleware/mobilidade');
-const c=require('../controllers/mobilidadeController');const lugares=require('../services/mobilidadeLugares');const router=express.Router();
+const c=require('../controllers/mobilidadeController');const buscaCliente=require('../services/mobilidadeBuscaCliente');const lugares=require('../services/mobilidadeLugares');const router=express.Router();
 const limited=rateLimit({windowMs:60000,max:50,standardHeaders:true,legacyHeaders:false});
 router.use(guardEnabled,verifyToken,betaGuard);
 router.get('/catalogo',asyncHandler(c.catalog));
 // Busca de enderecos, detalhes e selecao no mapa: autenticadas e limitadas.
 const placesLimited=rateLimit({windowMs:60000,max:40,standardHeaders:true,legacyHeaders:false, keyGenerator:req=>String(req.userId||req.ip)});
+const buscaLimited=rateLimit({windowMs:60000,max:8,standardHeaders:true,legacyHeaders:false, keyGenerator:req=>String(req.userId||req.ip)});
 router.post('/cliente/lugares/sessao',placesLimited,asyncHandler(lugares.criarSessao));
 router.post('/cliente/lugares/sugestoes',placesLimited,asyncHandler(lugares.sugestoes));
 router.post('/cliente/lugares/detalhes',placesLimited,asyncHandler(lugares.detalhes));
@@ -42,6 +43,7 @@ router.post('/cliente/solicitacoes',limited,asyncHandler(c.createRequest));
 router.get('/cliente/solicitacoes',asyncHandler(c.listClientJobs));
 router.get('/solicitacoes/:jobId',asyncHandler(c.readJob));
 router.get('/cliente/solicitacoes/:jobId/motorista',asyncHandler(c.clientDriverTracking));
+router.get('/cliente/solicitacoes/:jobId/busca',buscaLimited,asyncHandler(buscaCliente.buscar));
 router.post('/cliente/solicitacoes/:jobId/cancelar',limited,asyncHandler(c.clientCancel));
 router.post('/cliente/solicitacoes/:jobId/pagamento/avaliar',limited,asyncHandler(c.clientPaymentReview));
 router.post('/cliente/solicitacoes/:jobId/avaliacao',limited,asyncHandler(c.reviewTrip));
