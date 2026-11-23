@@ -43,6 +43,7 @@ router.post('/motorista/viagens/:jobId/pagamento/recebido',limited,asyncHandler(
 router.post('/cliente/cotacoes',limited,asyncHandler(c.quote));
 router.post('/cliente/solicitacoes',limited,asyncHandler(c.createRequest));
 router.get('/cliente/solicitacoes',asyncHandler(c.listClientJobs));
+router.get('/solicitacoes/:jobId/rota',placesLimited,asyncHandler(c.tripNavigation));
 router.get('/solicitacoes/:jobId',asyncHandler(c.readJob));
 router.get('/cliente/solicitacoes/:jobId/motorista',asyncHandler(c.clientDriverTracking));
 router.get('/cliente/solicitacoes/:jobId/busca',buscaLimited,asyncHandler(buscaCliente.buscar));

@@ -495,4 +495,37 @@ async function driverRatings(req,res){
  res.json({ok:true,avaliacoes});
 }
 
-module.exports={reviewTrip,driverRatings,catalog,modalidadesOrigem,getProfile,setProfile,solicitarRevisaoFoto,setCNH,listVehicles,createVehicle,updateVehicle,selectVehicle,upload,uploadDocument,listDocuments,setLocation,getAvailability,setAvailability,getDriverDashboard,addMaintenance,getMaintenance,quote,createRequest,listClientJobs,readJob,clientDriverTracking,getDriverOffers,getDemandAreas,acceptOffer,rejectOffer,driverTrips,driverArrive,startTrip,finishTrip,clientCancel,driverPaymentReceived,clientPaymentReview,messages,mensagensRapidas,ownedProfile};
+// Rota de navegacao restrita aos participantes de uma corrida.
+async function tripNavigation(req,res){
+ const job=await Job.findById(id(req.params.jobId)).lean();
+ if(!job)error(404,'Corrida não encontrada');
+ const usuario=String(own(req));
+ const cliente=String(job.clienteId)===usuario;
+ const motorista=String(job.motoristaId||'')===usuario;
+ if(!cliente&&!motorista)error(403,'Sem acesso à rota desta corrida');
+ if(!['aceita','no_local','em_andamento'].includes(job.status))error(409,'Rota disponível apenas durante uma viagem ativa');
+ const profile=await Profile.findOne({userId:job.motoristaId}).select('localizacao ultimaLocalizacaoEm').lean();
+ if(!profile?.localizacao?.coordinates||!profile.ultimaLocalizacaoEm||Date.now()-new Date(profile.ultimaLocalizacaoEm).getTime()>120000)
+  return res.json({ok:true,disponivel:false,motivo:'Aguardando GPS atualizado do motorista'});
+ const [lng,lat]=profile.localizacao.coordinates;
+ const origem={lat,lng};
+ const destino=job.status==='em_andamento'?job.destino:job.origem;
+ const etapa=job.status==='em_andamento'?'destino':'embarque';
+ const key=process.env.MOBILITY_GOOGLE_ROUTES_API_KEY;
+ if(!key)return res.json({ok:true,disponivel:false,motivo:'Serviço de rotas não configurado',etapa});
+ try{
+  const axios=require('axios');
+  const {data}=await axios.post('https://routes.googleapis.com/directions/v2:computeRoutes',{
+   origin:{location:{latLng:{latitude:origem.lat,longitude:origem.lng}}},
+   destination:{location:{latLng:{latitude:destino.lat,longitude:destino.lng}}},
+   travelMode:'DRIVE',routingPreference:'TRAFFIC_AWARE',languageCode:'pt-BR'
+  },{timeout:7000,headers:{'X-Goog-Api-Key':key,'X-Goog-FieldMask':'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline'}});
+  const route=data.routes?.[0];
+  if(!route?.polyline?.encodedPolyline)return res.json({ok:true,disponivel:false,motivo:'Rota não encontrada',etapa});
+  res.set('Cache-Control','private, no-store');
+  res.json({ok:true,disponivel:true,etapa,polyline:route.polyline.encodedPolyline,distanciaMetros:route.distanceMeters,
+   duracaoMinutos:Math.max(1,Math.ceil(parseFloat(route.duration||'0')/60))});
+ }catch(e){res.status(503).json({ok:false,erro:'Serviço de rotas temporariamente indisponível'});}
+}
+
+module.exports={tripNavigation,reviewTrip,driverRatings,catalog,modalidadesOrigem,getProfile,setProfile,solicitarRevisaoFoto,setCNH,listVehicles,createVehicle,updateVehicle,selectVehicle,upload,uploadDocument,listDocuments,setLocation,getAvailability,setAvailability,getDriverDashboard,addMaintenance,getMaintenance,quote,createRequest,listClientJobs,readJob,clientDriverTracking,getDriverOffers,getDemandAreas,acceptOffer,rejectOffer,driverTrips,driverArrive,startTrip,finishTrip,clientCancel,driverPaymentReceived,clientPaymentReview,messages,mensagensRapidas,ownedProfile};
