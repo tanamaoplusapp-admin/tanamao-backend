@@ -47,6 +47,18 @@ function publicProfile(profile){const x=profile.toObject?profile.toObject():{...
 async function getVehicle(req){const v=await Vehicle.findOne({_id:id(req.params.vehicleId),userId:own(req)});if(!v)error(404,'Veiculo nao encontrado');return v;}
 
 async function catalog(req,res){res.json({ok:true,servicos:SERVICES,veiculos:VEHICLES,formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',regras:{corridaMotoHabilitadaPorLocalidade:true,aprovacaoCNHManual:true,documentosPrivados:true}});}
+
+// Consulta antecipada pelo ponto de embarque. Usa a mesma verificacao
+// de cidade/PAIS que a cotacao para nao confiar na cidade informada pelo cliente.
+async function modalidadesOrigem(req,res){
+ const origem=calc.point(req.body?.origem);
+ await validarLocalidade(origem, req.body?.origem?.validacao);
+ const {politicaCorridaMoto}=require('../config/mobilidade');
+ const corridaMoto=politicaCorridaMoto(origem);
+ res.set('Cache-Control','private, no-store');
+ res.json({ok:true,origem:{cidade:origem.cidade,uf:origem.uf,pais:origem.pais},corridaMoto,
+  observacao:'Modalidades de entrega e corridas de carro seguem suas proprias regras e aprovacao.'});
+}
 async function getProfile(req,res){const {profile,prof}=await ownedProfile(req);const [vehicles,usuario]=await Promise.all([Vehicle.find({userId:own(req)}).sort({createdAt:-1}).lean(),User.findById(own(req)).select('avatar').lean()]);res.set('Cache-Control','private, no-store');res.json({ok:true,perfil:publicProfile(profile),veiculos:vehicles,fotoMotorista:usuario?.avatar||null,fotoAprovada:fotoAprovada(profile,usuario),formasPagamento:Pagamento.listarFormas(prof),recebimento:'diretamente_ao_prestador'});}
 async function setProfile(req,res){
  const {profile}=await ownedProfile(req,true);assertIdle(profile);
@@ -168,7 +180,12 @@ async function setAvailability(req,res){
  if(!vehicle||vehicle.status!=='aprovado')error(403,'Veiculo nao aprovado');
  if(!profile.ultimaLocalizacaoEm||new Date(profile.ultimaLocalizacaoEm).getTime()<Date.now()-120000)error(409,'Envie localizacao atual antes de ficar online');
  const services=arrayServices(req.body.servicosAtivos);
- for(const svc of services){if(!profile.servicosAprovados.includes(svc))error(403,`Modalidade nao aprovada: ${svc}`);if(!calc.cnhSupportsVehicle(profile.cnh.categoria,vehicle.tipo)||!calc.validVehicle(vehicle,svc,1))error(403,`Veiculo incompatível: ${svc}`);if(!calc.scopeAllowed(profile,svc,{cidade:profile.cidadeBase,uf:profile.ufBase}))error(403,'Corridas de moto bloqueadas nesta cidade');}
+ for(const svc of services){
+  if(!profile.servicosAprovados.includes(svc))error(403,`Modalidade nao aprovada: ${svc}`);
+  if(!calc.cnhSupportsVehicle(profile.cnh.categoria,vehicle.tipo)||!calc.validVehicle(vehicle,svc,1))error(403,`Veiculo incompatível: ${svc}`);
+ }
+ // A elegibilidade geografica da moto e checada na origem de cada corrida,
+ // nao na cidade de cadastro (o motorista pode atender varias cidades).
  profile.online=true;profile.servicosAtivos=services;await profile.save();
  res.json({ok:true,online:true,servicosAtivos:services,formasPagamento:Pagamento.listarFormas(prof)});
 }
@@ -212,7 +229,8 @@ function requestData(body){
  const origem=calc.point(body.origem),destino=calc.point(body.destino);
  const tipo=asText(body.tipo),tipoVeiculo=asText(body.veiculo);
  const servico=calc.serviceFor(tipo,tipoVeiculo,origem,destino);
- if(servico==='corrida_moto'&&!calc.scopeAllowed(null,servico,origem))error(403,'Mototaxi por aplicativo nao autorizado nesta cidade');
+ // A permissao geografica somente e conferida na cotacao depois da validacao
+ // real do ponto de origem, para nao confiar em cidade digitada pelo cliente.
  const passageiros=body.passageiros==null?1:Number(body.passageiros);
  if(!Number.isInteger(passageiros)||passageiros<1||passageiros>6)error(400,'Quantidade de passageiros invalida');
  const carga=calc.validateCargo(body.carga,servico);
@@ -226,6 +244,8 @@ async function quote(req,res){
   validarLocalidade(params.origem, req.body?.origem?.validacao),
   validarLocalidade(params.destino, req.body?.destino?.validacao),
  ]);
+ if(params.servico==='corrida_moto'&&!calc.scopeAllowed(null,params.servico,params.origem))
+  error(403,require('../config/mobilidade').politicaCorridaMoto(params.origem).mensagem);
  const cliente=await User.findById(own(req)).select('genero preferenciaProfissional').lean();
  const preferencia=Preferencias.preferenciaParaCotacao(cliente,req.body?.preferenciaMotorista);
  const localidades=calc.tarifaLocalidades(params.origem,params.destino);
@@ -257,6 +277,10 @@ async function createRequest(req,res){
  const formaPagamento=Pagamento.validarForma(req.body?.metodoPagamento);
  const cotacao=await Quote.findOne({_id:quoteId,clienteId:client,expiraEm:trust({$gt:new Date()}),usadoEmSolicitacao:null}).lean();
  if(!cotacao)error(409,'Cotacao expirada, invalida ou ja utilizada');
+ // Caso a autorizacao seja revogada nos cinco minutos de validade da cotacao,
+ // impede que uma solicitacao antiga seja confirmada.
+ if(cotacao.servico==='corrida_moto'&&!calc.scopeAllowed(null,cotacao.servico,cotacao.origem))
+  error(403,require('../config/mobilidade').politicaCorridaMoto(cotacao.origem).mensagem);
  if(cotacao.metodoRota==='aproximacao'&&!require('../config/mobilidade').approximateEnabled())error(403,'Rota de aproximacao desabilitada');
  const jobId=new mongoose.Types.ObjectId();
  const claimed=await Quote.findOneAndUpdate({_id:cotacao._id,clienteId:client,usadoEmSolicitacao:null,expiraEm:trust({$gt:new Date()})},{$set:{usadoEmSolicitacao:jobId}},{new:true});
@@ -469,4 +493,4 @@ async function driverRatings(req,res){
  res.json({ok:true,avaliacoes});
 }
 
-module.exports={reviewTrip,driverRatings,catalog,getProfile,setProfile,solicitarRevisaoFoto,setCNH,listVehicles,createVehicle,updateVehicle,selectVehicle,upload,uploadDocument,listDocuments,setLocation,getAvailability,setAvailability,getDriverDashboard,addMaintenance,getMaintenance,quote,createRequest,listClientJobs,readJob,clientDriverTracking,getDriverOffers,getDemandAreas,acceptOffer,rejectOffer,driverTrips,driverArrive,startTrip,finishTrip,clientCancel,driverPaymentReceived,clientPaymentReview,messages,mensagensRapidas,ownedProfile};
+module.exports={reviewTrip,driverRatings,catalog,modalidadesOrigem,getProfile,setProfile,solicitarRevisaoFoto,setCNH,listVehicles,createVehicle,updateVehicle,selectVehicle,upload,uploadDocument,listDocuments,setLocation,getAvailability,setAvailability,getDriverDashboard,addMaintenance,getMaintenance,quote,createRequest,listClientJobs,readJob,clientDriverTracking,getDriverOffers,getDemandAreas,acceptOffer,rejectOffer,driverTrips,driverArrive,startTrip,finishTrip,clientCancel,driverPaymentReceived,clientPaymentReview,messages,mensagensRapidas,ownedProfile};

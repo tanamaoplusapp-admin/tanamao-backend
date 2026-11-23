@@ -9,7 +9,7 @@ const Job=require('../models/MobilidadeSolicitacao');
 const Audit=require('../models/MobilidadeAuditoria');
 const {id,error,audit}=require('../middleware/mobilidade');
 const {SERVICES,serviceVehicleCompatible}=require('../config/mobilidade');
-const {validCnh,validVehicle,cnhSupportsVehicle,scopeAllowed,norm}=require('../services/mobilidadeCalculo');
+const {validCnh,validVehicle,cnhSupportsVehicle,norm}=require('../services/mobilidadeCalculo');
 const {decrypt}=require('../services/mobilidadeCrypto');
 const {emit}=require('../services/mobilidadeSocket');
 const Profissional=require('../models/Profissional');
@@ -76,7 +76,8 @@ async function reviewProfile(req,res){
   if(!Array.isArray(services)||!services.length||services.some(x=>!SERVICES.includes(x)||!p.servicosSolicitados.includes(x)))error(400,'Aprove apenas modalidades solicitadas');
   const vehicles=await Vehicle.find({userId:p.userId,status:'aprovado'}).lean();
   for(const code of services){
-   if(!scopeAllowed(p,code,{cidade:p.cidadeBase,uf:p.ufBase}))error(403,`Modalidade nao permitida: ${code}`);
+   // A aprovacao documental habilita o PERFIL; a permissao territorial
+   // permanece obrigatoria e e checada em cada origem pelo backend.
    const compatible=vehicles.filter(v=>cnhSupportsVehicle(p.cnh.categoria,v.tipo)&&validVehicle(v,code));
    if(!compatible.length)error(409,`Nao existe veiculo aprovado e CNH compativel para ${code}`);
    if(['frete_interestadual','frete_internacional'].includes(code)){

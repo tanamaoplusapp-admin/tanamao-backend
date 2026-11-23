@@ -8,6 +8,8 @@ router.get('/catalogo',asyncHandler(c.catalog));
 // Busca de enderecos, detalhes e selecao no mapa: autenticadas e limitadas.
 const placesLimited=rateLimit({windowMs:60000,max:40,standardHeaders:true,legacyHeaders:false, keyGenerator:req=>String(req.userId||req.ip)});
 const buscaLimited=rateLimit({windowMs:60000,max:8,standardHeaders:true,legacyHeaders:false, keyGenerator:req=>String(req.userId||req.ip)});
+// Consulta pre-cotacao de permissao territorial de passageiro por moto.
+router.post('/cliente/modalidades',placesLimited,asyncHandler(c.modalidadesOrigem));
 router.post('/cliente/lugares/sessao',placesLimited,asyncHandler(lugares.criarSessao));
 router.post('/cliente/lugares/sugestoes',placesLimited,asyncHandler(lugares.sugestoes));
 router.post('/cliente/lugares/detalhes',placesLimited,asyncHandler(lugares.detalhes));
