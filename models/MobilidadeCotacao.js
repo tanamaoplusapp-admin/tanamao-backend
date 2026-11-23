@@ -1,5 +1,5 @@
 'use strict';const mongoose=require('mongoose');const S=mongoose.Schema;
-const local=new S({endereco:{type:String,required:true,maxlength:240},cidade:{type:String,required:true,maxlength:80},uf:{type:String,required:true,maxlength:2},lat:{type:Number,required:true},lng:{type:Number,required:true}}, {_id:false});
+const local=new S({endereco:{type:String,required:true,maxlength:240},cidade:{type:String,required:true,maxlength:80},uf:{type:String,required:true,maxlength:2},pais:{type:String,maxlength:2,default:'BR'},estado:{type:String,maxlength:100},lat:{type:Number,required:true},lng:{type:Number,required:true}}, {_id:false});
 const schema=new S({
  clienteId:{type:S.Types.ObjectId,required:true,index:true},servico:{type:String,required:true},tipoVeiculo:{type:String,required:true},
  origem:{type:local,required:true},destino:{type:local,required:true},

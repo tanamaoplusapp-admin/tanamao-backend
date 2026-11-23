@@ -29,7 +29,7 @@ test('detalhe de um local retorna endereco, municipio, UF e coordenadas', () => 
   const api = load();
   assert.deepEqual({ ...api.parsePlace({ formattedAddress: 'Rua Tiradentes, 90, Ponta Porã - MS',
     addressComponents: components, location: { latitude: -22.536, longitude: -55.725 } }) },
-    { endereco: 'Rua Tiradentes, 90, Ponta Porã - MS', cidade: 'Ponta Porã', uf: 'MS', lat: -22.536, lng: -55.725 });
+    { endereco: 'Rua Tiradentes, 90, Ponta Porã - MS', cidade: 'Ponta Porã', uf: 'MS', pais: 'BR', estado: 'Mato Grosso do Sul', lat: -22.536, lng: -55.725 });
 });
 
 test('autocompletar normaliza a resposta Google sem expor a chave', async () => {
@@ -80,7 +80,7 @@ test('rejeita sessao, coordenada, pais e placeId invalidos', async () => {
   const api = load();
   assert.throws(() => api.session('token'), /Sessao de busca invalida/);
   assert.throws(() => api.pos({ lat: 200, lng: 10 }), /Ponto do mapa invalido/);
-  assert.throws(() => api.cityState([{ types: ['country'], shortText: 'PY' }]), /local no Brasil/);
+  assert.throws(() => api.cityState([{ types: ['country'], shortText: 'PY' }]), /Cidade nao identificada/);
   await assert.rejects(() => api.detalhes({ body: { placeId: 'http://localhost', sessao: session } }, response().res), /Lugar selecionado invalido/);
 });
 

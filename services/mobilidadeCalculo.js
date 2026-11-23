@@ -3,9 +3,21 @@ const axios=require('axios');
 const {SERVICES,VEHICLES,serviceVehicleCompatible,approximateEnabled}=require('../config/mobilidade');
 function fail(status,message){const e=new Error(message);e.status=status;throw e;}
 const norm=(value)=>String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-function point(raw){if(!raw||typeof raw!=='object')fail(400,'Origem e destino sao obrigatorios');const lat=Number(raw.lat??raw.latitude),lng=Number(raw.lng??raw.longitude);if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)fail(400,'Coordenadas invalidas');const endereco=String(raw.endereco||'').trim().slice(0,240);const cidade=String(raw.cidade||'').trim().slice(0,80);const uf=String(raw.uf||'').trim().toUpperCase();if(!endereco||!cidade||!/^[A-Z]{2}$/.test(uf))fail(400,'Endereco, cidade e UF obrigatorios');return {lat,lng,endereco,cidade,uf};}
-function scope(origem,destino){if(origem.uf!==destino.uf)return 'frete_interestadual';if(norm(origem.cidade)!==norm(destino.cidade))return 'frete_intermunicipal';return 'frete_local';}
-function serviceFor(tipo,veiculo,origem,destino){if(!VEHICLES.includes(veiculo))fail(400,'Veiculo desconhecido');if(tipo==='corrida'){if(!['moto','carro'].includes(veiculo))fail(400,'Corridas exigem moto ou carro');return `corrida_${veiculo}`;}if(tipo==='entrega'){if(veiculo==='caminhao')fail(400,'Para caminhao selecione frete');return veiculo==='moto'?'entrega_moto':'entrega_carro';}if(tipo==='frete'){if(veiculo==='moto')fail(400,'Frete de carga nao aceita moto');return scope(origem,destino);}fail(400,'Tipo invalido');}
+function point(raw){
+ if(!raw||typeof raw!=='object')fail(400,'Origem e destino sao obrigatorios');
+ const lat=Number(raw.lat??raw.latitude),lng=Number(raw.lng??raw.longitude);
+ if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)fail(400,'Coordenadas invalidas');
+ const endereco=String(raw.endereco||'').trim().slice(0,240);
+ const cidade=String(raw.cidade||'').trim().slice(0,80);
+ const pais=String(raw.pais || (String(raw.uf||'').toUpperCase()==='PY'?'PY':'BR')).trim().toUpperCase();
+ const uf=String(raw.uf || (pais!=='BR'?pais:'')).trim().toUpperCase();
+ const estado=String(raw.estado||'').trim().slice(0,100);
+ if(!endereco||!cidade||!/^[A-Z]{2}$/.test(uf)||!/^[A-Z]{2}$/.test(pais))fail(400,'Endereco, cidade, UF/regiao e pais obrigatorios');
+ if(pais!=='BR'&&uf!==pais)fail(400,'Codigo de pais e regiao incompativeis');
+ return {lat,lng,endereco,cidade,uf,pais,estado};
+}
+function scope(origem,destino){const paisA=origem.pais||'BR',paisB=destino.pais||'BR';if(paisA!==paisB)return 'frete_internacional';if(paisA==='BR'&&origem.uf!==destino.uf)return 'frete_interestadual';if(norm(origem.cidade)!==norm(destino.cidade))return 'frete_intermunicipal';return 'frete_local';}
+function serviceFor(tipo,veiculo,origem,destino){if((origem.pais||'BR')!==(destino.pais||'BR'))fail(409,'Enderecos dos dois paises disponiveis, mas viagens entre paises ainda precisam de habilitacao operacional e tarifas internacionais');if(!VEHICLES.includes(veiculo))fail(400,'Veiculo desconhecido');if(tipo==='corrida'){if(!['moto','carro'].includes(veiculo))fail(400,'Corridas exigem moto ou carro');return `corrida_${veiculo}`;}if(tipo==='entrega'){if(veiculo==='caminhao')fail(400,'Para caminhao selecione frete');return veiculo==='moto'?'entrega_moto':'entrega_carro';}if(tipo==='frete'){if(veiculo==='moto')fail(400,'Frete de carga nao aceita moto');return scope(origem,destino);}fail(400,'Tipo invalido');}
 function kilometers(a,b){const R=6371,toRad=x=>x*Math.PI/180;const dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng);const aa=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa));}
 async function route(a,b){
  const googleKey=process.env.MOBILITY_GOOGLE_ROUTES_API_KEY;

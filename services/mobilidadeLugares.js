@@ -35,14 +35,20 @@ function component(components, type) {
   return (Array.isArray(components) ? components : []).find(c => Array.isArray(c.types) && c.types.includes(type));
 }
 function cityState(components) {
-  const city = component(components, 'locality')?.longText ||
+  const country = String(component(components, 'country')?.shortText || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country)) fail(422, 'Pais nao identificado. Ajuste o ponto no mapa e tente novamente.');
+  const city = String(component(components, 'locality')?.longText ||
     component(components, 'postal_town')?.longText ||
-    component(components, 'administrative_area_level_2')?.longText || '';
-  const uf = component(components, 'administrative_area_level_1')?.shortText || '';
-  const country = component(components, 'country')?.shortText || '';
-  if (country.toUpperCase() !== 'BR') fail(422, 'Neste momento, selecione um local no Brasil.');
-  if (!city || !/^[A-Za-z]{2}$/.test(uf)) fail(422, 'Cidade/UF nao identificadas para esse local. Escolha um endereco mais preciso.');
-  return { cidade: city, uf: uf.toUpperCase() };
+    component(components, 'administrative_area_level_2')?.longText || '').trim();
+  if (!city) fail(422, 'Cidade nao identificada. Escolha uma rua ou estabelecimento mais preciso.');
+  const admin1 = component(components, 'administrative_area_level_1');
+  const state = String(admin1?.longText || admin1?.shortText || '').trim();
+  // The legacy app and tariff schemas use a two-letter 'uf' field. For
+  // addresses outside Brazil we use the country code there (PY, AR, etc.)
+  // while preserving the real region/department separately in 'estado'.
+  const uf = country === 'BR' ? String(admin1?.shortText || '').trim().toUpperCase() : country;
+  if (!/^[A-Z]{2}$/.test(uf)) fail(422, 'Estado nao identificado. Selecione um endereco mais preciso.');
+  return { cidade: city, uf, pais: country, estado: state };
 }
 function parsePlace(data) {
   if (!data || !data.location) fail(502, 'O local escolhido nao tem coordenadas disponiveis.');
@@ -92,7 +98,9 @@ async function sugestoes(req, res) {
   if (texto.length < 3) return res.json({ ok: true, lugares: [] });
   if (texto.length > 120) fail(400, 'Busque com ate 120 caracteres.');
   const sessao = session(req.body?.sessao);
-  const body = { input: texto, sessionToken: sessao, languageCode: 'pt-BR', regionCode: 'BR', includedRegionCodes: ['br'] };
+  // No country filter: near-border locations must return BR, PY and other countries.
+  // locationBias favors nearby suggestions but never excludes distant addresses.
+  const body = { input: texto, sessionToken: sessao, languageCode: 'pt-BR' };
   if (req.body?.latitude !== undefined && req.body?.longitude !== undefined) {
     const p = pos(req.body);
     body.locationBias = { circle: { center: { latitude: p.lat, longitude: p.lng }, radius: 30000 } };
@@ -122,7 +130,7 @@ async function detalhes(req, res) {
   try {
     ({ data } = await axios.get(`${PLACE_API}/places/${encodeURIComponent(placeId)}`, {
       timeout: 8000,
-      params: { languageCode: 'pt-BR', regionCode: 'BR', sessionToken: sessao },
+      params: { languageCode: 'pt-BR', sessionToken: sessao },
       headers: { 'X-Goog-Api-Key': placesKey(),
         'X-Goog-FieldMask': 'id,formattedAddress,location,addressComponents' },
     }));
