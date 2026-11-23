@@ -11,6 +11,7 @@ r.patch('/veiculos/:vehicleId/aprovacao',asyncHandler(c.reviewVehicle));
 r.get('/documentos/:documentId/download',asyncHandler(c.download));
 r.get('/tarifas',asyncHandler(c.getTariffs));
 r.put('/tarifas',asyncHandler(c.putTariff));
+r.post('/tarifas/iniciais',asyncHandler(c.instalarTarifasIniciais));
 r.get('/solicitacoes',asyncHandler(c.jobs));
 r.post('/solicitacoes/:jobId/cancelar',asyncHandler(c.emergencyCancel));
 r.post('/solicitacoes/:jobId/desbloquear-pin',asyncHandler(c.resetPin));

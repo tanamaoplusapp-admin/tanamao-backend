@@ -28,6 +28,7 @@ router.patch('/motorista/disponibilidade',limited,asyncHandler(c.setAvailability
 router.post('/motorista/localizacao',limited,asyncHandler(c.setLocation));
 router.get('/motorista/resumo',asyncHandler(c.getDriverDashboard));
 router.get('/motorista/ofertas',asyncHandler(c.getDriverOffers));
+router.get('/motorista/areas-demanda',asyncHandler(c.getDemandAreas));
 router.post('/motorista/ofertas/:jobId/aceitar',limited,asyncHandler(c.acceptOffer));
 router.post('/motorista/ofertas/:jobId/recusar',limited,asyncHandler(c.rejectOffer));
 router.get('/motorista/viagens',asyncHandler(c.driverTrips));
@@ -44,6 +45,7 @@ router.get('/cliente/solicitacoes/:jobId/motorista',asyncHandler(c.clientDriverT
 router.post('/cliente/solicitacoes/:jobId/cancelar',limited,asyncHandler(c.clientCancel));
 router.post('/cliente/solicitacoes/:jobId/pagamento/avaliar',limited,asyncHandler(c.clientPaymentReview));
 router.post('/cliente/solicitacoes/:jobId/avaliacao',limited,asyncHandler(c.reviewTrip));
+router.get('/solicitacoes/:jobId/mensagens/rapidas',asyncHandler(c.mensagensRapidas));
 router.get('/solicitacoes/:jobId/mensagens',asyncHandler(c.messages));
 router.post('/solicitacoes/:jobId/mensagens',limited,asyncHandler(c.messages));
 router.use(privateError);

@@ -8,6 +8,8 @@ const schema=new S({
  porKgCentavos:{type:Number,default:0,min:0,max:1000000},
  porM3Centavos:{type:Number,default:0,min:0,max:1000000},
  minimoCentavos:{type:Number,required:true,min:0,max:10000000},
+ // Acrescimo por demanda limitado pelo backend e mostrado antes da confirmacao.
+ dinamicaAtiva:{type:Boolean,default:false},
  ativo:{type:Boolean,default:false},
  alteradoPor:{type:S.Types.ObjectId,ref:'User'}
 },{timestamps:true});

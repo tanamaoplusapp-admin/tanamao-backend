@@ -9,7 +9,7 @@ const schema=new S({
  preferenciaMotorista:{type:String,enum:['todos','somente_mulheres','somente_homens'],default:'todos'},
  distanciaKm:{type:Number,required:true},duracaoMin:{type:Number,required:true},
  metodoRota:{type:String,enum:['google_routes','aproximacao'],required:true},
- valorCentavos:{type:Number,required:true},tarifaId:{type:S.Types.ObjectId,required:true},
+ valorCentavos:{type:Number,required:true},valorBaseCentavos:{type:Number},multiplicadorDinamico:{type:Number,default:1},adicionalDinamicoCentavos:{type:Number,default:0},tarifaId:{type:S.Types.ObjectId,required:true},
  expiraEm:{type:Date,required:true},usadoEmSolicitacao:{type:S.Types.ObjectId,default:null}
 },{timestamps:true});
 schema.index({expiraEm:1},{expireAfterSeconds:86400});

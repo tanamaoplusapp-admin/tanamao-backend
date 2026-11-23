@@ -110,8 +110,20 @@ async function putTariff(req,res){
  for(const field of campos){const x=Number(b[field]??(['porMinutoCentavos','porKgCentavos','porM3Centavos'].includes(field)?0:NaN));if(!Number.isSafeInteger(x)||x<0||x>10000000)error(400,`Campo ${field} invalido`);numbers[field]=x;}
  if(numbers.bandeiradaCentavos===0&&numbers.porKmCentavos===0&&numbers.porMinutoCentavos===0)error(400,'Configure algum valor real');
  if(typeof b.ativo!=='boolean')error(400,'Informe ativo true/false');
- const tariff=await Tariff.findOneAndUpdate({servico,uf,cidade},{$set:{...numbers,ativo:b.ativo,alteradoPor:req.userId}},{new:true,upsert:true,runValidators:true,setDefaultsOnInsert:true});
+ const tariff=await Tariff.findOneAndUpdate({servico,uf,cidade},{$set:{...numbers,ativo:b.ativo,dinamicaAtiva:b.dinamicaAtiva===true,alteradoPor:req.userId}},{new:true,upsert:true,runValidators:true,setDefaultsOnInsert:true});
  await audit(req,'admin.tarifa.atualizada',tariff._id,`${servico} ${cidade}/${uf}`);res.json({ok:true,tarifa:tariff});
+}
+async function instalarTarifasIniciais(req,res){
+ if(req.body?.confirmacao!=='HOMOLOGAR_TARIFAS')error(400,'Confirme a instalacao de tarifas iniciais');
+ const Tarifa=require('../models/MobilidadeTarifa');
+ const {planos}=require('../services/mobilidadeTarifasIniciais');
+ const rows=[...planos(),...planos({cidade:'pedro juan caballero',uf:'PY'})];let adicionadas=0;
+ for(const row of rows){
+  const result=await Tarifa.updateOne({servico:row.servico,uf:row.uf,cidade:row.cidade},{$setOnInsert:{...row,alteradoPor:req.userId}},{upsert:true});
+  if(result.upsertedCount)adicionadas++;
+ }
+ await audit(req,'admin.tarifas.iniciais',undefined,`${adicionadas} tarifas criadas sem sobreposicao`);
+ res.status(201).json({ok:true,adicionadas,total:rows.length,aviso:'Tarifas ilustrativas. Revise antes de atender clientes reais.'});
 }
 async function jobs(req,res){const status=text(req.query.status,25);const where=status&&['procurando','ofertada','aceita','no_local','em_andamento','concluida','cancelada','sem_motorista'].includes(status)?{status}:{};res.json({ok:true,solicitacoes:await Job.find(where).sort({createdAt:-1}).limit(100).lean()});}
 async function emergencyCancel(req,res){
@@ -127,4 +139,4 @@ async function resetPin(req,res){
  const jid=id(req.params.jobId);const row=await Job.findOneAndUpdate({_id:jid,status:trust({$in:['aceita','no_local','em_andamento']})},{$set:{codigoErradoTentativas:0}},{new:true});
  if(!row)error(404,'Viagem ativa nao encontrada');await audit(req,'admin.pin.desbloqueado',jid);res.json({ok:true,id:jid});
 }
-module.exports={list,detail,reviewCNH,reviewVehicle,reviewProfile,download,getTariffs,putTariff,jobs,emergencyCancel,resetPin};
+module.exports={list,detail,reviewCNH,reviewVehicle,reviewProfile,download,getTariffs,putTariff,instalarTarifasIniciais,jobs,emergencyCancel,resetPin};

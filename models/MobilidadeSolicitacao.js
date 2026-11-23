@@ -8,6 +8,7 @@ const schema=new S({
  clienteGenero:{type:String,enum:['feminino','masculino','outro','nao_informado'],default:'nao_informado'},
  preferenciaMotorista:{type:String,enum:['todos','somente_mulheres','somente_homens'],default:'todos'},
  distanciaKm:{type:Number,required:true},duracaoMin:{type:Number,required:true},metodoRota:{type:String},valorCentavos:{type:Number,required:true},
+ valorBaseCentavos:{type:Number},multiplicadorDinamico:{type:Number,default:1},adicionalDinamicoCentavos:{type:Number,default:0},
  status:{type:String,enum:['procurando','ofertada','aceita','no_local','em_andamento','concluida','cancelada','sem_motorista'],default:'procurando',index:true},
  motoristaId:{type:S.Types.ObjectId,default:null,index:true},
  veiculoId:{type:S.Types.ObjectId,default:null},
