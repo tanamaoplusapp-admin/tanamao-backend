@@ -9,7 +9,7 @@ function load(axiosStub = {}, env = { MOBILITY_GOOGLE_PLACES_API_KEY: 'CHAVE_TES
   const filename = path.resolve(__dirname, '../services/mobilidadeLugares.js');
   const code = fs.readFileSync(filename, 'utf8');
   const module = { exports: {} };
-  const localRequire = id => id === 'axios' ? axiosStub : require(id);
+  const localRequire = id => id === 'axios' ? axiosStub : id === './mobilidadePontoVerificado' ? { assinarPonto: () => 'token_mock' } : require(id);
   vm.runInNewContext('(function (require, module, exports, process) { ' + code + '\n })', {}, { filename })(localRequire, module, module.exports, { env });
   return module.exports;
 }

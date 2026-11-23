@@ -219,7 +219,10 @@ function requestData(body){
 }
 async function quote(req,res){
  const params=requestData(req.body||{});
- await Promise.all([validarLocalidade(params.origem),validarLocalidade(params.destino)]);
+ await Promise.all([
+  validarLocalidade(params.origem, req.body?.origem?.validacao),
+  validarLocalidade(params.destino, req.body?.destino?.validacao),
+ ]);
  const cliente=await User.findById(own(req)).select('genero preferenciaProfissional').lean();
  const preferencia=Preferencias.preferenciaParaCotacao(cliente,req.body?.preferenciaMotorista);
  const localidades=calc.tarifaLocalidades(params.origem,params.destino);

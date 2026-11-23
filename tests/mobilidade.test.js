@@ -25,7 +25,7 @@ const calc=load('services/mobilidadeCalculo.js',{'axios':{post:()=>{throw Error(
 const profissao=load('services/mobilidadeProfissao.js');
 const preferencias=load('services/mobilidadePreferencias.js');
 const periodo=load('services/mobilidadePeriodo.js');
-const geocoding=load('services/mobilidadeGeocoding.js',{'axios':{get:async()=>({data:{status:'ZERO_RESULTS'}})},'../config/mobilidade':config});
+const geocoding=load('services/mobilidadeGeocoding.js',{'axios':{get:async()=>({data:{status:'ZERO_RESULTS'}})},'../config/mobilidade':config,'./mobilidadePontoVerificado':{validarProva:()=>false}});
 const id=(number)=>`id_${number}`;
 const nearA={lat:-22.54,lng:-55.72,cidade:'Ponta Pora',uf:'MS',endereco:'R. Teste A'};
 const nearB={lat:-22.53,lng:-55.71,cidade:'Ponta Pora',uf:'MS',endereco:'R. Teste B'};

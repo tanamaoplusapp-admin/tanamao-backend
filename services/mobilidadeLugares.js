@@ -4,6 +4,7 @@
 // A chave privada nunca e enviada ao aplicativo. Nao armazenamos as buscas.
 const axios = require('axios');
 const { randomUUID } = require('node:crypto');
+const { assinarPonto } = require('./mobilidadePontoVerificado');
 
 const SESSION_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const PLACE_RE = /^[A-Za-z0-9_.:-]{6,256}$/;
@@ -136,7 +137,8 @@ async function detalhes(req, res) {
     }));
   } catch (e) { if (e.status) throw e; googleError(e, 'Detalhes do endereco'); }
   res.set('Cache-Control', 'private, no-store');
-  res.json({ ok: true, ponto: parsePlace(data) });
+  const ponto = parsePlace(data);
+  res.json({ ok: true, ponto: { ...ponto, validacao: assinarPonto(ponto) } });
 }
 async function reverso(req, res) {
   const p = pos(req.body);
@@ -146,6 +148,7 @@ async function reverso(req, res) {
       params: { latlng: `${p.lat},${p.lng}`, language: 'pt-BR', key: geoKey() } }));
   } catch (e) { if (e.status) throw e; googleError(e, 'Selecao no mapa'); }
   res.set('Cache-Control', 'private, no-store');
-  res.json({ ok: true, ponto: { ...parseReverse(data), ...p } });
+  const ponto = { ...parseReverse(data), ...p };
+  res.json({ ok: true, ponto: { ...ponto, validacao: assinarPonto(ponto) } });
 }
 module.exports = { criarSessao, sugestoes, detalhes, reverso, cityState, parsePlace, parseReverse, session, pos };

@@ -22,7 +22,7 @@ const py=[
  {types:['administrative_area_level_1'],longText:'Amambay',shortText:'Amambay'},
  {types:['country'],longText:'Paraguay',shortText:'PY'},
 ];
-function lugares(axios){return load('services/mobilidadeLugares.js',{axios});}
+function lugares(axios){return load('services/mobilidadeLugares.js',{axios,'./mobilidadePontoVerificado':{assinarPonto:()=> 'token_mock'}});}
 function res(){let data;return{get:()=>data,set(){return this;},json(d){data=d;return this;}};}
 const token='f8b0c5af-3e96-4ef2-95b1-45a874279047';
 test('Places keeps Brazilian region plus country code',()=>{
@@ -88,7 +88,7 @@ test('Frete entre outros paises continua classificado corretamente sem ser frete
 function geocodingWith(body){
  const config={approximateEnabled:()=>false};
  const axios={get:async()=>({data:body})};
- return load('services/mobilidadeGeocoding.js',{'axios':axios,'../config/mobilidade':config},{MOBILITY_GOOGLE_GEOCODING_API_KEY:'TEST_KEY'});
+ return load('services/mobilidadeGeocoding.js',{'axios':axios,'../config/mobilidade':config,'./mobilidadePontoVerificado':{validarProva:()=>false}},{MOBILITY_GOOGLE_GEOCODING_API_KEY:'TEST_KEY'});
 }
 test('Server validates a location in Pedro Juan Caballero (PY)',async()=>{
  const comps=py.map(x=>({types:x.types,long_name:x.longText,short_name:x.shortText}));
