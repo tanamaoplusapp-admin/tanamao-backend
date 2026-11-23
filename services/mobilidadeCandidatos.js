@@ -11,12 +11,14 @@ const { betaAllowed } = require('../config/mobilidade');
 const User = require('../models/user');
 const { fotoAprovada } = require('./mobilidadeFoto');
 const Vehicle = require('../models/MobilidadeVeiculo');
-const { kilometers, validCnh, validVehicle, cnhSupportsVehicle, scopeAllowed } = require('./mobilidadeCalculo');
+const { kilometers, validCnh, validVehicle, cnhSupportsVehicle } = require('./mobilidadeCalculo');
+const PoliticaMoto = require('./mobilidadePoliticaMoto');
 const LIMIT_KM = Math.min(100, Math.max(1, Number(process.env.MOBILITY_MAX_PICKUP_KM) || 25));
 
 async function buscarElegiveis(job) {
   if (!job || !job.origem || !Number.isFinite(Number(job.origem.lat)) || !Number.isFinite(Number(job.origem.lng))) return [];
   if (!betaAllowed(job.clienteId)) return [];
+  if (job.servico === 'corrida_moto' && !(await PoliticaMoto.consultar(job.origem)).permitida) return [];
   const cutoff = new Date(Date.now() - 120000);
   const profiles = await Profile.find({
     status: 'aprovado', online: true, emViagemId: null,
@@ -48,7 +50,7 @@ async function buscarElegiveis(job) {
     return betaAllowed(p.userId) && permitted.has(String(p.profissionalId)) &&
       account && fotoAprovada(p, account) && compativel(job, account) &&
       validCnh(p) && Array.isArray(p.localizacao?.coordinates) &&
-      p.localizacao.coordinates.length === 2 && scopeAllowed(p, job.servico, job.origem);
+      p.localizacao.coordinates.length === 2;
   });
   if (!eligibleProfiles.length) return [];
   const vehicleIds = eligibleProfiles.map(p => p.veiculoAtivoId).filter(Boolean);

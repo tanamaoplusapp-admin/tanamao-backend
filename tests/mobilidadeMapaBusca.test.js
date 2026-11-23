@@ -34,7 +34,8 @@ const candidateMocks = {
   '../config/mobilidade': { betaAllowed: () => true },
   './mobilidadeFoto': { fotoAprovada: () => true },
   './mobilidadeCalculo': { kilometers: () => 2.4, validCnh: () => true, validVehicle: () => true,
-    cnhSupportsVehicle: () => true, scopeAllowed: () => true },
+    cnhSupportsVehicle: () => true },
+  './mobilidadePoliticaMoto': {consultar: async () => ({permitida:false})},
 };
 const candidates = load('services/mobilidadeCandidatos.js', candidateMocks);
 const job = { clienteId: 'customer1', origem: { lat: -22.54, lng: -55.72 },
@@ -90,7 +91,7 @@ test('route uses existing auth and the new availability endpoint', () => {
 
 test('aggregate checks payment, approval, subscription, preferences and vehicle', () => {
   const lookup = fs.readFileSync(path.join(root, 'services/mobilidadeCandidatos.js'), 'utf8');
-  for (const term of ['CAMPOS[forma]', 'acessoExpiraEm', 'fotoAprovada', 'compativel', 'validCnh', 'validVehicle', 'scopeAllowed']) {
+  for (const term of ['CAMPOS[forma]', 'acessoExpiraEm', 'fotoAprovada', 'compativel', 'validCnh', 'validVehicle', 'PoliticaMoto']) {
     assert.ok(lookup.includes(term), 'Missing eligibility filter: ' + term);
   }
 });

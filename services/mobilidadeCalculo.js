@@ -63,5 +63,7 @@ function validateCargo(raw,service){const data=raw&&typeof raw==='object'?raw:{}
 function validCnh(profile,now=new Date()){return profile?.cnh?.status==='aprovado'&&profile?.cnh?.validade&&new Date(profile.cnh.validade)>now;}
 function cnhSupportsVehicle(category,type){const cat=String(category||'');if(type==='moto')return cat.includes('A');if(type==='caminhao')return /[CDE]/.test(cat);return /[BCDE]/.test(cat);}
 function validVehicle(v,service,passageiros=1,carga={},requestedType=null){return v?.status==='aprovado'&&(!v.crlvValidade||new Date(v.crlvValidade)>new Date())&&serviceVehicleCompatible(service,v.tipo)&&(!requestedType||v.tipo===requestedType)&&(!['frete_interestadual','frete_internacional'].includes(service)||Boolean(v.rntrc))&&(!service.startsWith('corrida')||v.lugares>passageiros)&&(!carga?.pesoKg||v.capacidadeKg>=carga.pesoKg)&&(!carga?.volumeM3||v.capacidadeM3>=carga.volumeM3);}
-function scopeAllowed(profile,service,origin){if(service==='corrida_moto'){const {motoPassengerAllowed}=require('../config/mobilidade');return motoPassengerAllowed(origin?.cidade,origin?.uf,origin?.pais);}return true;}
+// Territory is checked via mobilidadePoliticaMoto.consultar at all mutation and dispatch entry points.
+// This synchronous helper only deals with vehicle/profile compatibility.
+function scopeAllowed(){return true;}
 module.exports={fail,point,scope,serviceFor,fronteiraIntegrada,tarifaLocalidades,kilometers,route,price,validateCargo,validCnh,validVehicle,cnhSupportsVehicle,scopeAllowed,norm};

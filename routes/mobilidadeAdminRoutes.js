@@ -9,6 +9,8 @@ r.patch('/perfis/:profileId/cnh',asyncHandler(c.reviewCNH));
 r.patch('/perfis/:profileId/aprovacao',asyncHandler(c.reviewProfile));
 r.patch('/veiculos/:vehicleId/aprovacao',asyncHandler(c.reviewVehicle));
 r.get('/documentos/:documentId/download',asyncHandler(c.download));
+r.get('/permissoes-moto',asyncHandler(c.listMotoPolicies));
+r.patch('/permissoes-moto/:chave',asyncHandler(c.reviewMotoPolicy));
 r.get('/tarifas',asyncHandler(c.getTariffs));
 r.put('/tarifas',asyncHandler(c.putTariff));
 r.post('/tarifas/iniciais',asyncHandler(c.instalarTarifasIniciais));

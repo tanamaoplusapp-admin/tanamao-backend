@@ -80,7 +80,7 @@ function makeDispatch({acceptsCard=true,access=true,driverGenero='feminino',driv
   '../models/MobilidadePerfil':db.Profile,'../models/MobilidadeVeiculo':db.Vehicle,
   '../models/MobilidadeSolicitacao':db.Job,'../models/Profissional':db.Profissional,
   '../models/user':db.User,'./mobilidadeCalculo':calc,'./mobilidadePagamento':money,'./mobilidadeProfissao':profissao,
-  'mongoose':{trusted:x=>x},'./mobilidadeFoto':{fotoAprovada:()=>true},
+  'mongoose':{trusted:x=>x},'./mobilidadePoliticaMoto':{consultar:async()=>({permitida:true})},'./mobilidadeFoto':{fotoAprovada:()=>true},
   './mobilidadeSocket':{emit:()=>{}},'./pushService':{enviarPushParaUsuario:async()=>true},'./mobilidadePreferencias':preferencias
  });
  return {dispatch,getOffers:()=>offers,job};
@@ -128,6 +128,7 @@ function mockController(){
   '../services/mobilidadePreferencias':preferencias,
   '../services/mobilidadePeriodo':periodo,
   '../services/mobilidadeGeocoding':geocoding,
+  '../services/mobilidadePoliticaMoto':{consultar:async()=>({permitida:false,mensagem:'Aguardando revisao'})},
   '../services/mobilidadeSocket':{emit:()=>{}},
   '../services/mobilidadePagamento':money,
   '../models/user':{},

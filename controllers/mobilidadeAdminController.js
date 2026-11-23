@@ -17,6 +17,8 @@ const User=require('../models/user');
 const {fotoValida}=require('../services/mobilidadeFoto');
 const {possuiProfissaoMotorista}=require('../services/mobilidadeProfissao');
 const text=(x,max=500)=>String(x||'').trim().slice(0,max);
+const PoliticaMoto=require('../services/mobilidadePoliticaMoto');
+const PermissaoMoto=require('../models/MobilidadePermissaoMoto');
 const owner=id=>String(id||'');
 
 async function list(req,res){
@@ -103,6 +105,28 @@ async function download(req,res){
  await audit(req,'admin.documento.visualizado',doc._id,doc.tipo);
  const stream=bucket.openDownloadStream(doc.arquivoId);stream.on('error',err=>{if(!res.headersSent)res.status(404).json({ok:false,erro:'Arquivo indisponivel'});else res.destroy(err);});stream.pipe(res);
 }
+async function listMotoPolicies(req,res){
+ const status=text(req.query.status,25);
+ const page=Math.min(1000,Math.max(1,parseInt(req.query.page,10)||1));
+ const query={};
+ if(['pendente','autorizado','restrito'].includes(status))query.status=status;
+ const filter=text(req.query.busca,60).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+ if(filter){const escaped=filter.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');query.cidadeNormalizada={$regex:'^'+escaped};}
+ const [rows,total]=await Promise.all([
+  PermissaoMoto.find(query).sort({status:1,consultadaEm:-1}).skip((page-1)*30).limit(30).lean(),
+  PermissaoMoto.countDocuments(query),
+ ]);
+ res.set('Cache-Control','private, no-store');
+ res.json({ok:true,localidades:rows.map(row=>({...row,politica:PoliticaMoto.effective(row)})),total,page,limite:30});
+}
+async function reviewMotoPolicy(req,res){
+ const chave=decodeURIComponent(req.params.chave||'');
+ const updated=await PoliticaMoto.revisar(chave,req.body,req.userId);
+ await audit(req,'admin.moto.localidade.revisada',updated._id,`${updated.chave}: ${updated.status}; ${updated.fundamento}`.slice(0,280));
+ res.set('Cache-Control','private, no-store');
+ res.json({ok:true,localidade:{...updated,politica:PoliticaMoto.effective(updated)}});
+}
+
 async function getTariffs(req,res){const tariffs=await Tariff.find({}).sort({servico:1,uf:1,cidade:1}).lean();res.json({ok:true,tarifas:tariffs});}
 async function putTariff(req,res){
  const b=req.body||{},servico=text(b.servico,40),uf=text(b.uf||'*',2).toUpperCase(),cidade=norm(b.cidade||'*');
@@ -140,4 +164,4 @@ async function resetPin(req,res){
  const jid=id(req.params.jobId);const row=await Job.findOneAndUpdate({_id:jid,status:trust({$in:['aceita','no_local','em_andamento']})},{$set:{codigoErradoTentativas:0}},{new:true});
  if(!row)error(404,'Viagem ativa nao encontrada');await audit(req,'admin.pin.desbloqueado',jid);res.json({ok:true,id:jid});
 }
-module.exports={list,detail,reviewCNH,reviewVehicle,reviewProfile,download,getTariffs,putTariff,instalarTarifasIniciais,jobs,emergencyCancel,resetPin};
+module.exports={list,detail,reviewCNH,reviewVehicle,reviewProfile,download,listMotoPolicies,reviewMotoPolicy,getTariffs,putTariff,instalarTarifasIniciais,jobs,emergencyCancel,resetPin};

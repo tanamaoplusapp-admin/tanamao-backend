@@ -28,6 +28,7 @@ const Pagamento=require('../services/mobilidadePagamento');
 const Preferencias=require('../services/mobilidadePreferencias');
 const {periodo:periodoFinanceiro}=require('../services/mobilidadePeriodo');
 const {validarLocalidade}=require('../services/mobilidadeGeocoding');
+const PoliticaMoto=require('../services/mobilidadePoliticaMoto');
 const User=require('../models/user');
 const {fotoAprovada,fotoValida}=require('../services/mobilidadeFoto');
 const own=req=>id(req.userId||req.user?._id);
@@ -53,8 +54,7 @@ async function catalog(req,res){res.json({ok:true,servicos:SERVICES,veiculos:VEH
 async function modalidadesOrigem(req,res){
  const origem=calc.point(req.body?.origem);
  await validarLocalidade(origem, req.body?.origem?.validacao);
- const {politicaCorridaMoto}=require('../config/mobilidade');
- const corridaMoto=politicaCorridaMoto(origem);
+ const corridaMoto=await PoliticaMoto.consultar(origem);
  res.set('Cache-Control','private, no-store');
  res.json({ok:true,origem:{cidade:origem.cidade,uf:origem.uf,pais:origem.pais},corridaMoto,
   observacao:'Modalidades de entrega e corridas de carro seguem suas proprias regras e aprovacao.'});
@@ -244,8 +244,7 @@ async function quote(req,res){
   validarLocalidade(params.origem, req.body?.origem?.validacao),
   validarLocalidade(params.destino, req.body?.destino?.validacao),
  ]);
- if(params.servico==='corrida_moto'&&!calc.scopeAllowed(null,params.servico,params.origem))
-  error(403,require('../config/mobilidade').politicaCorridaMoto(params.origem).mensagem);
+ if(params.servico==='corrida_moto'){const policy=await PoliticaMoto.consultar(params.origem);if(!policy.permitida)error(403,policy.mensagem);}
  const cliente=await User.findById(own(req)).select('genero preferenciaProfissional').lean();
  const preferencia=Preferencias.preferenciaParaCotacao(cliente,req.body?.preferenciaMotorista);
  const localidades=calc.tarifaLocalidades(params.origem,params.destino);
@@ -279,8 +278,7 @@ async function createRequest(req,res){
  if(!cotacao)error(409,'Cotacao expirada, invalida ou ja utilizada');
  // Caso a autorizacao seja revogada nos cinco minutos de validade da cotacao,
  // impede que uma solicitacao antiga seja confirmada.
- if(cotacao.servico==='corrida_moto'&&!calc.scopeAllowed(null,cotacao.servico,cotacao.origem))
-  error(403,require('../config/mobilidade').politicaCorridaMoto(cotacao.origem).mensagem);
+ if(cotacao.servico==='corrida_moto'){const policy=await PoliticaMoto.consultar(cotacao.origem);if(!policy.permitida)error(403,policy.mensagem);}
  if(cotacao.metodoRota==='aproximacao'&&!require('../config/mobilidade').approximateEnabled())error(403,'Rota de aproximacao desabilitada');
  const jobId=new mongoose.Types.ObjectId();
  const claimed=await Quote.findOneAndUpdate({_id:cotacao._id,clienteId:client,usadoEmSolicitacao:null,expiraEm:trust({$gt:new Date()})},{$set:{usadoEmSolicitacao:jobId}},{new:true});
@@ -347,7 +345,8 @@ async function acceptOffer(req,res){
  if(!usuario||usuario.status==='blocked'||['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo');
  if(!profile.online||profile.status!=='aprovado'||!calc.validCnh(profile)||profile.emViagemId)error(403,'Motorista indisponivel ou sem CNH aprovada');
  const job=await Job.findOne({_id:jobId,status:'ofertada',ofertaMotoristaId:user,ofertaExpiraEm:trust({$gt:new Date()})}).lean();if(!job)error(409,'Oferta expirada ou indisponivel');
- if(!profile.servicosAtivos.includes(job.servico)||!profile.servicosAprovados.includes(job.servico)||!calc.scopeAllowed(profile,job.servico,job.origem))error(403,'Modalidade nao autorizada');
+ if(!profile.servicosAtivos.includes(job.servico)||!profile.servicosAprovados.includes(job.servico))error(403,'Modalidade nao autorizada');
+ if(job.servico==='corrida_moto'){const policy=await PoliticaMoto.consultar(job.origem);if(!policy.permitida)error(403,policy.mensagem);}
  if(!Preferencias.compativel(job,usuario))error(403,'Preferencia de atendimento incompativel');
  const prof=await Pagamento.buscarPreferencias(profile.profissionalId);
  if(!Pagamento.aceitaForma(prof,job.pagamento?.metodo))error(403,'Voce nao aceita a forma de pagamento escolhida pelo cliente');
