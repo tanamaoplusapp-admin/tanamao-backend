@@ -7,7 +7,6 @@ r.get('/perfis',asyncHandler(c.list));
 r.get('/perfis/:profileId',asyncHandler(c.detail));
 r.patch('/perfis/:profileId/cnh',asyncHandler(c.reviewCNH));
 r.patch('/perfis/:profileId/aprovacao',asyncHandler(c.reviewProfile));
-r.post('/perfis/:profileId/teste',asyncHandler(c.controlarTeste));
 r.patch('/veiculos/:vehicleId/aprovacao',asyncHandler(c.reviewVehicle));
 r.get('/documentos/:documentId/download',asyncHandler(c.download));
 r.get('/permissoes-moto',asyncHandler(c.listMotoPolicies));

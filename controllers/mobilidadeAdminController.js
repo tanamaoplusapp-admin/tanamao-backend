@@ -14,7 +14,6 @@ const {decrypt}=require('../services/mobilidadeCrypto');
 const {emit}=require('../services/mobilidadeSocket');
 const Profissional=require('../models/Profissional');
 const User=require('../models/user');
-const Teste=require('../services/mobilidadeTeste');
 const {fotoValida}=require('../services/mobilidadeFoto');
 const {possuiProfissaoMotorista}=require('../services/mobilidadeProfissao');
 const text=(x,max=500)=>String(x||'').trim().slice(0,max);
@@ -97,40 +96,6 @@ async function reviewProfile(req,res){
  emit(req.app,p.userId,'perfil:aprovacao',{status:p.status,servicos:p.servicosAprovados});
  res.json({ok:true,perfilId:p._id,status:p.status,servicosAprovados:p.servicosAprovados});
 }
-async function controlarTeste(req,res){
- const p=await Profile.findById(id(req.params.profileId));
- if(!p)error(404,'Perfil nao encontrado');
- const acao=text(req.body?.acao,20);
- if(acao==='revogar'){
-  p.liberacaoTeste = {...(p.liberacaoTeste?.toObject?.() || p.liberacaoTeste || {}),revogadaEm:new Date()};
-  p.online=false;p.servicosAtivos=[];
-  await p.save();
-  await audit(req,'admin.motorista.teste_revogado',p._id,'Revogacao administrativa');
-  emit(req.app,p.userId,'perfil:aprovacao',{status:p.status,teste:false});
-  return res.json({ok:true,liberacaoTeste:null});
- }
- if(acao!=='liberar')error(400,'Acao deve ser liberar ou revogar');
- if(!Teste.ativo())error(403,'Ative MOBILITY_TEST_MODE_ENABLED=true no backend para usar demonstracao entre contas de teste');
- if(['suspenso','reprovado'].includes(p.status))error(403,'Perfil suspenso ou reprovado nao pode receber teste');
- if(p.emViagemId)error(409,'Motorista possui viagem em andamento');
- const minutos=Number(req.body?.minutos);
- if(!Number.isSafeInteger(minutos)||minutos<5||minutos>60)error(400,'A duracao de teste deve ter entre 5 e 60 minutos');
- const clienteTesteId=id(req.body?.clienteTesteId);
- if(String(clienteTesteId)===String(p.userId))error(400,'Use uma conta de cliente diferente da conta do motorista');
- const cliente=await User.findById(clienteTesteId).select('_id status').lean();
- if(!cliente||cliente.status==='blocked')error(404,'Conta de cliente de teste nao encontrada ou bloqueada');
- const veiculoId=id(req.body?.veiculoId);
- const v=await Vehicle.findOne({_id:veiculoId,userId:p.userId}).lean();
- if(!Teste.veiculoDemo(v,'corrida_carro',1,'carro'))error(409,'Cadastre primeiro um carro valido, com ao menos dois lugares; veiculo suspenso nao pode ser usado');
- if(!Array.isArray(p.servicosSolicitados)||!p.servicosSolicitados.includes('corrida_carro'))error(409,'Motorista precisa solicitar a modalidade corrida_carro no cadastro');
- const agora=new Date();
- p.liberacaoTeste={clienteTesteId,veiculoId,servicos:['corrida_carro'],concedidaEm:agora,expiraEm:new Date(agora.getTime()+minutos*60000),revogadaEm:null,concedidaPor:req.userId,motivo:text(req.body?.motivo,350)||'Demonstracao controlada do fluxo de corrida'};
- p.veiculoAtivoId=veiculoId;p.online=false;p.servicosAtivos=[];
- await p.save();
- await audit(req,'admin.motorista.teste_liberado',p._id,`Demonstracao ${minutos}min, cliente ${String(clienteTesteId)}, veiculo ${String(veiculoId)}`);
- emit(req.app,p.userId,'perfil:aprovacao',{status:p.status,teste:true,expiraEm:p.liberacaoTeste.expiraEm});
- res.json({ok:true,liberacaoTeste:p.liberacaoTeste,aviso:'Somente demonstracao com o cliente vinculado. Nao iniciar transporte nem pagamento real.'});
-}
 async function download(req,res){
  const doc=await Document.findById(id(req.params.documentId));if(!doc)error(404,'Documento nao encontrado');
  if(!mongoose.connection.db)error(503,'MongoDB indisponivel');
@@ -199,4 +164,4 @@ async function resetPin(req,res){
  const jid=id(req.params.jobId);const row=await Job.findOneAndUpdate({_id:jid,status:trust({$in:['aceita','no_local','em_andamento']})},{$set:{codigoErradoTentativas:0}},{new:true});
  if(!row)error(404,'Viagem ativa nao encontrada');await audit(req,'admin.pin.desbloqueado',jid);res.json({ok:true,id:jid});
 }
-module.exports={list,detail,reviewCNH,reviewVehicle,reviewProfile,controlarTeste,download,listMotoPolicies,reviewMotoPolicy,getTariffs,putTariff,instalarTarifasIniciais,jobs,emergencyCancel,resetPin};
+module.exports={list,detail,reviewCNH,reviewVehicle,reviewProfile,download,listMotoPolicies,reviewMotoPolicy,getTariffs,putTariff,instalarTarifasIniciais,jobs,emergencyCancel,resetPin};

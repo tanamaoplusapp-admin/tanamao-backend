@@ -1,7 +1,6 @@
 'use strict';const mongoose=require('mongoose');const S=mongoose.Schema;
 const schema=new S({
  clienteId:{type:S.Types.ObjectId,required:true,index:true},
- testeOperacional:{type:Boolean,default:false,index:true},
  cotacaoId:{type:S.Types.ObjectId,required:true,unique:true},
  servico:{type:String,required:true,index:true},tipoVeiculo:{type:String,required:true},
  origem:{type:Object,required:true},destino:{type:Object,required:true},

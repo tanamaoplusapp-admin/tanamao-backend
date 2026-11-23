@@ -11,7 +11,6 @@ const Vehicle=require('../models/MobilidadeVeiculo');
 const Job=require('../models/MobilidadeSolicitacao');
 const {kilometers,validCnh,validVehicle,cnhSupportsVehicle}=require('./mobilidadeCalculo');
 const PoliticaMoto=require('./mobilidadePoliticaMoto');
-const Teste=require('./mobilidadeTeste');
 const {emit}=require('./mobilidadeSocket');
 const {enviarPushParaUsuario}=require('./pushService');
 const LIMIT=Math.min(100,Math.max(1,Number(process.env.MOBILITY_MAX_PICKUP_KM)||25));
@@ -23,25 +22,22 @@ async function dispatchOne(app,jobId){
  if(!job||job.status!=='procurando'||job.tentativas>=MAX_ATTEMPTS||!betaAllowed(job.clienteId))return null;
  // No offer may be issued if the origin permission is pending, restricted or expired.
  if(job.servico==='corrida_moto'&&!(await PoliticaMoto.consultar(job.origem)).permitida)return null;
- const demo=job.testeOperacional===true;
- if(demo&&!Teste.ativo())return null;
- const busca=demo?{'liberacaoTeste.clienteTesteId':job.clienteId,'liberacaoTeste.expiraEm':trust({$gt:new Date()}),'liberacaoTeste.revogadaEm':null,'liberacaoTeste.servicos':job.servico,status:trust({$nin:['suspenso','reprovado']})}:{status:'aprovado',servicosAprovados:job.servico};
- const profiles=await Profile.find({...busca,online:true,emViagemId:null,servicosAtivos:job.servico,ultimaLocalizacaoEm:trust({$gte:recentDate()}),userId:trust({$nin:job.ignorados||[]}),localizacao:trust({$near:{$geometry:{type:'Point',coordinates:[job.origem.lng,job.origem.lat]},$maxDistance:LIMIT*1000}})}).limit(200).lean();
+ const profiles=await Profile.find({status:'aprovado',servicosAprovados:job.servico,online:true,emViagemId:null,servicosAtivos:job.servico,ultimaLocalizacaoEm:trust({$gte:recentDate()}),userId:trust({$nin:job.ignorados||[]}),localizacao:trust({$near:{$geometry:{type:'Point',coordinates:[job.origem.lng,job.origem.lat]},$maxDistance:LIMIT*1000}})}).limit(200).lean();
  // Somente prestadores que aceitam a forma de pagamento escolhida pelo cliente.
  const forma=Pagamento.validarForma(job.pagamento?.metodo);
- const professionals=await Profissional.find({_id:trust({$in:profiles.map(p=>p.profissionalId)}),...(demo?{}:{[Pagamento.CAMPOS[forma]]:true})}).select('_id profissaoNome profissoes profissoesDetalhadas').lean();
+ const professionals=await Profissional.find({_id:trust({$in:profiles.map(p=>p.profissionalId)}),[Pagamento.CAMPOS[forma]]:true}).select('_id profissaoNome profissoes profissoesDetalhadas').lean();
  const methodEnabled=new Set(professionals.filter(possuiProfissaoMotorista).map(p=>String(p._id)));
  // Mesma regra de acesso por plano usada na descoberta dos demais prestadores.
- const accessRows=await User.find({_id:trust({$in:profiles.map(p=>p.userId)}),status:trust({$ne:'blocked'}),...(demo?{}:{acessoExpiraEm:trust({$gt:new Date()}),subscriptionStatus:trust({$nin:['overdue','blocked']})})}).select('_id genero preferenciaAtendimento').lean();
+ const accessRows=await User.find({_id:trust({$in:profiles.map(p=>p.userId)}),status:trust({$ne:'blocked'}),acessoExpiraEm:trust({$gt:new Date()}),subscriptionStatus:trust({$nin:['overdue','blocked']})}).select('_id genero preferenciaAtendimento').lean();
  const accessEnabled=new Map(accessRows.map(u=>[String(u._id),u]));
- const candidates=profiles.filter(p=>betaAllowed(p.userId)&&methodEnabled.has(String(p.profissionalId))&&accessEnabled.has(String(p.userId))&&compativel(job,accessEnabled.get(String(p.userId)))&&(demo?Teste.autorizadoPara(p,job.clienteId,job.servico):validCnh(p))&&p.localizacao?.coordinates?.length===2).map(p=>({p,km:kilometers({lat:p.localizacao.coordinates[1],lng:p.localizacao.coordinates[0]},job.origem)})).filter(x=>x.km<=LIMIT).sort((a,b)=>a.km-b.km);
+ const candidates=profiles.filter(p=>betaAllowed(p.userId)&&methodEnabled.has(String(p.profissionalId))&&accessEnabled.has(String(p.userId))&&compativel(job,accessEnabled.get(String(p.userId)))&&validCnh(p)&&p.localizacao?.coordinates?.length===2).map(p=>({p,km:kilometers({lat:p.localizacao.coordinates[1],lng:p.localizacao.coordinates[0]},job.origem)})).filter(x=>x.km<=LIMIT).sort((a,b)=>a.km-b.km);
  for(const {p,km} of candidates){
   const vehicle=await Vehicle.findOne({_id:p.veiculoAtivoId,userId:p.userId}).lean();
-  if(demo?(String(p.liberacaoTeste?.veiculoId)!==String(vehicle?._id)||!Teste.veiculoDemo(vehicle,job.servico,job.passageiros,job.tipoVeiculo)):(!cnhSupportsVehicle(p.cnh.categoria,vehicle?.tipo)||!validVehicle(vehicle,job.servico,job.passageiros,job.carga,job.tipoVeiculo)))continue;
+  if(!cnhSupportsVehicle(p.cnh.categoria,vehicle?.tipo)||!validVehicle(vehicle,job.servico,job.passageiros,job.carga,job.tipoVeiculo))continue;
   // Compare-and-swap: uma unica oferta por solicitacao, mesmo com dois workers.
   const updated=await Job.findOneAndUpdate({_id:job._id,status:'procurando',tentativas:trust({$lt:MAX_ATTEMPTS})},{$set:{status:'ofertada',ofertaMotoristaId:p.userId,ofertaVeiculoId:vehicle._id,ofertaExpiraEm:new Date(Date.now()+OFFER_SECONDS*1000)},$inc:{tentativas:1}},{new:true});
   if(!updated)return null;
-  emit(app,p.userId,'oferta:nova',{id:String(job._id),servico:job.servico,origem:job.origem,destino:job.destino,precoCentavos:job.valorCentavos,distanciaAteColetaKm:Math.round(km*100)/100,expiraEm:updated.ofertaExpiraEm,testeOperacional:demo});
+  emit(app,p.userId,'oferta:nova',{id:String(job._id),servico:job.servico,origem:job.origem,destino:job.destino,precoCentavos:job.valorCentavos,distanciaAteColetaKm:Math.round(km*100)/100,expiraEm:updated.ofertaExpiraEm});
   // Reutiliza Firebase Push do backend atual; a oferta tambem fica disponivel por GET.
   // O push nao contem endereco, telefone ou dados pessoais do passageiro.
   Promise.resolve().then(()=>enviarPushParaUsuario(p.userId,{title:'Nova solicitacao Tanamao+',body:'Uma viagem ou entrega esta disponivel. Abra o app para responder.',type:'MOBILIDADE_OFERTA',data:{mobilidadeSolicitacaoId:String(job._id),expiraEm:updated.ofertaExpiraEm.toISOString()}})).catch(e=>console.warn('[mobilidade] push nao entregue:',e.message));
