@@ -79,11 +79,11 @@ async function reviewProfile(req,res){
    if(!scopeAllowed(p,code,{cidade:p.cidadeBase,uf:p.ufBase}))error(403,`Modalidade nao permitida: ${code}`);
    const compatible=vehicles.filter(v=>cnhSupportsVehicle(p.cnh.categoria,v.tipo)&&validVehicle(v,code));
    if(!compatible.length)error(409,`Nao existe veiculo aprovado e CNH compativel para ${code}`);
-   if(code==='frete_interestadual'){
+   if(['frete_interestadual','frete_internacional'].includes(code)){
     const comRNTRC=compatible.filter(v=>v.rntrc);
-    if(!comRNTRC.length)error(409,'Frete interestadual exige RNTRC e revisao da documentacao, conforme enquadramento aplicavel');
+    if(!comRNTRC.length)error(409,'Frete de longa distancia exige RNTRC e revisao da documentacao, conforme enquadramento aplicavel');
     const doc=await Document.exists({userId:p.userId,veiculoId:trust({$in:comRNTRC.map(v=>v._id)}),tipo:'rntrc'});
-    if(!doc)error(409,'Envie comprovante RNTRC para analise manual do frete interestadual');
+    if(!doc)error(409,'Envie comprovante RNTRC para analise manual do frete de longa distancia');
    }
   }
   p.status='aprovado';p.servicosAprovados=[...new Set(services)];p.fotoAprovadaUrl=usuario.avatar;p.motivo='';

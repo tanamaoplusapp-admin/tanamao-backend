@@ -16,8 +16,33 @@ function point(raw){
  if(pais!=='BR'&&uf!==pais)fail(400,'Codigo de pais e regiao incompativeis');
  return {lat,lng,endereco,cidade,uf,pais,estado};
 }
-function scope(origem,destino){const paisA=origem.pais||'BR',paisB=destino.pais||'BR';if(paisA!==paisB)return 'frete_internacional';if(paisA==='BR'&&origem.uf!==destino.uf)return 'frete_interestadual';if(norm(origem.cidade)!==norm(destino.cidade))return 'frete_intermunicipal';return 'frete_local';}
-function serviceFor(tipo,veiculo,origem,destino){if((origem.pais||'BR')!==(destino.pais||'BR'))fail(409,'Enderecos dos dois paises disponiveis, mas viagens entre paises ainda precisam de habilitacao operacional e tarifas internacionais');if(!VEHICLES.includes(veiculo))fail(400,'Veiculo desconhecido');if(tipo==='corrida'){if(!['moto','carro'].includes(veiculo))fail(400,'Corridas exigem moto ou carro');return `corrida_${veiculo}`;}if(tipo==='entrega'){if(veiculo==='caminhao')fail(400,'Para caminhao selecione frete');return veiculo==='moto'?'entrega_moto':'entrega_carro';}if(tipo==='frete'){if(veiculo==='moto')fail(400,'Frete de carga nao aceita moto');return scope(origem,destino);}fail(400,'Tipo invalido');}
+// Na fronteira seca, Ponta Pora e Pedro Juan Caballero compartilham a zona
+// comercial local. Preservamos pais, cidade e coordenadas originais para
+// fiscalizacao, pagamentos e regras aplicaveis em cada jurisdicao.
+function fronteiraIntegrada(a,b){
+ const br=p=>(p.pais||'BR')==='BR'&&p.uf==='MS'&&norm(p.cidade)==='ponta pora';
+ const py=p=>p.pais==='PY'&&norm(p.cidade)==='pedro juan caballero';
+ return (br(a)&&py(b))||(py(a)&&br(b));
+}
+function scope(origem,destino){
+ const paisA=origem.pais||'BR',paisB=destino.pais||'BR';
+ if(fronteiraIntegrada(origem,destino))return 'frete_local';
+ if(paisA!==paisB)return 'frete_internacional';
+ if(paisA==='BR'&&origem.uf!==destino.uf)return 'frete_interestadual';
+ if(norm(origem.cidade)!==norm(destino.cidade))return 'frete_intermunicipal';
+ return 'frete_local';
+}
+function tarifaLocalidades(origem,destino){
+ const locais=[{uf:origem.uf,cidade:norm(origem.cidade)},{uf:origem.uf,cidade:'*'}];
+ // No trajeto PJC -> Ponta Pora, admite a tarifa da regiao integrada
+ // somente se nao houver tarifa mais especifica para a origem PY.
+ if(fronteiraIntegrada(origem,destino)&&origem.pais==='PY'){
+  locais.push({uf:'MS',cidade:'ponta pora'},{uf:'MS',cidade:'*'});
+ }
+ locais.push({uf:'*',cidade:'*'});
+ return locais;
+}
+function serviceFor(tipo,veiculo,origem,destino){if(!VEHICLES.includes(veiculo))fail(400,'Veiculo desconhecido');if(tipo==='corrida'){if(!['moto','carro'].includes(veiculo))fail(400,'Corridas exigem moto ou carro');return `corrida_${veiculo}`;}if(tipo==='entrega'){if(veiculo==='caminhao')fail(400,'Para caminhao selecione frete');return veiculo==='moto'?'entrega_moto':'entrega_carro';}if(tipo==='frete'){if(veiculo==='moto')fail(400,'Frete de carga nao aceita moto');return scope(origem,destino);}fail(400,'Tipo invalido');}
 function kilometers(a,b){const R=6371,toRad=x=>x*Math.PI/180;const dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng);const aa=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa));}
 async function route(a,b){
  const googleKey=process.env.MOBILITY_GOOGLE_ROUTES_API_KEY;
@@ -37,6 +62,6 @@ function price(tariff,km,min,carga={}){const x=tariff.bandeiradaCentavos+Math.ce
 function validateCargo(raw,service){const data=raw&&typeof raw==='object'?raw:{};const pesoKg=Number(data.pesoKg||0),volumeM3=Number(data.volumeM3||0);if(!Number.isFinite(pesoKg)||pesoKg<0||pesoKg>80000||!Number.isFinite(volumeM3)||volumeM3<0||volumeM3>150)fail(400,'Dimensoes de carga invalidas');if((service.startsWith('entrega')||service.startsWith('frete'))&&(!pesoKg||!String(data.descricao||'').trim()))fail(400,'Carga requer descricao e peso');return {pesoKg,volumeM3,descricao:String(data.descricao||'').trim().slice(0,500)};}
 function validCnh(profile,now=new Date()){return profile?.cnh?.status==='aprovado'&&profile?.cnh?.validade&&new Date(profile.cnh.validade)>now;}
 function cnhSupportsVehicle(category,type){const cat=String(category||'');if(type==='moto')return cat.includes('A');if(type==='caminhao')return /[CDE]/.test(cat);return /[BCDE]/.test(cat);}
-function validVehicle(v,service,passageiros=1,carga={},requestedType=null){return v?.status==='aprovado'&&(!v.crlvValidade||new Date(v.crlvValidade)>new Date())&&serviceVehicleCompatible(service,v.tipo)&&(!requestedType||v.tipo===requestedType)&&(service!=='frete_interestadual'||Boolean(v.rntrc))&&(!service.startsWith('corrida')||v.lugares>passageiros)&&(!carga?.pesoKg||v.capacidadeKg>=carga.pesoKg)&&(!carga?.volumeM3||v.capacidadeM3>=carga.volumeM3);}
+function validVehicle(v,service,passageiros=1,carga={},requestedType=null){return v?.status==='aprovado'&&(!v.crlvValidade||new Date(v.crlvValidade)>new Date())&&serviceVehicleCompatible(service,v.tipo)&&(!requestedType||v.tipo===requestedType)&&(!['frete_interestadual','frete_internacional'].includes(service)||Boolean(v.rntrc))&&(!service.startsWith('corrida')||v.lugares>passageiros)&&(!carga?.pesoKg||v.capacidadeKg>=carga.pesoKg)&&(!carga?.volumeM3||v.capacidadeM3>=carga.volumeM3);}
 function scopeAllowed(profile,service,origin){if(service==='corrida_moto'){const {motoPassengerAllowed}=require('../config/mobilidade');return motoPassengerAllowed(origin.cidade,origin.uf);}return true;}
-module.exports={fail,point,scope,serviceFor,kilometers,route,price,validateCargo,validCnh,validVehicle,cnhSupportsVehicle,scopeAllowed,norm};
+module.exports={fail,point,scope,serviceFor,fronteiraIntegrada,tarifaLocalidades,kilometers,route,price,validateCargo,validCnh,validVehicle,cnhSupportsVehicle,scopeAllowed,norm};

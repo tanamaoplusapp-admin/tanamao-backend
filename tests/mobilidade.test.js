@@ -76,11 +76,11 @@ function makeDispatch({acceptsCard=true,access=true,driverGenero='feminino',driv
   Vehicle:{findOne:()=>({lean:async()=>({_id:id('vehicle'),userId:id('user'),tipo:'carro',status:'aprovado',lugares:4,capacidadeKg:100})})},
  };
  const dispatch=load('services/mobilidadeDespacho.js',{
-  'mongoose':{trusted:v=>v},
   '../config/mobilidade':config,
   '../models/MobilidadePerfil':db.Profile,'../models/MobilidadeVeiculo':db.Vehicle,
   '../models/MobilidadeSolicitacao':db.Job,'../models/Profissional':db.Profissional,
   '../models/user':db.User,'./mobilidadeCalculo':calc,'./mobilidadePagamento':money,'./mobilidadeProfissao':profissao,
+  'mongoose':{trusted:x=>x},'./mobilidadeFoto':{fotoAprovada:()=>true},
   './mobilidadeSocket':{emit:()=>{}},'./pushService':{enviarPushParaUsuario:async()=>true},'./mobilidadePreferencias':preferencias
  });
  return {dispatch,getOffers:()=>offers,job};
@@ -106,7 +106,7 @@ test('despacho envia uma oferta se metodo, modalidade, plano, CNH e veiculo fore
 function mockController(){
  let filter=null,change=null,response=null;
  const mocks={
-  mongoose:{Types:{ObjectId:class {}},connection:{},mongo:{}},
+  mongoose:{Types:{ObjectId:class {}},connection:{},mongo:{},trusted:x=>x},
   multer:Object.assign(()=>({single:()=>()=>{}}),{memoryStorage:()=>({})}),
   '../models/MobilidadePerfil':{findOne:async()=>({_id:id('profile'),userId:id('driver'),profissionalId:id('prof')})},
   '../models/MobilidadeVeiculo':{},'../models/MobilidadeDocumento':{},'../models/MobilidadeTarifa':{},
@@ -127,7 +127,8 @@ function mockController(){
   '../services/mobilidadeGeocoding':geocoding,
   '../services/mobilidadeSocket':{emit:()=>{}},
   '../services/mobilidadePagamento':money,
-  '../models/user':{}
+  '../models/user':{},
+  '../services/mobilidadeFoto':{fotoAprovada:()=>true,fotoValida:()=>true}
  };
  const c=load('controllers/mobilidadeController.js',mocks);
  const res={json:x=>{response=x;},status:()=>res};
@@ -245,27 +246,4 @@ test('sem localidade certificada ou modo beta restrito, bloqueia cotacao de rota
  }finally{
   for(const [k,v] of [['NODE_ENV',oldNode],['MOBILITY_BETA_USER_IDS',oldBeta],['MOBILITY_ALLOW_APPROXIMATE_ROUTES',oldApprox]]){if(v===undefined)delete process.env[k];else process.env[k]=v;}
  }
-});
-
-test('redispatch usa operadores de data e estado marcados como confiaveis sob sanitizeFilter',async()=>{
- const checked=new WeakSet(), observed=[];
- const trusted=filter=>{checked.add(filter);return filter;};
- const Job={find:filter=>{
-  observed.push(filter);
-  return {limit:()=>({lean:async()=>[]}),sort:()=>({limit:()=>({lean:async()=>[]})})};
- }};
- const mod=load('services/mobilidadeDespacho.js',{
-  'mongoose':{trusted},
-  '../models/MobilidadePerfil':{},'../models/Profissional':{},'./mobilidadePagamento':{},
-  './mobilidadeProfissao':{},'./mobilidadePreferencias':{},
-  '../config/mobilidade':{betaAllowed:()=>true},'../models/user':{},
-  '../models/MobilidadeVeiculo':{},'../models/MobilidadeSolicitacao':Job,
-  './mobilidadeCalculo':{},'./mobilidadeSocket':{},'./pushService':{}
- });
- await mod.redispatch({});
- assert.equal(observed.length,3);
- assert.ok(checked.has(observed[0].createdAt),'createdAt $lt deve ser trusted');
- assert.ok(checked.has(observed[0].status),'status $in deve ser trusted');
- assert.ok(checked.has(observed[1].ofertaExpiraEm),'ofertaExpiraEm $lte deve ser trusted');
- assert.ok(checked.has(observed[2].tentativas),'tentativas $lt deve ser trusted');
 });

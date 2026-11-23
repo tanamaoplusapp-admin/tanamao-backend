@@ -3,7 +3,7 @@
 // Novo modulo opt-in: nao altera o cadastro tradicional ou o papel User.role.
 const SERVICES = Object.freeze([
   'corrida_carro', 'corrida_moto', 'entrega_moto', 'entrega_carro',
-  'frete_local', 'frete_intermunicipal', 'frete_interestadual',
+  'frete_local', 'frete_intermunicipal', 'frete_interestadual', 'frete_internacional',
 ]);
 const VEHICLES = Object.freeze(['moto', 'carro', 'utilitario', 'van', 'caminhao']);
 const MODALITIES = Object.freeze(['corrida', 'entrega', 'frete']);
@@ -27,6 +27,7 @@ const serviceVehicleCompatible = (service, type) => ({
   frete_local: ['carro', 'utilitario', 'van', 'caminhao'],
   frete_intermunicipal: ['carro', 'utilitario', 'van', 'caminhao'],
   frete_interestadual: ['carro', 'utilitario', 'van', 'caminhao'],
+  frete_internacional: ['carro', 'utilitario', 'van', 'caminhao'],
 })[service]?.includes(type) || false;
 
 module.exports = { SERVICES, VEHICLES, MODALITIES, enabled, approximateEnabled, betaAllowed, motoPassengerAllowed, serviceVehicleCompatible };

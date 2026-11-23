@@ -58,13 +58,31 @@ test('Quote input keeps country, state and backward-compatible Brazilian data',(
  const pyPt=calc.point({endereco:'Centro',cidade:'Pedro Juan Caballero',estado:'Amambay',uf:'PY',pais:'PY',lat:-22.55,lng:-55.73});
  assert.equal(brPt.pais,'BR');assert.equal(pyPt.pais,'PY');assert.equal(pyPt.estado,'Amambay');
  assert.equal(calc.scope(pyPt,pyPt),'frete_local');
- assert.equal(calc.scope(brPt,pyPt),'frete_internacional');
+ assert.equal(calc.scope(brPt,pyPt),'frete_local');
 });
-test('Cross-border trips cannot be mislabeled as Brazilian interstate freight',()=>{
+test('Fronteira seca Ponta Pora e PJC aceita corridas, entregas e frete local sem bloqueio por pais',()=>{
  const a=calc.point({endereco:'Brasil',cidade:'Ponta Pora',uf:'MS',pais:'BR',lat:-22.53,lng:-55.73});
  const b=calc.point({endereco:'Paraguai',cidade:'Pedro Juan Caballero',uf:'PY',pais:'PY',estado:'Amambay',lat:-22.55,lng:-55.73});
- assert.throws(()=>calc.serviceFor('frete','carro',a,b),/viagens entre paises ainda precisam/);
- assert.throws(()=>calc.serviceFor('corrida','carro',a,b),/viagens entre paises ainda precisam/);
+ assert.equal(calc.fronteiraIntegrada(a,b),true);
+ assert.equal(calc.scope(a,b),'frete_local');
+ assert.equal(calc.scope(b,a),'frete_local');
+ assert.equal(calc.serviceFor('frete','carro',a,b),'frete_local');
+ assert.equal(calc.serviceFor('frete','van',b,a),'frete_local');
+ assert.equal(calc.serviceFor('corrida','carro',a,b),'corrida_carro');
+ assert.equal(calc.serviceFor('corrida','carro',b,a),'corrida_carro');
+ assert.equal(calc.serviceFor('entrega','moto',a,b),'entrega_moto');
+ assert.equal(calc.serviceFor('entrega','carro',b,a),'entrega_carro');
+ assert.equal(calc.tarifaLocalidades(b,a)[2].uf,'MS');
+ assert.equal(calc.tarifaLocalidades(b,a)[2].cidade,'ponta pora');
+ assert.equal(calc.tarifaLocalidades(a,b).length,3);
+});
+test('Frete entre outros paises continua classificado corretamente sem ser frete interestadual BR',()=>{
+ const a=calc.point({endereco:'Brasil',cidade:'Dourados',uf:'MS',pais:'BR',lat:-22.2,lng:-54.8});
+ const b=calc.point({endereco:'Paraguai',cidade:'Asuncion',uf:'PY',pais:'PY',estado:'Central',lat:-25.3,lng:-57.6});
+ assert.equal(calc.scope(a,b),'frete_internacional');
+ assert.equal(calc.serviceFor('frete','van',a,b),'frete_internacional');
+ assert.equal(calc.serviceFor('entrega','carro',a,b),'entrega_carro');
+ assert.equal(calc.serviceFor('corrida','carro',a,b),'corrida_carro');
 });
 
 function geocodingWith(body){

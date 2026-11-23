@@ -31,7 +31,7 @@ const own=req=>id(req.userId||req.user?._id);
 const validateDate=value=>{const d=new Date(value);if(!value||Number.isNaN(d.getTime()))error(400,'Data invalida');return d;};
 const asText=(x,max=200)=>String(x||'').trim().slice(0,max);
 const upper=(x)=>String(x||'').trim().toUpperCase();
-function arrayServices(items){if(!Array.isArray(items)||!items.length||items.length>7||items.some(s=>!SERVICES.includes(s)))error(400,'Selecione modalidades validas');return [...new Set(items)];}
+function arrayServices(items){if(!Array.isArray(items)||!items.length||items.length>SERVICES.length||items.some(s=>!SERVICES.includes(s)))error(400,'Selecione modalidades validas');return [...new Set(items)];}
 async function ownedProfile(req,create=false){
  const {prof,owner}=await ownedProfessional(req);
  let profile=await Profile.findOne({userId:owner});
@@ -222,9 +222,9 @@ async function quote(req,res){
  await Promise.all([validarLocalidade(params.origem),validarLocalidade(params.destino)]);
  const cliente=await User.findById(own(req)).select('genero preferenciaProfissional').lean();
  const preferencia=Preferencias.preferenciaParaCotacao(cliente,req.body?.preferenciaMotorista);
- const u=calc.norm(params.origem.cidade),uf=params.origem.uf;
- const tariffs=await Tariff.find({servico:params.servico,ativo:true,$or:[{uf,cidade:u},{uf,cidade:'*'},{uf:'*',cidade:'*'}]}).lean();
- const tariff=tariffs.find(t=>t.uf===uf&&t.cidade===u)||tariffs.find(t=>t.uf===uf&&t.cidade==='*')||tariffs.find(t=>t.uf==='*'&&t.cidade==='*');
+ const localidades=calc.tarifaLocalidades(params.origem,params.destino);
+ const tariffs=await Tariff.find({servico:params.servico,ativo:true,$or:localidades}).lean();
+ const tariff=localidades.map(loc=>tariffs.find(t=>t.uf===loc.uf&&t.cidade===loc.cidade)).find(Boolean);
  if(!tariff)error(409,'Tarifa indisponivel para esta modalidade e regiao; configure no painel administrativo');
  const route=await calc.route(params.origem,params.destino);
  if(route.km>4000)error(400,'Distancia muito grande');
