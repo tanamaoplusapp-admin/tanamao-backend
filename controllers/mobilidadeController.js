@@ -29,6 +29,7 @@ const Preferencias=require('../services/mobilidadePreferencias');
 const {periodo:periodoFinanceiro}=require('../services/mobilidadePeriodo');
 const {validarLocalidade}=require('../services/mobilidadeGeocoding');
 const PoliticaMoto=require('../services/mobilidadePoliticaMoto');
+const Teste=require('../services/mobilidadeTeste');
 const User=require('../models/user');
 const {fotoAprovada,fotoValida}=require('../services/mobilidadeFoto');
 const own=req=>id(req.userId||req.user?._id);
@@ -158,8 +159,8 @@ async function getAvailability(req,res){const {profile}=await ownedProfile(req);
 async function setLocation(req,res){
  const p=calc.point({...req.body,endereco:'gps',cidade:'GPS',uf:'MS'});
  const {profile}=await ownedProfile(req);
- if(profile.status!=='aprovado'||!calc.validCnh(profile))error(403,'Aprovacao de motorista e CNH obrigatoria');
- const updated=await Profile.findOneAndUpdate({_id:profile._id,status:'aprovado'},{$set:{localizacao:{type:'Point',coordinates:[p.lng,p.lat]},ultimaLocalizacaoEm:new Date()}},{new:true});
+ if((profile.status!=='aprovado'||!calc.validCnh(profile))&&!Teste.perfilEmTeste(profile))error(403,'Aprovacao de motorista ou liberacao de teste vigente obrigatoria');
+ const updated=await Profile.findOneAndUpdate({_id:profile._id},{$set:{localizacao:{type:'Point',coordinates:[p.lng,p.lat]},ultimaLocalizacaoEm:new Date()}},{new:true});
  res.json({ok:true,ultimaLocalizacaoEm:updated.ultimaLocalizacaoEm});
  if(profile.emViagemId){const job=await Job.findOne({_id:profile.emViagemId,motoristaId:own(req)}).lean();if(job&&['aceita','no_local','em_andamento'].includes(job.status))emit(req.app,job.clienteId,'viagem:localizacao',{id:String(job._id),latitude:p.lat,longitude:p.lng,atualizadoEm:updated.ultimaLocalizacaoEm});}
 }
@@ -170,6 +171,19 @@ async function setAvailability(req,res){
  if(!enable){assertIdle(profile);profile.online=false;profile.servicosAtivos=[];await profile.save();return res.json({ok:true,online:false});}
  // Mesma elegibilidade e formas de recebimento dos profissionais tradicionais.
  const {prof}=await ownedProfile(req);
+ const teste = Teste.perfilEmTeste(profile);
+ if(teste){
+  const usuario=await User.findById(own(req)).select('status').lean();
+  if(!usuario||usuario.status==='blocked')error(403,'Conta bloqueada ou inexistente');
+  const veiculo=await Vehicle.findOne({_id:profile.liberacaoTeste.veiculoId,userId:own(req)}).lean();
+  if(!Teste.veiculoDemo(veiculo,'corrida_carro',1,'carro'))error(403,'Carro nao disponivel para demonstracao');
+  const servicos=arrayServices(req.body.servicosAtivos);
+  if(servicos.length!==1||servicos[0]!=='corrida_carro')error(403,'A liberacao de teste permite somente corrida de carro');
+  if(!profile.ultimaLocalizacaoEm||new Date(profile.ultimaLocalizacaoEm).getTime()<Date.now()-120000)error(409,'Envie sua localizacao atual antes de ficar online');
+  profile.veiculoAtivoId=veiculo._id;
+  profile.online=true;profile.servicosAtivos=['corrida_carro'];await profile.save();
+  return res.json({ok:true,online:true,servicosAtivos:profile.servicosAtivos,testeOperacional:true,aviso:'Apenas demonstracao com cliente autorizado. Nao transportar nem cobrar.'});
+ }
  if(!Pagamento.listarFormas(prof).length)error(409,'Ative Pix, Cartao ou Dinheiro em Formas de pagamento do perfil profissional');
  const usuario=await User.findById(own(req)).select('acessoExpiraEm subscriptionStatus status avatar').lean();
  if(!fotoAprovada(profile,usuario))error(403,'Foto do motorista ausente, alterada ou ainda nao aprovada. Envie a foto e aguarde a analise no painel');
@@ -192,7 +206,7 @@ async function setAvailability(req,res){
 async function getDriverDashboard(req,res){
  const {profile}=await ownedProfile(req);
  const range=periodoFinanceiro(req.query?.periodo||'hoje');
- const filtroViagens={motoristaId:own(req),status:'concluida'};
+ const filtroViagens={motoristaId:own(req),status:'concluida',testeOperacional:{$ne:true}};
  const filtroGastos={userId:own(req)};
  if(range.inicio){filtroViagens.conclusaoEm={$gte:range.inicio,$lte:range.fim};filtroGastos.data={$gte:range.inicio,$lte:range.fim};}
  const [completed,expenses,active,offers,confirmed,byService,usuario]=await Promise.all([
@@ -268,14 +282,16 @@ async function quote(req,res){
  }
  const multiplicadorDinamico=value>valorBaseCentavos?Math.round(value/valorBaseCentavos*100)/100:1;
  const adicionalDinamicoCentavos=Math.max(0,value-valorBaseCentavos);
- const rec=await Quote.create({...params,...preferencia,clienteId:own(req),distanciaKm:route.km,duracaoMin:route.min,metodoRota:route.method,valorCentavos:value,valorBaseCentavos:Math.min(valorBaseCentavos,value),multiplicadorDinamico,adicionalDinamicoCentavos,tarifaId:tariff._id,expiraEm:new Date(Date.now()+5*60000)});
- res.status(201).json({ok:true,cotacao:{id:rec._id,servico:rec.servico,veiculo:rec.tipoVeiculo,distanciaKm:rec.distanciaKm,duracaoMin:rec.duracaoMin,metodoRota:rec.metodoRota,valorCentavos:rec.valorCentavos,valorBaseCentavos:rec.valorBaseCentavos,adicionalDinamicoCentavos:rec.adicionalDinamicoCentavos,multiplicadorDinamico:rec.multiplicadorDinamico,expiraEm:rec.expiraEm,preferenciaMotorista:rec.preferenciaMotorista},formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',aviso:route.method==='aproximacao'?'Estimativa tecnica para teste, nao e rota rodoviaria real. Nao iniciar cobranca real.':undefined});
+ const testeOperacional=await Teste.existeClienteComTeste(own(req),params.servico);
+ const rec=await Quote.create({...params,...preferencia,testeOperacional,clienteId:own(req),distanciaKm:route.km,duracaoMin:route.min,metodoRota:route.method,valorCentavos:value,valorBaseCentavos:Math.min(valorBaseCentavos,value),multiplicadorDinamico,adicionalDinamicoCentavos,tarifaId:tariff._id,expiraEm:new Date(Date.now()+5*60000)});
+ res.status(201).json({ok:true,cotacao:{id:rec._id,servico:rec.servico,veiculo:rec.tipoVeiculo,distanciaKm:rec.distanciaKm,duracaoMin:rec.duracaoMin,metodoRota:rec.metodoRota,valorCentavos:rec.valorCentavos,valorBaseCentavos:rec.valorBaseCentavos,adicionalDinamicoCentavos:rec.adicionalDinamicoCentavos,multiplicadorDinamico:rec.multiplicadorDinamico,expiraEm:rec.expiraEm,preferenciaMotorista:rec.preferenciaMotorista,testeOperacional},formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',aviso:testeOperacional?'MODO DE TESTE: simulacao com motorista autorizado. Nao realizar transporte nem pagamento real.':route.method==='aproximacao'?'Estimativa tecnica para teste, nao e rota rodoviaria real. Nao iniciar cobranca real.':undefined});
 }
 async function createRequest(req,res){
  const quoteId=id(req.body?.cotacaoId),client=own(req);
  const formaPagamento=Pagamento.validarForma(req.body?.metodoPagamento);
  const cotacao=await Quote.findOne({_id:quoteId,clienteId:client,expiraEm:trust({$gt:new Date()}),usadoEmSolicitacao:null}).lean();
  if(!cotacao)error(409,'Cotacao expirada, invalida ou ja utilizada');
+ if(cotacao.testeOperacional && !(await Teste.existeClienteComTeste(client,cotacao.servico)))error(409,'A liberacao de teste foi encerrada. Solicite outra ao administrador');
  // Caso a autorizacao seja revogada nos cinco minutos de validade da cotacao,
  // impede que uma solicitacao antiga seja confirmada.
  if(cotacao.servico==='corrida_moto'){const policy=await PoliticaMoto.consultar(cotacao.origem);if(!policy.permitida)error(403,policy.mensagem);}
@@ -286,12 +302,12 @@ async function createRequest(req,res){
  const code1=pin(),code2=pin();
  let job;
  try{
-  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,origem:cotacao.origem,destino:cotacao.destino,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,pagamento:{metodo:formaPagamento,status:'pendente'},codigoInicioCriptografado:encrypt(code1),codigoConclusaoCriptografado:encrypt(code2)});
+  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,testeOperacional:cotacao.testeOperacional===true,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,origem:cotacao.origem,destino:cotacao.destino,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,pagamento:{metodo:formaPagamento,status:'pendente'},codigoInicioCriptografado:encrypt(code1),codigoConclusaoCriptografado:encrypt(code2)});
  }catch(e){await Quote.updateOne({_id:cotacao._id,usadoEmSolicitacao:jobId},{$set:{usadoEmSolicitacao:null}});throw e;}
  await audit(req,'solicitacao.criada',job._id,job.servico);
  try{await dispatchOne(req.app,job._id);}catch(e){console.error('[mobilidade] solicitacao registrada; tentativa de despacho sera repetida:',e.message);}
  const state=await Job.findById(job._id).select('status').lean();
- res.status(201).json({ok:true,solicitacao:{id:job._id,status:state?.status||job.status,valorCentavos:job.valorCentavos,metodoRota:job.metodoRota,pagamento:{metodo:formaPagamento,status:'pendente'}},codigos:{inicio:code1,conclusao:code2},aviso:'Codigos sao exclusivos do cliente e nao devem ser enviados automaticamente ao motorista.'});
+ res.status(201).json({ok:true,solicitacao:{id:job._id,status:state?.status||job.status,testeOperacional:job.testeOperacional,valorCentavos:job.valorCentavos,metodoRota:job.metodoRota,pagamento:{metodo:formaPagamento,status:'pendente'}},codigos:{inicio:code1,conclusao:code2},aviso:job.testeOperacional?'DEMONSTRACAO SEM PAGAMENTO E SEM TRANSPORTE REAL. Os codigos sao apenas para simular o fluxo.':'Codigos sao exclusivos do cliente e nao devem ser enviados automaticamente ao motorista.'});
 }
 async function listClientJobs(req,res){const jobs=await Job.find({clienteId:own(req)}).sort({createdAt:-1}).limit(60).lean();res.json({ok:true,solicitacoes:jobs});}
 async function readJob(req,res){
@@ -332,7 +348,7 @@ async function getDemandAreas(req,res){
 }
 async function getDriverOffers(req,res){
  const {profile}=await ownedProfile(req);
- if(profile.status!=='aprovado')error(403,'Motorista nao aprovado');
+ if(profile.status!=='aprovado'&&!Teste.perfilEmTeste(profile))error(403,'Motorista nao aprovado e sem demonstracao vigente');
  const offers=await Job.find({status:'ofertada',ofertaMotoristaId:own(req),ofertaExpiraEm:trust({$gt:new Date()})}).select('-clienteId -clienteGenero').sort({createdAt:-1}).limit(10).lean();
  const xy=profile.localizacao?.coordinates;
  const enriched=offers.map(o=>({...o,distanciaAteColetaKm:Array.isArray(xy)&&xy.length===2?Math.round(calc.kilometers({lat:xy[1],lng:xy[0]},o.origem)*10)/10:null}));
@@ -340,23 +356,34 @@ async function getDriverOffers(req,res){
 }
 async function acceptOffer(req,res){
  const {profile}=await ownedProfile(req),user=own(req),jobId=id(req.params.jobId);
+ const job=await Job.findOne({_id:jobId,status:'ofertada',ofertaMotoristaId:user,ofertaExpiraEm:trust({$gt:new Date()})}).lean();
+ if(!job)error(409,'Oferta expirada ou indisponivel');
+ const teste=job.testeOperacional===true;
+ if(teste&&!Teste.autorizadoPara(profile,job.clienteId,job.servico))error(403,'Liberacao temporaria encerrada ou cliente nao autorizado');
  const usuario=await User.findById(user).select('acessoExpiraEm subscriptionStatus status genero preferenciaAtendimento avatar').lean();
- if(!fotoAprovada(profile,usuario))error(403,'Foto do motorista nao aprovada ou alterada');
- if(!usuario||usuario.status==='blocked'||['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo');
- if(!profile.online||profile.status!=='aprovado'||!calc.validCnh(profile)||profile.emViagemId)error(403,'Motorista indisponivel ou sem CNH aprovada');
- const job=await Job.findOne({_id:jobId,status:'ofertada',ofertaMotoristaId:user,ofertaExpiraEm:trust({$gt:new Date()})}).lean();if(!job)error(409,'Oferta expirada ou indisponivel');
- if(!profile.servicosAtivos.includes(job.servico)||!profile.servicosAprovados.includes(job.servico))error(403,'Modalidade nao autorizada');
+ if(!usuario||usuario.status==='blocked')error(403,'Conta bloqueada');
+ if(!teste){
+  if(!fotoAprovada(profile,usuario))error(403,'Foto do motorista nao aprovada ou alterada');
+  if(['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo');
+  if(profile.status!=='aprovado'||!calc.validCnh(profile))error(403,'Motorista indisponivel ou sem CNH aprovada');
+ }
+ if(!profile.online||profile.emViagemId)error(403,'Motorista indisponivel');
+ if(!profile.servicosAtivos.includes(job.servico)||(!teste&&!profile.servicosAprovados.includes(job.servico)))error(403,'Modalidade nao autorizada');
  if(job.servico==='corrida_moto'){const policy=await PoliticaMoto.consultar(job.origem);if(!policy.permitida)error(403,policy.mensagem);}
  if(!Preferencias.compativel(job,usuario))error(403,'Preferencia de atendimento incompativel');
- const prof=await Pagamento.buscarPreferencias(profile.profissionalId);
- if(!Pagamento.aceitaForma(prof,job.pagamento?.metodo))error(403,'Voce nao aceita a forma de pagamento escolhida pelo cliente');
- const vehicle=await Vehicle.findOne({_id:profile.veiculoAtivoId,userId:user}).lean();if(!calc.cnhSupportsVehicle(profile.cnh.categoria,vehicle?.tipo)||!calc.validVehicle(vehicle,job.servico,job.passageiros,job.carga,job.tipoVeiculo))error(403,'Veiculo nao compativel com esta viagem');
- const reserved=await Profile.findOneAndUpdate({_id:profile._id,emViagemId:null,online:true,status:'aprovado'},{$set:{emViagemId:job._id}},{new:true});if(!reserved)error(409,'Voce ja possui viagem ativa');
+ if(!teste){const prof=await Pagamento.buscarPreferencias(profile.profissionalId);if(!Pagamento.aceitaForma(prof,job.pagamento?.metodo))error(403,'Forma de pagamento nao aceita');}
+ const vehicle=await Vehicle.findOne({_id:profile.veiculoAtivoId,userId:user}).lean();
+ if(teste){
+  if(String(vehicle?._id||'')!==String(profile.liberacaoTeste.veiculoId)||!Teste.veiculoDemo(vehicle,job.servico,job.passageiros,job.tipoVeiculo))error(403,'Carro nao autorizado para demonstracao');
+ }else if(!calc.cnhSupportsVehicle(profile.cnh.categoria,vehicle?.tipo)||!calc.validVehicle(vehicle,job.servico,job.passageiros,job.carga,job.tipoVeiculo))error(403,'Veiculo nao compativel com esta viagem');
+ const reserva={_id:profile._id,emViagemId:null,online:true,...(teste?{'liberacaoTeste.expiraEm':trust({$gt:new Date()}),'liberacaoTeste.clienteTesteId':job.clienteId,'liberacaoTeste.revogadaEm':null}:{status:'aprovado'})};
+ const reserved=await Profile.findOneAndUpdate(reserva,{$set:{emViagemId:job._id}},{new:true});
+ if(!reserved)error(409,'Voce ja possui viagem ativa ou a liberacao expirou');
  let accepted;
  try{accepted=await Job.findOneAndUpdate({_id:job._id,status:'ofertada',ofertaMotoristaId:user,ofertaExpiraEm:trust({$gt:new Date()})},{$set:{status:'aceita',motoristaId:user,veiculoId:vehicle._id,aceiteEm:new Date(),ofertaMotoristaId:null,ofertaVeiculoId:null,ofertaExpiraEm:null}},{new:true});}
  finally{if(!accepted)await Profile.updateOne({_id:profile._id,emViagemId:job._id},{$set:{emViagemId:null}});}
  if(!accepted)error(409,'Oferta ja aceita por outro motorista ou expirada');
- emit(req.app,job.clienteId,'viagem:atualizada',{id:String(job._id),status:'aceita',motoristaId:String(user)});
+ emit(req.app,job.clienteId,'viagem:atualizada',{id:String(job._id),status:'aceita',motoristaId:String(user),testeOperacional:teste});
  res.json({ok:true,solicitacao:accepted});
 }
 async function rejectOffer(req,res){
@@ -399,7 +426,7 @@ async function clientCancel(req,res){
 async function driverPaymentReceived(req,res){
  await ownedProfile(req);
  const job=await Job.findOneAndUpdate(
-  {_id:id(req.params.jobId),motoristaId:own(req),status:'concluida','pagamento.status':'pendente'},
+  {_id:id(req.params.jobId),motoristaId:own(req),testeOperacional:{$ne:true},status:'concluida','pagamento.status':'pendente'},
   {$set:{'pagamento.status':'informado_recebido','pagamento.informadoPeloMotoristaEm':new Date()}},
   {new:true}
  );
@@ -414,7 +441,7 @@ async function clientPaymentReview(req,res){
  if(decisao==='contestar'&&!obs)error(400,'Descreva o problema para contestar');
  const status=decisao==='confirmar'?'confirmado_cliente':'contestado';
  const job=await Job.findOneAndUpdate(
-  {_id:id(req.params.jobId),clienteId:own(req),status:'concluida','pagamento.status':'informado_recebido'},
+  {_id:id(req.params.jobId),clienteId:own(req),testeOperacional:{$ne:true},status:'concluida','pagamento.status':'informado_recebido'},
   {$set:{'pagamento.status':status,[decisao==='confirmar'?'pagamento.confirmadoPeloClienteEm':'pagamento.contestadoPeloClienteEm']:new Date(),'pagamento.observacao':decisao==='contestar'?obs:''}},
   {new:true}
  );
@@ -460,6 +487,7 @@ async function reviewTrip(req,res){
  if(!Number.isInteger(nota)||nota<1||nota>5)error(400,'A nota deve ser um inteiro entre 1 e 5');
  const job=await Job.findOne({_id:jobId,clienteId:cliente,status:'concluida'}).lean();
  if(!job||!job.motoristaId)error(403,'Somente o cliente de uma viagem concluida pode avaliar');
+ if(job.testeOperacional===true)error(403,'Viagens de demonstracao nao geram avaliacoes publicas');
  const profile=await Profile.findOne({userId:job.motoristaId}).select('profissionalId').lean();
  if(!profile)error(409,'Perfil de motorista nao encontrado');
  // A colecao especifica garante no maximo uma avaliacao por viagem.

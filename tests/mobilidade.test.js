@@ -81,7 +81,7 @@ function makeDispatch({acceptsCard=true,access=true,driverGenero='feminino',driv
   '../models/MobilidadeSolicitacao':db.Job,'../models/Profissional':db.Profissional,
   '../models/user':db.User,'./mobilidadeCalculo':calc,'./mobilidadePagamento':money,'./mobilidadeProfissao':profissao,
   'mongoose':{trusted:x=>x},'./mobilidadePoliticaMoto':{consultar:async()=>({permitida:true})},'./mobilidadeFoto':{fotoAprovada:()=>true},
-  './mobilidadeSocket':{emit:()=>{}},'./pushService':{enviarPushParaUsuario:async()=>true},'./mobilidadePreferencias':preferencias
+  './mobilidadeSocket':{emit:()=>{}},'./pushService':{enviarPushParaUsuario:async()=>true},'./mobilidadePreferencias':preferencias,'./mobilidadeTeste':{ativo:()=>false,autorizadoPara:()=>false,veiculoDemo:()=>false}
  });
  return {dispatch,getOffers:()=>offers,job};
 }
@@ -132,7 +132,7 @@ function mockController(){
   '../services/mobilidadeSocket':{emit:()=>{}},
   '../services/mobilidadePagamento':money,
   '../models/user':{},
-  '../services/mobilidadeFoto':{fotoAprovada:()=>true,fotoValida:()=>true}
+  '../services/mobilidadeFoto':{fotoAprovada:()=>true,fotoValida:()=>true},'../services/mobilidadeTeste':{ativo:()=>false,perfilEmTeste:()=>false,autorizadoPara:()=>false,existeClienteComTeste:async()=>false,veiculoDemo:()=>false}
  };
  const c=load('controllers/mobilidadeController.js',mocks);
  const res={json:x=>{response=x;},status:()=>res};

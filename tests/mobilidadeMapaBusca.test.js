@@ -36,6 +36,7 @@ const candidateMocks = {
   './mobilidadeCalculo': { kilometers: () => 2.4, validCnh: () => true, validVehicle: () => true,
     cnhSupportsVehicle: () => true },
   './mobilidadePoliticaMoto': {consultar: async () => ({permitida:false})},
+  './mobilidadeTeste': {ativo:()=>false,autorizadoPara:()=>false,veiculoDemo:()=>false},
 };
 const candidates = load('services/mobilidadeCandidatos.js', candidateMocks);
 const job = { clienteId: 'customer1', origem: { lat: -22.54, lng: -55.72 },

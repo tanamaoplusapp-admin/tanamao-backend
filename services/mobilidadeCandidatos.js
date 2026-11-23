@@ -13,6 +13,7 @@ const { fotoAprovada } = require('./mobilidadeFoto');
 const Vehicle = require('../models/MobilidadeVeiculo');
 const { kilometers, validCnh, validVehicle, cnhSupportsVehicle } = require('./mobilidadeCalculo');
 const PoliticaMoto = require('./mobilidadePoliticaMoto');
+const Teste = require('./mobilidadeTeste');
 const LIMIT_KM = Math.min(100, Math.max(1, Number(process.env.MOBILITY_MAX_PICKUP_KM) || 25));
 
 async function buscarElegiveis(job) {
@@ -20,9 +21,18 @@ async function buscarElegiveis(job) {
   if (!betaAllowed(job.clienteId)) return [];
   if (job.servico === 'corrida_moto' && !(await PoliticaMoto.consultar(job.origem)).permitida) return [];
   const cutoff = new Date(Date.now() - 120000);
+  const demo = job.testeOperacional === true;
+  if (demo && !Teste.ativo()) return [];
+  const busca = demo ? {
+    'liberacaoTeste.clienteTesteId': job.clienteId,
+    'liberacaoTeste.expiraEm': trust({ $gt: new Date() }),
+    'liberacaoTeste.revogadaEm': null,
+    'liberacaoTeste.servicos': job.servico,
+    status: trust({ $nin: ['suspenso', 'reprovado'] }),
+  } : { status: 'aprovado', servicosAprovados: job.servico };
   const profiles = await Profile.find({
-    status: 'aprovado', online: true, emViagemId: null,
-    servicosAprovados: job.servico, servicosAtivos: job.servico,
+    ...busca, online: true, emViagemId: null,
+    servicosAtivos: job.servico,
     ultimaLocalizacaoEm: trust({ $gte: cutoff }),
     userId: trust({ $nin: job.ignorados || [] }),
     localizacao: trust({ $near: { $geometry: {
@@ -34,13 +44,12 @@ async function buscarElegiveis(job) {
   const [professionals, users] = await Promise.all([
     Profissional.find({
       _id: trust({ $in: profiles.map(p => p.profissionalId) }),
-      [Pagamento.CAMPOS[forma]]: true,
+      ...(demo ? {} : { [Pagamento.CAMPOS[forma]]: true }),
     }).select('_id profissaoNome profissoes profissoesDetalhadas').lean(),
     User.find({
       _id: trust({ $in: profiles.map(p => p.userId) }),
-      acessoExpiraEm: trust({ $gt: new Date() }),
       status: trust({ $ne: 'blocked' }),
-      subscriptionStatus: trust({ $nin: ['overdue', 'blocked'] }),
+      ...(demo ? {} : { acessoExpiraEm: trust({ $gt: new Date() }), subscriptionStatus: trust({ $nin: ['overdue', 'blocked'] }) }),
     }).select('_id genero preferenciaAtendimento avatar').lean(),
   ]);
   const permitted = new Set(professionals.filter(possuiProfissaoMotorista).map(p => String(p._id)));
@@ -48,8 +57,8 @@ async function buscarElegiveis(job) {
   const eligibleProfiles = profiles.filter(p => {
     const account = userById.get(String(p.userId));
     return betaAllowed(p.userId) && permitted.has(String(p.profissionalId)) &&
-      account && fotoAprovada(p, account) && compativel(job, account) &&
-      validCnh(p) && Array.isArray(p.localizacao?.coordinates) &&
+      account && (demo ? Teste.autorizadoPara(p,job.clienteId,job.servico) : fotoAprovada(p, account)) && compativel(job, account) &&
+      (demo || validCnh(p)) && Array.isArray(p.localizacao?.coordinates) &&
       p.localizacao.coordinates.length === 2;
   });
   if (!eligibleProfiles.length) return [];
@@ -61,8 +70,10 @@ async function buscarElegiveis(job) {
   for (const p of eligibleProfiles) {
     const vehicle = vehicleById.get(String(p.veiculoAtivoId || ''));
     if (!vehicle || String(vehicle.userId) !== String(p.userId)) continue;
-    if (!cnhSupportsVehicle(p.cnh?.categoria, vehicle.tipo) ||
-        !validVehicle(vehicle, job.servico, job.passageiros, job.carga, job.tipoVeiculo)) continue;
+    if (demo ? (String(p.liberacaoTeste?.veiculoId) !== String(vehicle._id) ||
+          !Teste.veiculoDemo(vehicle, job.servico, job.passageiros, job.tipoVeiculo)) :
+        (!cnhSupportsVehicle(p.cnh?.categoria, vehicle.tipo) ||
+          !validVehicle(vehicle, job.servico, job.passageiros, job.carga, job.tipoVeiculo))) continue;
     const km = kilometers({ lat: p.localizacao.coordinates[1], lng: p.localizacao.coordinates[0] }, job.origem);
     if (!Number.isFinite(km) || km > LIMIT_KM) continue;
     result.push({ p, vehicle, km });

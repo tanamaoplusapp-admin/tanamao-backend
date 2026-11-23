@@ -18,8 +18,6 @@ const schema = new S({
     status: { type:String, enum:['ausente','pendente','aprovado','reprovado'], default:'ausente' },
     motivo: {type:String, maxlength:500}, avaliadoEm: Date, avaliadoPor: {type:S.Types.ObjectId,ref:'User'}
   },
-  // Foto exibida na aprovacao manual: mudancas posteriores exigem nova conferencia.
-  fotoAprovadaUrl: { type:String, default:null, maxlength:2048 },
   veiculoAtivoId: { type:S.Types.ObjectId, ref:'MobilidadeVeiculo', default:null },
   online: { type:Boolean, default:false, index:true },
   emViagemId: {type:S.Types.ObjectId, ref:'MobilidadeSolicitacao', default:null },
@@ -27,6 +25,14 @@ const schema = new S({
   ultimaLocalizacaoEm: {type:Date, default:null},
   cidadeBase: {type:String, maxlength:80}, ufBase: {type:String, uppercase:true, maxlength:2},
   motivo: {type:String, maxlength:500}, avaliadoEm:Date, avaliadoPor:{type:S.Types.ObjectId, ref:'User'},
+  liberacaoTeste: {
+    clienteTesteId: {type:S.Types.ObjectId,ref:'User',default:null},
+    veiculoId: {type:S.Types.ObjectId,ref:'MobilidadeVeiculo',default:null},
+    servicos: [{type:String,enum:['corrida_carro']}],
+    concedidaEm: Date, expiraEm: Date, revogadaEm: Date,
+    concedidaPor: {type:S.Types.ObjectId,ref:'User'},
+    motivo: {type:String,maxlength:350},
+  },
 }, {timestamps:true, minimize:false});
 schema.index({localizacao:'2dsphere'}, {sparse:true});
 schema.index({online:1,status:1,ultimaLocalizacaoEm:-1});

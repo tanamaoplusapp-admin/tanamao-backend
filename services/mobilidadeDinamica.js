@@ -47,7 +47,7 @@ async function amostra(servico,janelaMin=JANELA_MIN,paraMapa=false){
   const limite=new Date(Date.now()-janelaMin*60_000);
   const onlineMin=new Date(Date.now()-120_000);
   const [jobs,profiles]=await Promise.all([
-    Job.find({servico,status:mongoose.trusted({$in:paraMapa?[...STATUS_MAPA]:[...STATUS_DEMANDA]}),createdAt:mongoose.trusted({$gte:limite})})
+    Job.find({servico,testeOperacional:mongoose.trusted({$ne:true}),status:mongoose.trusted({$in:paraMapa?[...STATUS_MAPA]:[...STATUS_DEMANDA]}),createdAt:mongoose.trusted({$gte:limite})})
       .select('origem status createdAt').sort({createdAt:-1}).limit(500).lean(),
     Profile.find({status:'aprovado',online:true,servicosAtivos:servico,ultimaLocalizacaoEm:mongoose.trusted({$gte:onlineMin})})
       .select('localizacao ultimaLocalizacaoEm').limit(400).lean(),
@@ -71,6 +71,7 @@ function mapaDemanda(jobs,profiles,centro,servico){
   const grupos=new Map();
   const idadeMax=Date.now()-30*60_000;
   for(const item of jobs||[]){
+    if(item.testeOperacional===true)continue;
     if(item.servico && item.servico!==servico)continue;
     if(!STATUS_MAPA.has(item.status))continue;
     if(item.createdAt && new Date(item.createdAt).getTime()<idadeMax)continue;
