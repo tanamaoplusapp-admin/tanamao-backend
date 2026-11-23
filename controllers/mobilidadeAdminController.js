@@ -69,32 +69,36 @@ async function reviewProfile(req,res){
  const choice=req.body?.decisao,reason=text(req.body?.motivo);
  if(!['aprovar','reprovar','suspender','solicitar_reenvio'].includes(choice))error(400,'Decisao invalida');if(choice!=='aprovar'&&!reason)error(400,'Informe o motivo');
  if(choice==='aprovar'){
+  const services=req.body?.servicosAprovados;
+  if(!Array.isArray(services)||!services.length||services.some(x=>!SERVICES.includes(x)||!p.servicosSolicitados.includes(x)))error(400,'Aprove apenas modalidades solicitadas');
   const profissional=await Profissional.findById(p.profissionalId).lean();
   if(!possuiProfissaoMotorista(profissional))error(403,'Prestador nao selecionou a profissao Motorista');
   const usuario=await User.findById(p.userId).select('avatar').lean();
-  if(!fotoValida(usuario?.avatar))error(409,'Foto do motorista obrigatoria. Solicite o envio de uma foto de rosto antes de aprovar');
-  if(!validCnh(p)||!p.cnh.ear)error(409,'CNH aprovada, valida e EAR obrigatorios');
-  const services=req.body?.servicosAprovados;
-  if(!Array.isArray(services)||!services.length||services.some(x=>!SERVICES.includes(x)||!p.servicosSolicitados.includes(x)))error(400,'Aprove apenas modalidades solicitadas');
+  const fotoOk=fotoValida(usuario?.avatar);
+  const cnhOk=Boolean(validCnh(p)&&p.cnh.ear);
   const vehicles=await Vehicle.find({userId:p.userId,status:'aprovado'}).lean();
-  for(const code of services){
-   // A aprovacao documental habilita o PERFIL; a permissao territorial
-   // permanece obrigatoria e e checada em cada origem pelo backend.
-   const compatible=vehicles.filter(v=>cnhSupportsVehicle(p.cnh.categoria,v.tipo)&&validVehicle(v,code));
-   if(!compatible.length)error(409,`Nao existe veiculo aprovado e CNH compativel para ${code}`);
-   if(['frete_interestadual','frete_internacional'].includes(code)){
-    const comRNTRC=compatible.filter(v=>v.rntrc);
-    if(!comRNTRC.length)error(409,'Frete de longa distancia exige RNTRC e revisao da documentacao, conforme enquadramento aplicavel');
-    const doc=await Document.exists({userId:p.userId,veiculoId:trust({$in:comRNTRC.map(v=>v._id)}),tipo:'rntrc'});
-    if(!doc)error(409,'Envie comprovante RNTRC para analise manual do frete de longa distancia');
+  const veiculosOk=services.every(code=>vehicles.some(v=>cnhSupportsVehicle(p.cnh?.categoria,v.tipo)&&validVehicle(v,code)));
+  // A administracao pode concluir a analise do CADASTRO sem aprovar documentos.
+  // Isso NAO habilita motorista em corridas reais: setAvailability, setLocation e
+  // acceptOffer continuam exigindo CNH aprovada e veiculo regular.
+  const restrita=!fotoOk||!cnhOk||!veiculosOk;
+  if(!restrita){
+   for(const code of services){
+    if(['frete_interestadual','frete_internacional'].includes(code)){
+     const compativeis=vehicles.filter(v=>cnhSupportsVehicle(p.cnh.categoria,v.tipo)&&validVehicle(v,code)&&v.rntrc);
+     const doc=compativeis.length&&await Document.exists({userId:p.userId,veiculoId:trust({$in:compativeis.map(v=>v._id)}),tipo:'rntrc'});
+     if(!doc)error(409,'Envie comprovante RNTRC para analise manual do frete de longa distancia');
+    }
    }
   }
-  p.status='aprovado';p.servicosAprovados=[...new Set(services)];p.fotoAprovadaUrl=usuario.avatar;p.motivo='';
- }else{p.status=choice==='suspender'?'suspenso':choice==='reprovar'?'reprovado':'em_analise';p.servicosAprovados=[];}
+  p.status='aprovado';p.aprovacaoRestrita=restrita;
+  p.servicosAprovados=[...new Set(services)];
+  p.fotoAprovadaUrl=fotoOk?usuario.avatar:null;p.motivo='';
+ }else{p.status=choice==='suspender'?'suspenso':choice==='reprovar'?'reprovado':'em_analise';p.servicosAprovados=[];p.aprovacaoRestrita=false;}
  p.online=false;p.servicosAtivos=[];p.avaliadoEm=new Date();p.avaliadoPor=req.userId;p.motivo=reason;
- await p.save();await audit(req,`admin.perfil.${choice}`,p._id,reason);
+ await p.save();await audit(req,`admin.perfil.${choice}`,p._id,choice==='aprovar'&&p.aprovacaoRestrita?'Aprovacao administrativa restrita: documentos pendentes':reason);
  emit(req.app,p.userId,'perfil:aprovacao',{status:p.status,servicos:p.servicosAprovados});
- res.json({ok:true,perfilId:p._id,status:p.status,servicosAprovados:p.servicosAprovados});
+ res.json({ok:true,perfilId:p._id,status:p.status,servicosAprovados:p.servicosAprovados,aprovacaoRestrita:!!p.aprovacaoRestrita});
 }
 async function download(req,res){
  const doc=await Document.findById(id(req.params.documentId));if(!doc)error(404,'Documento nao encontrado');
