@@ -3,6 +3,9 @@
 const mongoose = require('mongoose');
 const Avaliacao = require('../models/Avaliacao');
 const Profissional = require('../models/Profissional');
+const ProfissaoCatalogo = require('../models/Profissao');
+const CategoriaCatalogo = require('../models/Categoria');
+const { somenteBuscaTradicional, termoBuscaMobilidade } = require('../services/mobilidadeVisibilidade');
 const User = require('../models/user');
 const Order = require('../models/order');
 const scoreEvents = require("../services/scoreEvents");
@@ -149,6 +152,21 @@ exports.list = async (req, res) => {
       urgente,
       immediate,
     } = req.query;
+
+    // Corridas, mototaxi e fretes sao pesquisados pelo modulo Mobilidade,
+    // nunca pela listagem de profissionais tradicionais.
+    let destinoMobilidade = termoBuscaMobilidade(query);
+    if (!destinoMobilidade && profissaoId && mongoose.Types.ObjectId.isValid(profissaoId)) {
+      const profissaoAlvo = await ProfissaoCatalogo.findById(profissaoId).select('nome').lean();
+      destinoMobilidade = !!profissaoAlvo && /^motorista$/i.test(String(profissaoAlvo.nome).trim());
+    }
+    if (!destinoMobilidade && categoriaId && mongoose.Types.ObjectId.isValid(categoriaId)) {
+      const categoriaAlvo = await CategoriaCatalogo.findById(categoriaId).select('slug').lean();
+      destinoMobilidade = categoriaAlvo?.slug === 'transporte-mobilidade';
+    }
+    if (destinoMobilidade) {
+      return res.json({ok:true,data:[],meta:{tanaMatch:true,total:0,matchStats:{}}});
+    }
 
     /* ============================================================
        FILTROS
@@ -648,7 +666,7 @@ console.log(
 
     const agora = new Date();
 
-    const filtrados = profs.filter((p) => {
+    const filtrados = profs.map(somenteBuscaTradicional).filter(Boolean).filter((p) => {
       const user = p.userId;
 
       if (!user) return false;

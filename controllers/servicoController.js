@@ -1,6 +1,7 @@
 const Servico = require('../models/Servico');
 const User = require('../models/user');
 const Profissional = require('../models/Profissional');
+const { somenteBuscaTradicional } = require('../services/mobilidadeVisibilidade');
 const Chat = require('../models/Chat')
 
 const { enviarPushParaUsuario } = require('../services/pushService');
@@ -509,6 +510,8 @@ if (filtrosCompatibilidade.length > 0) {
 
   const candidatosElegiveis =
     profissionais
+      .map(somenteBuscaTradicional)
+      .filter(Boolean)
       .filter((profissional) => {
         const user =
           profissional.userId;

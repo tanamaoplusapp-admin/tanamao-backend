@@ -1,0 +1,18 @@
+'use strict';
+const express=require('express');const {verifyToken}=require('../middleware/verifyToken');
+const {asyncHandler,guardEnabled,admin,privateError}=require('../middleware/mobilidade');
+const c=require('../controllers/mobilidadeAdminController');const r=express.Router();
+r.use(guardEnabled,verifyToken,admin);
+r.get('/perfis',asyncHandler(c.list));
+r.get('/perfis/:profileId',asyncHandler(c.detail));
+r.patch('/perfis/:profileId/cnh',asyncHandler(c.reviewCNH));
+r.patch('/perfis/:profileId/aprovacao',asyncHandler(c.reviewProfile));
+r.patch('/veiculos/:vehicleId/aprovacao',asyncHandler(c.reviewVehicle));
+r.get('/documentos/:documentId/download',asyncHandler(c.download));
+r.get('/tarifas',asyncHandler(c.getTariffs));
+r.put('/tarifas',asyncHandler(c.putTariff));
+r.get('/solicitacoes',asyncHandler(c.jobs));
+r.post('/solicitacoes/:jobId/cancelar',asyncHandler(c.emergencyCancel));
+r.post('/solicitacoes/:jobId/desbloquear-pin',asyncHandler(c.resetPin));
+r.use(privateError);
+module.exports=r;
