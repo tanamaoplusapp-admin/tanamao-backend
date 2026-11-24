@@ -24,8 +24,8 @@ async function dispatchOne(app,jobId){
   // Reutiliza Firebase Push do backend atual; a oferta tambem fica disponivel por GET.
   // O push nao contem endereco, telefone ou dados pessoais do passageiro.
   Promise.resolve().then(()=>enviarPushParaUsuario(p.userId,{
-    title:job.servico?.startsWith('corrida') ? 'Nova corrida no Tanamão+' : 'Nova solicitação no Tanamão+',
-    body:'Você tem uma solicitação. Toque para ver e responder antes que expire.',
+    title:job.servico?.startsWith('corrida') ? `🚗 Nova corrida • R$ ${(Number(job.valorCentavos||0)/100).toFixed(2).replace('.',',')}` : 'Nova solicitação no Tanamão+',
+    body:`${Number(job.distanciaKm||0).toFixed(1)} km de percurso · ${Math.round(km*10)/10} km até embarque · Toque para aceitar`,
     type:'MOBILIDADE_OFERTA',
     data:{
       mobilidadeSolicitacaoId:String(job._id),

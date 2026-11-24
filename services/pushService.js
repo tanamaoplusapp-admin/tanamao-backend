@@ -115,7 +115,7 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
         priority: 'high',
         ...(isMobilidadeOferta ? { ttl: restanteMs } : {}),
         notification: {
-          channelId: isMobilidadeOferta ? 'tanamao-corridas-v1' : 'default',
+          channelId: isMobilidadeOferta ? 'tanamao-corridas-v2' : 'default',
           sound: 'default',
           priority: 'high',
           icon: 'ic_notification',
