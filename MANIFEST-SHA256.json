@@ -1,7 +1,9 @@
 {
-  "LEIA-PRIMEIRO.txt": "20cc3bbdc896b0a2272cc4065f1f725d3d6124fc38d4e606c5a837b57bd0eb3a",
-  "routes/paymentRoutes.js": "4c16039ae0507c99c38dae4cde2d4c529c60b6d6639ea9a7cc029dcb916f6cfa",
-  "tests/precoPlano30Dias.test.cjs": "517a2afc3f97ab9d593e036bcf4b8456cb22e0931108c805520777190641ce9e",
-  "controllers/mercadoPagoWebhookController.js": "9af5d2c8ba424648d240c89aa7f22f4ea3e8ae8d6e2ba3be9dd7070ac964510c",
-  "controllers/paymentController.js": "7826ac508f6064881bf5a583a476571bbf5c28b1618bff043e535c4e5bb5ca9c"
+  "LEIA-PRIMEIRO.md": "af7c4589c8bb53966e0a04055ebdf83b0fd92914f3e36f9a1007f2ec1902a36e",
+  "PREVIA_TARIFAS.csv": "a23a0f9e84c0fba979f345bf776acb19e591704d0460822c7d2408268e265f1f",
+  "scripts/cadastrarTarifasBrasil.cjs": "42282bd7526e04fe3a63ff5eea17187613898a3726f361ac5de0b45d4f976ddf",
+  "services/mobilidadeComfort.js": "e2183651bd4223e20711180a339f7b12cee6ca62b72f6228c152440da00d4e96",
+  "services/mobilidadeTarifasIniciais.js": "c2439d09367ca5098db63830e32e1f0dd94a4de27e4c0051d420d42b1eb34a63",
+  "tests/mobilidadeComfortPreco.test.cjs": "8f66adffd45cf53ac05118ebb10f6b899948bfcffd2947a62c74273d84f2d251",
+  "tests/tarifasBrasil.test.cjs": "d3c129d16398053baccec8aae1c7e2ca98d46bf91855e458893e5e0de3d0f286"
 }

@@ -5,11 +5,15 @@ const {kilometers}=require('./mobilidadeCalculo');
 
 // Comfort é uma categoria de carro, NÃO uma autorização automática.
 // Requer veículo explicitamente aprovado pelo administrador e taxa definida.
-function taxaComfort(){return Number(process.env.MOBILITY_COMFORT_MARKUP_PERCENT);}
+// Proposta inicial: 25% a mais que a categoria Normal.
+// A variavel permite ajuste futuro sem alterar o codigo.
+function taxaComfort(){
+ const configurado=String(process.env.MOBILITY_COMFORT_MARKUP_PERCENT||'').trim();
+ return configurado===''?25:Number(configurado);
+}
 function configurado(){
   const taxa=taxaComfort();
   return process.env.MOBILITY_COMFORT_ENABLED==='true' &&
-    String(process.env.MOBILITY_COMFORT_MARKUP_PERCENT||'').trim()!=='' &&
     Number.isFinite(taxa)&&taxa>=5&&taxa<=75;
 }
 function categoriaCorrida(valor,servico){

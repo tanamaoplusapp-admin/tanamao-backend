@@ -2,7 +2,7 @@
 // Valores ilustrativos para HOMOLOGACAO. Aplicar somente por acao administrativa
 // consciente; nunca sobrescreve tarifa ja existente.
 const VALORES = Object.freeze([
-  ['corrida_carro',490,195,20,1290],
+  ['corrida_carro',350,160,15,890],
   ['corrida_moto',290,125,12,790],
   ['entrega_carro',590,185,16,1290],
   ['entrega_moto',340,120,10,790],
@@ -14,7 +14,7 @@ const VALORES = Object.freeze([
 function planos(region={cidade:'ponta pora',uf:'MS'}){
  return VALORES.map(([servico,bandeiradaCentavos,porKmCentavos,porMinutoCentavos,minimoCentavos])=>({
   servico,cidade:region.cidade,uf:region.uf,bandeiradaCentavos,porKmCentavos,porMinutoCentavos,
-  minimoCentavos,porKgCentavos:0,porM3Centavos:0,ativo:true,dinamicaAtiva:servico.startsWith('corrida_')||servico.startsWith('entrega_'),
+  minimoCentavos,porKgCentavos:0,porM3Centavos:0,ativo:true,dinamicaAtiva:servico!=='corrida_carro'&&(servico.startsWith('corrida_')||servico.startsWith('entrega_')),
  }));
 }
 module.exports={planos};
