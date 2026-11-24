@@ -33,7 +33,7 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
       return false;
     }
 
-    if (!user.pushEnabled) {
+    if (user.pushEnabled === false) {
       console.log('[PUSH] Push desabilitado para o usuário');
       return false;
     }

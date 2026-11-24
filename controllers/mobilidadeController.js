@@ -19,6 +19,7 @@ const {notificarClienteEtapa}=require('../services/mobilidadeNotificacoesCliente
 const Comfort=require('../services/mobilidadeComfort');
 const Avaliacao=require('../models/Avaliacao');
 const AvaliacaoMobilidade=require('../models/MobilidadeAvaliacao');
+const {obterReputacaoMotorista}=require('../services/mobilidadeReputacao');
 const Profissional=require('../models/Profissional');
 const {ownedProfessional,id,error,audit}=require('../middleware/mobilidade');
 const {SERVICES,VEHICLES,serviceVehicleCompatible}=require('../config/mobilidade');
@@ -319,12 +320,22 @@ async function clientDriverTracking(req,res){
  const [user,vehicle,profile]=await Promise.all([
   User.findById(job.motoristaId).select('name avatar').lean(),
   Vehicle.findOne({_id:job.veiculoId,userId:job.motoristaId}).select('tipo marca modelo placa cor').lean(),
-  Profile.findOne({userId:job.motoristaId}).select('localizacao ultimaLocalizacaoEm').lean()
+  Profile.findOne({userId:job.motoristaId}).select('localizacao ultimaLocalizacaoEm profissionalId').lean()
  ]);
  const gpsFresh=['aceita','no_local','em_andamento'].includes(job.status)&&profile?.ultimaLocalizacaoEm&&new Date(profile.ultimaLocalizacaoEm).getTime()>Date.now()-120000;
  const pos=gpsFresh&&profile.localizacao?.coordinates?.length===2?{latitude:profile.localizacao.coordinates[1],longitude:profile.localizacao.coordinates[0],atualizadoEm:profile.ultimaLocalizacaoEm}:null;
+ // Reputacao real: conta avaliacoes de corridas e do perfil profissional.
+ let avaliacao={media:null,quantidade:0};
+ try {
+  avaliacao=await obterReputacaoMotorista({
+   avaliacoes:Avaliacao,motoristaId:job.motoristaId,profissionalId:profile?.profissionalId
+  });
+ } catch (e) {
+  // A avaliação não pode interromper o GPS nem o acompanhamento de uma corrida ativa.
+  console.warn('[mobilidade] Falha ao consultar reputação do motorista:',e?.message||e);
+ }
  res.set('Cache-Control','private, no-store');
- res.json({ok:true,motorista:{nome:user?.name||'Motorista aprovado',foto:user?.avatar||null,veiculo:vehicle},localizacao:pos,status:job.status});
+ res.json({ok:true,motorista:{nome:user?.name||'Motorista aprovado',foto:user?.avatar||null,veiculo:vehicle,avaliacao},localizacao:pos,status:job.status});
 }
 async function getDemandAreas(req,res){
  const {profile}=await ownedProfile(req);
