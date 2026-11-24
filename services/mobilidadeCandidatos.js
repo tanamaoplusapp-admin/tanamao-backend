@@ -56,6 +56,7 @@ async function buscarElegiveis(job) {
   const profiles = await Profile.find({
     status: 'aprovado', servicosAprovados: job.servico, online: true, emViagemId: null,
     servicosAtivos: job.servico,
+    ...((job.paradas||[]).length?{suportaParadasEm:trust({$gte:cutoff})}:{}),
     ultimaLocalizacaoEm: trust({ $gte: cutoff }),
     userId: trust({ $nin: job.ignorados || [] }),
     localizacao: trust({ $near: { $geometry: {

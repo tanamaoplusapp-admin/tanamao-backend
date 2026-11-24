@@ -24,6 +24,7 @@ const schema = new S({
   emViagemId: {type:S.Types.ObjectId, ref:'MobilidadeSolicitacao', default:null },
   localizacao: {type:localizacaoSchema, default:undefined},
   ultimaLocalizacaoEm: {type:Date, default:null},
+  suportaParadasEm:{type:Date,default:null},
   cidadeBase: {type:String, maxlength:80}, ufBase: {type:String, uppercase:true, maxlength:2},
   motivo: {type:String, maxlength:500}, avaliadoEm:Date, avaliadoPor:{type:S.Types.ObjectId, ref:'User'},
 }, {timestamps:true, minimize:false});

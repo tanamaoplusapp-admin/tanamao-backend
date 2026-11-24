@@ -1,0 +1,30 @@
+TANAMAO+ MOBILIDADE - PARADAS E EDICAO DE TRAJETO
+
+Instale primeiro o backend, depois o aplicativo. ZIPs de sobreposicao, nao sao repositorios completos. Nao apague os projetos. Mantenha as correcoes de pedidos abertos e automacao anteriores. Nao ha mudancas no painel, no cadastro/aprovacoes, nem necessidade de novo seed de tarifas.
+
+BACKEND: extraia tanamao-backend-paradas.zip na raiz do backend. Se ja usa Git, confira git diff e rode:
+  node --test tests/mobilidadeParadas.test.cjs
+  git add controllers/mobilidadeController.js models/MobilidadeCotacao.js models/MobilidadeSolicitacao.js models/MobilidadePerfil.js routes/mobilidadeRoutes.js services/mobilidadeParadasRegras.js services/mobilidadeEdicaoRota.js services/mobilidadeRotasVivas.js services/mobilidadeCandidatos.js services/mobilidadeComfort.js tests/mobilidadeParadas.test.cjs
+  git commit -m "Mobilidade: paradas e edicao de rota com recalculo"
+  git push
+Confira o deploy no Render antes de instalar o app. Nao crie variaveis nem rode scripts de tarifas. Usa as mesmas chaves Google e Firebase existentes. Os campos novos no MongoDB sao opcionais, sem migracao obrigatoria.
+
+APP: extraia tanamao-app-paradas.zip na raiz do app, mantendo os demais arquivos. Teste com o ambiente atualizado:
+  npx expo start --clear
+Para TestFlight:
+  eas build --platform ios --profile production --auto-submit
+Para Android use o perfil de teste APK configurado no seu eas.json, ou gere a build production para a loja.
+
+FLUXO:
+- Solicitar corrida: adicionar ate 3 paradas antes do destino; editar, remover, escolher pelo mapa ou pesquisa. Somente carro e moto (paradas de moto na cidade de origem). Entregas e fretes continuam com o fluxo original.
+- Backend soma distancias e duracoes dos trechos reais calculados pela Routes API. Bandeirada e minimo uma vez; mantem tarifa dinamica, Comfort e limite moto vs carro.
+- Motorista precisa estar na versao nova. O app anuncia suporte pelo GPS e aceite. Motoristas antigos nao recebem novas corridas com paradas. Cliente e motorista devem usar a nova versao para editar durante corrida. A edicao so aparece depois do aceite do motorista compativel. Corridas iniciadas antes do novo backend nao tem snapshot; nao sao editaveis. Para mudar antes de um motorista aceitar, cancelar e solicitar de novo.
+- Na viagem aceita ou em andamento, cliente abre Editar destino ou paradas. Paradas ja concluidas nao podem ser editadas. Calcula previa no servidor e confirma em ate 90 s. Se o motorista avancou mais de 300 m ou mudou etapa/revisao, calcula de novo. Sem GPS recente, a edicao durante percurso e recusada. Valor anterior so muda apos confirmacao. Motorista recebe push e atualizacao socket; tambem consulta periodicamente a viagem. Motorista confirma parada a ate 250 m do ponto, segue para a seguinte. Nao finaliza com paradas pendentes.
+- Preco durante viagem: usa estimativa rodoviaria do trecho ja percorrido (origem ou ultimo marco de edicao, paradas concluidas, GPS atual) + restante, com tarifa da cotacao original. Nao mede quilometragem real de odometro, nem tempo de espera nas paradas. Nao cria cobranca automatica; pagamento direto como antes. Confirmacao do passageiro basta para atualizar; nao foi adicionada aprovacao do motorista para alteracoes.
+
+VALIDACAO: 12 testes unitarios da regra de paradas passaram em Node. Sintaxe de 10 JS backend e 9 JS/JSX app verificada. Nao houve build completo, consulta ao MongoDB de producao, teste real de Google Routes ou push Firebase. Teste com duas contas e os dois aparelhos na versao atualizada, antes de publicar:
+1. Corrida normal sem parada (regressao); Normal/Comfort com 2 paradas, conferir o preco da cotacao e a lista antes do aceite.
+2. Antes do embarque, editar destino, calcular, desistir; confirmar que o valor nao mudou. Calcular de novo e confirmar; motorista deve receber rota e total novos.
+3. Iniciar; confirmar parada perto do ponto (longe deve falhar); testar edicao com parada concluida e GPS recente. Remover uma futura parada e conferir o valor. Tentar finalizar com parada pendente (deve falhar).
+4. Concluir todas as paradas e a corrida; conferir pagamento e historico. Confirmar que entrega/frete e pedidos abertos continuam funcionando.
+5. Repetir com moto autorizada; testar Comfort onde disponivel e dinamica por horario. Testar aparelho antigo (nao recebe corrida com paradas).

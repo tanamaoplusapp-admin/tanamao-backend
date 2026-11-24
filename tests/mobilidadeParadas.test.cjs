@@ -1,0 +1,18 @@
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');
+const R=require('../services/mobilidadeParadasRegras');
+const p=n=>({lat:n,lng:0});const dist=(a,b)=>Math.abs(a.lat-b.lat);const route=async(a,b)=>({km:dist(a,b),min:dist(a,b)*2,method:'google_routes'});
+const t={bandeiradaCentavos:350,porKmCentavos:160,porMinutoCentavos:15,minimoCentavos:890};
+const price=(t,km,min)=>Math.max(t.minimoCentavos,t.bandeiradaCentavos+Math.ceil(km*t.porKmCentavos)+Math.ceil(min*t.porMinutoCentavos));
+test('até três paradas, somente corridas de passageiros',()=>{assert.equal(R.lista([p(1),p(2),p(3)],x=>x,'corrida_carro').length,3);assert.throws(()=>R.lista([1,2,3,4],x=>x,'corrida_carro'),{status:400});assert.throws(()=>R.lista([1],x=>x,'frete_local'),{status:400});assert.deepEqual(R.lista(undefined,x=>x,'frete_local'),[]);});
+test('percurso mantém ordem das paradas, inclusive retorno',async()=>{const r=await R.percurso([p(0),p(3),p(1),p(5)],route,dist);assert.deepEqual(r,{km:9,min:18,method:'google_routes'});});
+test('pontos consecutivos iguais não são aceitos',async()=>{await assert.rejects(R.percurso([p(0),p(0),p(1)],route,dist),{status:400});});
+test('GPS já na parada não adiciona percurso artificial',async()=>{const r=await R.percurso([p(1),p(1),p(3)],route,dist,{permitirIguais:true});assert.equal(r.km,2);assert.equal(r.min,4);});
+test('bandeirada e mínimo cobrados uma vez no percurso',()=>{const s=R.snapshot(t,1,0);assert.equal(R.precificar(s,5,10,price).valorCentavos,1300);assert.equal(R.precificar(s,0.1,1,price).valorCentavos,890);});
+test('Comfort e dinâmica ficam congelados, sem acumular nova bandeirada',()=>{const s=R.snapshot(t,1.2,25,null,1,'Pico');const x=R.precificar(s,5,10,price);assert.equal(x.valorBaseCentavos,1300);assert.equal(x.adicionalDinamicoCentavos,260);assert.equal(x.adicionalComfortCentavos,390);assert.equal(x.valorCentavos,1950);assert.equal(x.motivoDinamico,'Pico');});
+test('limite da moto preservado no recálculo',()=>{const s=R.snapshot(t,1,0,t,1);assert.equal(R.precificar(s,5,10,price).valorCentavos,1105);});
+test('trecho percorrido somado ao restante sem repetir a bandeirada',async()=>{const a=await R.percurso([p(0),p(2)],route,dist),b=await R.percurso([p(2),p(4),p(5)],route,dist);const total=R.somar(a,b);assert.deepEqual(total,{km:5,min:10,method:'google_routes'});assert.equal(R.precificar(R.snapshot(t,1,0),total.km,total.min,price).valorCentavos,1300);});
+test('navegação avança para a próxima parada e depois destino',()=>{const j={status:'em_andamento',origem:p(0),paradas:[p(1),p(2)],destino:p(3),paradasConcluidas:0};assert.deepEqual(R.alvo(j),p(1));j.paradasConcluidas=1;assert.deepEqual(R.alvo(j),p(2));j.paradasConcluidas=2;assert.deepEqual(R.alvo(j),p(3));j.status='aceita';assert.deepEqual(R.alvo(j),p(0));});
+test('se um trecho é aproximado, o percurso todo informa aproximação',async()=>{const r=await R.percurso([p(0),p(1),p(2)],async(a,b)=>({km:1,min:2,method:a.lat===0?'aproximacao':'google_routes'}),dist);assert.equal(r.method,'aproximacao');});
+test('rota indisponível não produz preço fictício',async()=>{await assert.rejects(R.percurso([p(0),p(1),p(2)],async(a,b)=>{if(a.lat===1)throw Object.assign(new Error('indisponível'),{status:503});return route(a,b);},dist),{status:503});});
+test('valores não finitos e distâncias excessivas são recusados',()=>{assert.throws(()=>R.precificar(R.snapshot(t,1,0),NaN,10,price),{status:409});assert.throws(()=>R.precificar(R.snapshot(t,1,0),4001,10,price),{status:409});});

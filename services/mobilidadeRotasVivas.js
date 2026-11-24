@@ -5,6 +5,7 @@ const axios = require('axios');
 const mongoose = require('mongoose');
 const Job = require('../models/MobilidadeSolicitacao');
 const Profile = require('../models/MobilidadePerfil');
+const R=require('./mobilidadeParadasRegras');
 
 const cache = new Map();
 const isValid = (x) => Number.isFinite(x) && Math.abs(x) <= 180;
@@ -34,7 +35,7 @@ async function rotaViagem(req, res) {
   }
   const profile = await Profile.findOne({userId:job.motoristaId}).select('localizacao ultimaLocalizacaoEm').lean();
   const from = gpsPoint(profile?.localizacao);
-  const to = toPoint(job.status === 'em_andamento' ? job.destino : job.origem);
+  const to = toPoint(R.alvo(job));
   if (!from || !to) return res.status(200).json({ok:true, disponivel:false, motivo:'gps_indisponivel'});
   const age = Date.now() - new Date(profile?.ultimaLocalizacaoEm || 0).getTime();
   if (!Number.isFinite(age) || age > 180000 || age < -60000) {
@@ -42,8 +43,8 @@ async function rotaViagem(req, res) {
   }
   const key = process.env.MOBILITY_GOOGLE_ROUTES_API_KEY || process.env.GOOGLE_ROUTES_API_KEY;
   if (!key) return res.status(503).json({ok:false, disponivel:false, erro:'Rota indisponível no momento'});
-  const stage = job.status === 'em_andamento' ? 'destino' : 'embarque';
-  const id = cacheKey(job, stage, from, to);
+  const stage = job.status === 'em_andamento' ? (R.restante(job).length?'parada':'destino') : 'embarque';
+  const id = cacheKey(job, `${stage}:${job.versaoRota||0}`, from, to);
   const cached = cache.get(id);
   if (cached && cached.until > Date.now()) return res.json(cached.value);
   try {

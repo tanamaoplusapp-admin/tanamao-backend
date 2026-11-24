@@ -2,6 +2,7 @@
 const express=require('express');const {verifyToken}=require('../middleware/verifyToken');
 const rateLimit=require('express-rate-limit');const {asyncHandler,guardEnabled,betaGuard,privateError}=require('../middleware/mobilidade');
 const c=require('../controllers/mobilidadeController');const buscaCliente=require('../services/mobilidadeBuscaCliente');const lugares=require('../services/mobilidadeLugares');const router=express.Router();
+const edicao=require('../services/mobilidadeEdicaoRota');
 const limited=rateLimit({windowMs:60000,max:50,standardHeaders:true,legacyHeaders:false});
 router.use(guardEnabled,verifyToken,betaGuard);
 router.get('/catalogo',asyncHandler(c.catalog));
@@ -40,6 +41,9 @@ router.post('/motorista/viagens/:jobId/cheguei',limited,asyncHandler(c.driverArr
 router.post('/motorista/viagens/:jobId/iniciar',limited,asyncHandler(c.startTrip));
 router.post('/motorista/viagens/:jobId/finalizar',limited,asyncHandler(c.finishTrip));
 router.post('/motorista/viagens/:jobId/pagamento/recebido',limited,asyncHandler(c.driverPaymentReceived));
+router.post('/cliente/solicitacoes/:jobId/rota/previa',placesLimited,asyncHandler(edicao.previa));
+router.post('/cliente/solicitacoes/:jobId/rota/confirmar',limited,asyncHandler(edicao.confirmar));
+router.post('/motorista/viagens/:jobId/parada',limited,asyncHandler(edicao.concluirParada));
 router.post('/cliente/cotacoes',limited,asyncHandler(c.quote));
 router.post('/cliente/solicitacoes',limited,asyncHandler(c.createRequest));
 router.get('/cliente/solicitacoes',asyncHandler(c.listClientJobs));

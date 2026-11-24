@@ -1,4 +1,5 @@
 'use strict';
+const trust=require('mongoose').trusted;
 const Perfil=require('../models/MobilidadePerfil');
 const Veiculo=require('../models/MobilidadeVeiculo');
 const {kilometers}=require('./mobilidadeCalculo');
@@ -29,7 +30,7 @@ function adicionalComfort(valor){return Math.round(Number(valor||0)*taxaComfort(
 async function disponivelNaOrigem(origem){
   if(!configurado()||!Number.isFinite(Number(origem?.lat))||!Number.isFinite(Number(origem?.lng)))return false;
   const online=await Perfil.find({status:'aprovado',online:true,servicosAtivos:'corrida_carro',emViagemId:null,
-    ultimaLocalizacaoEm:{$gte:new Date(Date.now()-120000)}})
+    ultimaLocalizacaoEm:trust({$gte:new Date(Date.now()-120000)})})
     .select('veiculoAtivoId localizacao').limit(300).lean();
   const veiculosProximos=online.filter(p=>{
     const xy=p.localizacao?.coordinates;
@@ -37,7 +38,7 @@ async function disponivelNaOrigem(origem){
       kilometers({lat:xy[1],lng:xy[0]},origem)<=25;
   }).map(p=>p.veiculoAtivoId);
   if(!veiculosProximos.length)return false;
-  const habilitados=await Veiculo.find({_id:{$in:veiculosProximos},tipo:'carro',status:'aprovado',confortoAprovado:true,lugares:{$gte:5},ano:{$gte:new Date().getFullYear()-8}}).limit(1).lean();
+  const habilitados=await Veiculo.find({_id:trust({$in:veiculosProximos}),tipo:'carro',status:'aprovado',confortoAprovado:true,lugares:trust({$gte:5}),ano:trust({$gte:new Date().getFullYear()-8})}).limit(1).lean();
   return habilitados.some(veiculoComfort);
 }
 module.exports={configurado,taxaComfort,categoriaCorrida,adicionalComfort,veiculoComfort,disponivelNaOrigem};

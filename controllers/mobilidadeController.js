@@ -26,6 +26,8 @@ const {ownedProfessional,id,error,audit}=require('../middleware/mobilidade');
 const {SERVICES,VEHICLES,serviceVehicleCompatible}=require('../config/mobilidade');
 const {encrypt}=require('../services/mobilidadeCrypto');
 const calc=require('../services/mobilidadeCalculo');
+const Paradas=require('../services/mobilidadeParadasRegras');
+const {rotaViagem:tripNavigation}=require('../services/mobilidadeRotasVivas');
 const {dispatchOne}=require('../services/mobilidadeDespacho');
 const {documentosAutorizados,veiculoCompativel}=require('../services/mobilidadeCandidatos');
 const {emit}=require('../services/mobilidadeSocket');
@@ -166,7 +168,7 @@ async function setLocation(req,res){
  const p=calc.point({...req.body,endereco:'gps',cidade:'GPS',uf:'MS'});
  const {profile}=await ownedProfile(req);
  if(profile.status!=='aprovado' || (profile.liberacaoManual !== true && !calc.validCnh(profile)))error(403,'Perfil não aprovado ou CNH pendente de aprovação');
- const updated=await Profile.findOneAndUpdate({_id:profile._id},{$set:{localizacao:{type:'Point',coordinates:[p.lng,p.lat]},ultimaLocalizacaoEm:new Date()}},{new:true});
+ const updated=await Profile.findOneAndUpdate({_id:profile._id},{$set:{localizacao:{type:'Point',coordinates:[p.lng,p.lat]},ultimaLocalizacaoEm:new Date(),suportaParadasEm:req.body?.suportaParadas===true?new Date():null}},{new:true});
  res.json({ok:true,ultimaLocalizacaoEm:updated.ultimaLocalizacaoEm});
  if(profile.emViagemId){const job=await Job.findOne({_id:profile.emViagemId,motoristaId:own(req)}).lean();if(job&&['aceita','no_local','em_andamento'].includes(job.status))emit(req.app,job.clienteId,'viagem:localizacao',{id:String(job._id),latitude:p.lat,longitude:p.lng,atualizadoEm:updated.ultimaLocalizacaoEm});}
 }
@@ -245,7 +247,8 @@ function requestData(body){
  const carga=calc.validateCargo(body.carga,servico);
  if(tipo==='corrida'&&tipoVeiculo==='moto'&&passageiros!==1)error(400,'Moto permite um passageiro');
  if(tipo==='corrida'&&(carga.pesoKg||carga.volumeM3))error(400,'Corridas nao podem declarar transporte de carga');
- return {origem,destino,servico,tipoVeiculo,passageiros,carga};
+ const paradas=Paradas.lista(body.paradas,calc.point,servico);
+ return {origem,destino,paradas,servico,tipoVeiculo,passageiros,carga};
 }
 async function quote(req,res){
  const params=requestData(req.body||{});
@@ -253,6 +256,7 @@ async function quote(req,res){
  await Promise.all([
   validarLocalidade(params.origem, req.body?.origem?.validacao),
   validarLocalidade(params.destino, req.body?.destino?.validacao),
+  ...params.paradas.map((p,i)=>validarLocalidade(p,req.body?.paradas?.[i]?.validacao)),
  ]);
  if(params.servico==='corrida_moto'){const policy=await PoliticaMoto.consultar(params.origem);if(!policy.permitida)error(403,policy.mensagem);}
  if(params.categoriaCorrida==='comfort') {
@@ -264,7 +268,8 @@ async function quote(req,res){
  const tariffs=await Tariff.find({servico:params.servico,ativo:true,$or:localidades}).lean();
  const tariff=localidades.map(loc=>tariffs.find(t=>t.uf===loc.uf&&t.cidade===loc.cidade)).find(Boolean);
  if(!tariff)error(409,'Tarifa indisponivel para esta modalidade e regiao; configure no painel administrativo');
- const route=await calc.route(params.origem,params.destino);
+ if(params.servico==='corrida_moto'&&params.paradas.some(p=>calc.scope(params.origem,p)!=='frete_local'||p.pais!==params.origem.pais))error(400,'Paradas de moto devem ficar na mesma cidade do embarque.');
+ const route=await Paradas.percurso([params.origem,...params.paradas,params.destino],calc.route,calc.kilometers);
  if(route.km>4000)error(400,'Distancia muito grande');
  const valorBaseCentavos=calc.price(tariff,route.km,route.min,params.carga);
  const instanteCotacao=new Date();
@@ -274,6 +279,7 @@ async function quote(req,res){
  const fator=Math.max(agenda.fator,corridaBR?Math.min(1.3,mercado.fator):mercado.fator);
  const motivoDinamico=fator>1?(agenda.fator>=fator?agenda.motivo:'Demanda de corridas'):null;
  let value=Dinamica.precificar(valorBaseCentavos,fator);
+ let tarifaCarro=null, fatorCarroCongelado=1;
  // Em condicoes equivalentes, moto nunca custa mais que 85% do carro.
  // A regra e aplicada quando a tarifa de carro do mesmo territorio esta disponivel.
  if(['corrida_moto','entrega_moto'].includes(params.servico)){
@@ -284,6 +290,7 @@ async function quote(req,res){
    const agendaCarro=await AgendaDinamica.scheduled(params.origem,par,instanteCotacao);
    const mercadoCarro=comparavel.dinamicaAtiva===true&&agendaCarro.permitida?await Dinamica.multiplicadorNaOrigem(params.origem,par):{fator:1};
    const fatorCarro=Math.max(agendaCarro.fator,corridaBR?Math.min(1.3,mercadoCarro.fator):mercadoCarro.fator);
+   tarifaCarro=comparavel;fatorCarroCongelado=fatorCarro;
    value=Math.min(value,Math.floor(Dinamica.precificar(precoCarro,fatorCarro)*0.85));
   }
  }
@@ -292,8 +299,9 @@ async function quote(req,res){
  value+=adicionalComfortCentavos;
  const multiplicadorDinamico=valorAntesComfort>valorBaseCentavos?Math.round(valorAntesComfort/valorBaseCentavos*100)/100:1;
  const adicionalDinamicoCentavos=Math.max(0,valorAntesComfort-valorBaseCentavos);
- const rec=await Quote.create({...params,...preferencia,clienteId:own(req),distanciaKm:route.km,duracaoMin:route.min,metodoRota:route.method,valorCentavos:value,valorBaseCentavos:Math.min(valorBaseCentavos,value),multiplicadorDinamico,adicionalDinamicoCentavos,motivoDinamico:adicionalDinamicoCentavos>0?motivoDinamico:null,adicionalComfortCentavos,tarifaId:tariff._id,expiraEm:new Date(Date.now()+5*60000)});
- res.status(201).json({ok:true,cotacao:{id:rec._id,servico:rec.servico,veiculo:rec.tipoVeiculo,distanciaKm:rec.distanciaKm,duracaoMin:rec.duracaoMin,metodoRota:rec.metodoRota,valorCentavos:rec.valorCentavos,valorBaseCentavos:rec.valorBaseCentavos,adicionalDinamicoCentavos:rec.adicionalDinamicoCentavos,motivoDinamico:rec.motivoDinamico,adicionalComfortCentavos:rec.adicionalComfortCentavos,categoriaCorrida:rec.categoriaCorrida,multiplicadorDinamico:rec.multiplicadorDinamico,expiraEm:rec.expiraEm,preferenciaMotorista:rec.preferenciaMotorista},formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',aviso:route.method==='aproximacao'?'Estimativa tecnica, nao e rota rodoviaria real. Confira antes de cobrar.':undefined});
+ const tarifaCongelada=Paradas.snapshot(tariff,fator,params.categoriaCorrida==='comfort'?Comfort.taxaComfort():0,tarifaCarro,fatorCarroCongelado,motivoDinamico);
+ const rec=await Quote.create({...params,...preferencia,tarifaCongelada,clienteId:own(req),distanciaKm:route.km,duracaoMin:route.min,metodoRota:route.method,valorCentavos:value,valorBaseCentavos:Math.min(valorBaseCentavos,value),multiplicadorDinamico,adicionalDinamicoCentavos,motivoDinamico:adicionalDinamicoCentavos>0?motivoDinamico:null,adicionalComfortCentavos,tarifaId:tariff._id,expiraEm:new Date(Date.now()+5*60000)});
+ res.status(201).json({ok:true,cotacao:{id:rec._id,servico:rec.servico,veiculo:rec.tipoVeiculo,paradas:rec.paradas||[],distanciaKm:rec.distanciaKm,duracaoMin:rec.duracaoMin,metodoRota:rec.metodoRota,valorCentavos:rec.valorCentavos,valorBaseCentavos:rec.valorBaseCentavos,adicionalDinamicoCentavos:rec.adicionalDinamicoCentavos,motivoDinamico:rec.motivoDinamico,adicionalComfortCentavos:rec.adicionalComfortCentavos,categoriaCorrida:rec.categoriaCorrida,multiplicadorDinamico:rec.multiplicadorDinamico,expiraEm:rec.expiraEm,preferenciaMotorista:rec.preferenciaMotorista},formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',aviso:route.method==='aproximacao'?'Estimativa tecnica, nao e rota rodoviaria real. Confira antes de cobrar.':undefined});
 }
 async function createRequest(req,res){
  const quoteId=id(req.body?.cotacaoId),client=own(req);
@@ -307,7 +315,7 @@ async function createRequest(req,res){
  if(!claimed)error(409,'Esta cotacao ja foi confirmada');
  let job;
  try{
-  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,categoriaCorrida:cotacao.categoriaCorrida||'normal',adicionalComfortCentavos:cotacao.adicionalComfortCentavos||0,origem:cotacao.origem,destino:cotacao.destino,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,motivoDinamico:cotacao.motivoDinamico,pagamento:{metodo:formaPagamento,status:'pendente'}});
+  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,categoriaCorrida:cotacao.categoriaCorrida||'normal',adicionalComfortCentavos:cotacao.adicionalComfortCentavos||0,origem:cotacao.origem,destino:cotacao.destino,paradas:cotacao.paradas||[],tarifaCongelada:cotacao.tarifaCongelada,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,motivoDinamico:cotacao.motivoDinamico,pagamento:{metodo:formaPagamento,status:'pendente'}});
  }catch(e){await Quote.updateOne({_id:cotacao._id,usadoEmSolicitacao:jobId},{$set:{usadoEmSolicitacao:null}});throw e;}
  await audit(req,'solicitacao.criada',job._id,job.servico);
  try{await dispatchOne(req.app,job._id);}catch(e){console.error('[mobilidade] solicitacao registrada; tentativa de despacho sera repetida:',e.message);}
@@ -387,6 +395,7 @@ async function acceptOffer(req,res){
  const {profile}=await ownedProfile(req),user=own(req),jobId=id(req.params.jobId);
  const job=await Job.findOne({_id:jobId,status:'ofertada',ofertaMotoristaId:user,ofertaExpiraEm:trust({$gt:new Date()})}).lean();
  if(!job)error(409,await motivoOfertaIndisponivel(jobId,user));
+ if((job.paradas||[]).length&&req.body?.suportaParadas!==true)error(409,'Atualize o Tanamão+ para aceitar viagens com paradas.');
  const usuario=await User.findById(user).select('acessoExpiraEm subscriptionStatus status genero preferenciaAtendimento avatar').lean();
  if(!usuario||usuario.status==='blocked')error(403,'Conta bloqueada');
  if(!documentosAutorizados(profile,usuario))error(403,'O perfil ainda não está liberado no painel de mobilidade');
@@ -403,7 +412,7 @@ async function acceptOffer(req,res){
  const reserved=await Profile.findOneAndUpdate(reserva,{$set:{emViagemId:job._id}},{new:true});
  if(!reserved)error(409,'Voce ja possui viagem ativa ou nao esta disponivel');
  let accepted;
- try{accepted=await Job.findOneAndUpdate({_id:job._id,status:'ofertada',ofertaMotoristaId:user,ofertaExpiraEm:trust({$gt:new Date()})},{$set:{status:'aceita',motoristaId:user,veiculoId:vehicle._id,aceiteEm:new Date(),ofertaMotoristaId:null,ofertaVeiculoId:null,ofertaExpiraEm:null}},{new:true});}
+ try{accepted=await Job.findOneAndUpdate({_id:job._id,status:'ofertada',ofertaMotoristaId:user,ofertaExpiraEm:trust({$gt:new Date()})},{$set:{status:'aceita',motoristaId:user,motoristaSuportaParadas:req.body?.suportaParadas===true,veiculoId:vehicle._id,aceiteEm:new Date(),ofertaMotoristaId:null,ofertaVeiculoId:null,ofertaExpiraEm:null}},{new:true});}
  finally{if(!accepted)await Profile.updateOne({_id:profile._id,emViagemId:job._id},{$set:{emViagemId:null}});}
  if(!accepted)error(409,await motivoOfertaIndisponivel(job._id,user));
  emit(req.app,job.clienteId,'viagem:atualizada',{id:String(job._id),status:'aceita',motoristaId:String(user)});
@@ -430,10 +439,11 @@ async function tripTransition(req,res,phase){
  const current=phase==='iniciar'?'no_local':'em_andamento';
  const next=phase==='iniciar'?'em_andamento':'concluida';
  const job=await assignedJob(req,[current]);
+ if(phase==='concluir'&&Paradas.restante(job).length)error(409,'Confirme as paradas restantes antes de finalizar a corrida.');
  const fields={status:next};
  fields[phase==='iniciar'?'inicioEm':'conclusaoEm']=new Date();
  const updated=await Job.findOneAndUpdate(
-  {_id:job._id,status:current,motoristaId:own(req)},
+  {_id:job._id,status:current,motoristaId:own(req),...(phase==='concluir'?(job.versaoRota?{versaoRota:job.versaoRota}:{$or:[{versaoRota:0},{versaoRota:trust({$exists:false})}]}):{})},
   {$set:fields},{new:true}
  );
  if(!updated)error(409,'A viagem ja mudou de etapa. Atualize a tela.');
@@ -573,4 +583,4 @@ async function driverRatings(req,res){
  res.json({ok:true,avaliacoes});
 }
 
-module.exports={reviewTrip,driverRatings,catalog,modalidadesOrigem,getProfile,setProfile,solicitarRevisaoFoto,setCNH,listVehicles,createVehicle,updateVehicle,selectVehicle,upload,uploadDocument,listDocuments,setLocation,getAvailability,setAvailability,getDriverDashboard,addMaintenance,getMaintenance,quote,createRequest,listClientJobs,readJob,clientDriverTracking,getDriverOffers,getDemandAreas,acceptOffer,rejectOffer,driverTrips,driverArrive,startTrip,finishTrip,clientCancel,driverPaymentReceived,clientPaymentReview,messages,mensagensRapidas,ownedProfile};
+module.exports={tripNavigation,reviewTrip,driverRatings,catalog,modalidadesOrigem,getProfile,setProfile,solicitarRevisaoFoto,setCNH,listVehicles,createVehicle,updateVehicle,selectVehicle,upload,uploadDocument,listDocuments,setLocation,getAvailability,setAvailability,getDriverDashboard,addMaintenance,getMaintenance,quote,createRequest,listClientJobs,readJob,clientDriverTracking,getDriverOffers,getDemandAreas,acceptOffer,rejectOffer,driverTrips,driverArrive,startTrip,finishTrip,clientCancel,driverPaymentReceived,clientPaymentReview,messages,mensagensRapidas,ownedProfile};
