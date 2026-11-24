@@ -177,4 +177,26 @@ async function resetPin(req,res){
  const jid=id(req.params.jobId);const row=await Job.findOneAndUpdate({_id:jid,status:trust({$in:['aceita','no_local','em_andamento']})},{$set:{codigoErradoTentativas:0}},{new:true});
  if(!row)error(404,'Viagem ativa nao encontrada');await audit(req,'admin.pin.desbloqueado',jid);res.json({ok:true,id:jid});
 }
-module.exports={list,detail,reviewCNH,reviewVehicle,reviewProfile,download,listMotoPolicies,reviewMotoPolicy,getTariffs,putTariff,instalarTarifasIniciais,jobs,emergencyCancel,resetPin};
+const Agenda=require('../services/mobilidadeAgendaDinamica');
+const AgendaModel=require('../models/MobilidadeAgendaDinamica');
+async function getAgenda(req,res){const registros=await AgendaModel.find({}).sort({uf:1,cidade:1}).lean();res.set('Cache-Control','private, no-store');res.json({ok:true,registros,padrao:Agenda.defaults(),bloqueioAmbiente:process.env.MOBILITY_DYNAMIC_PRICING==='false'});}
+async function putAgenda(req,res){let local,cfg;try{local=Agenda.scope(req.body?.uf,req.body?.cidade);cfg=Agenda.validate(req.body);if(cfg.fuso&&local.cidade==='*')throw Error('Fuso personalizado somente por cidade');}catch(e){error(400,e.message);}const registro=await AgendaModel.findOneAndUpdate(local,{$set:{...cfg,alteradoPor:req.userId}},{upsert:true,new:true,runValidators:true});await audit(req,'admin.dinamica.agenda',registro._id,`${local.uf}/${local.cidade}`);res.json({ok:true,registro});}
+async function deleteAgenda(req,res){let local;try{local=Agenda.scope(req.body?.uf,req.body?.cidade);if(local.uf==='*')throw Error('Desative a regra nacional em vez de excluir');}catch(e){error(400,e.message);}const registro=await AgendaModel.findOneAndDelete(local);await audit(req,'admin.dinamica.herdar',registro?._id,`${local.uf}/${local.cidade}`);res.json({ok:true});}
+// Contadores exatos, sem transferir documentos ou dados pessoais para o resumo.
+async function operationalSummary(req,res){
+ const now=new Date(), soon=new Date(now.getTime()+30*86400000), stale=new Date(now.getTime()-5*60000);
+ const real={testeOperacional:trust({$ne:true})};
+ const [motoristasPendentes,cidadesMotoPendentes,cnhVencidas,cnhAVencer,crlvVencidos,crlvAVencer,buscaDemorada,semMotorista24h,viagensAtivas]=await Promise.all([
+  Profile.countDocuments({status:'em_analise'}),
+  PermissaoMoto.countDocuments({status:'pendente'}),
+  Profile.countDocuments({status:'aprovado','cnh.validade':trust({$lte:now})}),
+  Profile.countDocuments({status:'aprovado','cnh.validade':trust({$gt:now,$lte:soon})}),
+  Vehicle.countDocuments({status:'aprovado',crlvValidade:trust({$lte:now})}),
+  Vehicle.countDocuments({status:'aprovado',crlvValidade:trust({$gt:now,$lte:soon})}),
+  Job.countDocuments({...real,status:trust({$in:['procurando','ofertada']}),createdAt:trust({$lte:stale})}),
+  Job.countDocuments({...real,status:'sem_motorista',createdAt:trust({$gte:new Date(now.getTime()-86400000)})}),
+  Job.countDocuments({...real,status:trust({$in:['procurando','ofertada','aceita','no_local','em_andamento']})}),
+ ]);
+ res.set('Cache-Control','private, no-store');res.json({ok:true,consultadoEm:now,motoristasPendentes,cidadesMotoPendentes,cnhVencidas,cnhAVencer,crlvVencidos,crlvAVencer,buscaDemorada,semMotorista24h,viagensAtivas});
+}
+module.exports={operationalSummary,getAgenda,putAgenda,deleteAgenda,list,detail,reviewCNH,reviewVehicle,reviewProfile,download,listMotoPolicies,reviewMotoPolicy,getTariffs,putTariff,instalarTarifasIniciais,jobs,emergencyCancel,resetPin};

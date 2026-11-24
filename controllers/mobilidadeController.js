@@ -13,6 +13,7 @@ const Job=require('../models/MobilidadeSolicitacao');
 const Maintenance=require('../models/MobilidadeManutencao');
 const Message=require('../models/MobilidadeMensagem');
 const Dinamica=require('../services/mobilidadeDinamica');
+const AgendaDinamica=require('../services/mobilidadeAgendaDinamica');
 const ChatRapido=require('../services/mobilidadeChatRapido');
 const {enviarPushParaUsuario}=require('../services/pushService');
 const {notificarClienteEtapa}=require('../services/mobilidadeNotificacoesCliente');
@@ -266,8 +267,13 @@ async function quote(req,res){
  const route=await calc.route(params.origem,params.destino);
  if(route.km>4000)error(400,'Distancia muito grande');
  const valorBaseCentavos=calc.price(tariff,route.km,route.min,params.carga);
- const mercado=tariff.dinamicaAtiva!==true?{fator:1}:await Dinamica.multiplicadorNaOrigem(params.origem,params.servico);
- let value=Dinamica.precificar(valorBaseCentavos,mercado.fator);
+ const instanteCotacao=new Date();
+ const agenda=await AgendaDinamica.scheduled(params.origem,params.servico,instanteCotacao);
+ const mercado=tariff.dinamicaAtiva!==true||!agenda.permitida?{fator:1}:await Dinamica.multiplicadorNaOrigem(params.origem,params.servico);
+ const corridaBR=params.origem.pais!=='PY'&&['corrida_carro','corrida_moto'].includes(params.servico);
+ const fator=Math.max(agenda.fator,corridaBR?Math.min(1.3,mercado.fator):mercado.fator);
+ const motivoDinamico=fator>1?(agenda.fator>=fator?agenda.motivo:'Demanda de corridas'):null;
+ let value=Dinamica.precificar(valorBaseCentavos,fator);
  // Em condicoes equivalentes, moto nunca custa mais que 85% do carro.
  // A regra e aplicada quando a tarifa de carro do mesmo territorio esta disponivel.
  if(['corrida_moto','entrega_moto'].includes(params.servico)){
@@ -275,7 +281,10 @@ async function quote(req,res){
   const pares=await Tariff.find({servico:par,ativo:true,$or:localidades}).lean();
   const comparavel=localidades.map(loc=>pares.find(t=>t.uf===loc.uf&&t.cidade===loc.cidade)).find(Boolean);
   if(comparavel){const precoCarro=calc.price(comparavel,route.km,route.min,params.carga);
-   value=Math.min(value,Math.floor(precoCarro*0.85));
+   const agendaCarro=await AgendaDinamica.scheduled(params.origem,par,instanteCotacao);
+   const mercadoCarro=comparavel.dinamicaAtiva===true&&agendaCarro.permitida?await Dinamica.multiplicadorNaOrigem(params.origem,par):{fator:1};
+   const fatorCarro=Math.max(agendaCarro.fator,corridaBR?Math.min(1.3,mercadoCarro.fator):mercadoCarro.fator);
+   value=Math.min(value,Math.floor(Dinamica.precificar(precoCarro,fatorCarro)*0.85));
   }
  }
  const valorAntesComfort=value;
@@ -283,8 +292,8 @@ async function quote(req,res){
  value+=adicionalComfortCentavos;
  const multiplicadorDinamico=valorAntesComfort>valorBaseCentavos?Math.round(valorAntesComfort/valorBaseCentavos*100)/100:1;
  const adicionalDinamicoCentavos=Math.max(0,valorAntesComfort-valorBaseCentavos);
- const rec=await Quote.create({...params,...preferencia,clienteId:own(req),distanciaKm:route.km,duracaoMin:route.min,metodoRota:route.method,valorCentavos:value,valorBaseCentavos:Math.min(valorBaseCentavos,value),multiplicadorDinamico,adicionalDinamicoCentavos,adicionalComfortCentavos,tarifaId:tariff._id,expiraEm:new Date(Date.now()+5*60000)});
- res.status(201).json({ok:true,cotacao:{id:rec._id,servico:rec.servico,veiculo:rec.tipoVeiculo,distanciaKm:rec.distanciaKm,duracaoMin:rec.duracaoMin,metodoRota:rec.metodoRota,valorCentavos:rec.valorCentavos,valorBaseCentavos:rec.valorBaseCentavos,adicionalDinamicoCentavos:rec.adicionalDinamicoCentavos,adicionalComfortCentavos:rec.adicionalComfortCentavos,categoriaCorrida:rec.categoriaCorrida,multiplicadorDinamico:rec.multiplicadorDinamico,expiraEm:rec.expiraEm,preferenciaMotorista:rec.preferenciaMotorista},formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',aviso:route.method==='aproximacao'?'Estimativa tecnica, nao e rota rodoviaria real. Confira antes de cobrar.':undefined});
+ const rec=await Quote.create({...params,...preferencia,clienteId:own(req),distanciaKm:route.km,duracaoMin:route.min,metodoRota:route.method,valorCentavos:value,valorBaseCentavos:Math.min(valorBaseCentavos,value),multiplicadorDinamico,adicionalDinamicoCentavos,motivoDinamico:adicionalDinamicoCentavos>0?motivoDinamico:null,adicionalComfortCentavos,tarifaId:tariff._id,expiraEm:new Date(Date.now()+5*60000)});
+ res.status(201).json({ok:true,cotacao:{id:rec._id,servico:rec.servico,veiculo:rec.tipoVeiculo,distanciaKm:rec.distanciaKm,duracaoMin:rec.duracaoMin,metodoRota:rec.metodoRota,valorCentavos:rec.valorCentavos,valorBaseCentavos:rec.valorBaseCentavos,adicionalDinamicoCentavos:rec.adicionalDinamicoCentavos,motivoDinamico:rec.motivoDinamico,adicionalComfortCentavos:rec.adicionalComfortCentavos,categoriaCorrida:rec.categoriaCorrida,multiplicadorDinamico:rec.multiplicadorDinamico,expiraEm:rec.expiraEm,preferenciaMotorista:rec.preferenciaMotorista},formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',aviso:route.method==='aproximacao'?'Estimativa tecnica, nao e rota rodoviaria real. Confira antes de cobrar.':undefined});
 }
 async function createRequest(req,res){
  const quoteId=id(req.body?.cotacaoId),client=own(req);
@@ -298,7 +307,7 @@ async function createRequest(req,res){
  if(!claimed)error(409,'Esta cotacao ja foi confirmada');
  let job;
  try{
-  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,categoriaCorrida:cotacao.categoriaCorrida||'normal',adicionalComfortCentavos:cotacao.adicionalComfortCentavos||0,origem:cotacao.origem,destino:cotacao.destino,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,pagamento:{metodo:formaPagamento,status:'pendente'}});
+  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,categoriaCorrida:cotacao.categoriaCorrida||'normal',adicionalComfortCentavos:cotacao.adicionalComfortCentavos||0,origem:cotacao.origem,destino:cotacao.destino,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,motivoDinamico:cotacao.motivoDinamico,pagamento:{metodo:formaPagamento,status:'pendente'}});
  }catch(e){await Quote.updateOne({_id:cotacao._id,usadoEmSolicitacao:jobId},{$set:{usadoEmSolicitacao:null}});throw e;}
  await audit(req,'solicitacao.criada',job._id,job.servico);
  try{await dispatchOne(req.app,job._id);}catch(e){console.error('[mobilidade] solicitacao registrada; tentativa de despacho sera repetida:',e.message);}

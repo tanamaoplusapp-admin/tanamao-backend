@@ -1,0 +1,11 @@
+TANAMAO+ | ATUALIZACAO DE MOBILIDADE
+
+Este ZIP e um patch para sobrepor ao repositorio correspondente, nao um projeto independente. Nao apague a pasta atual. Preserve .env, uploads, node_modules e .git.
+1. Extraia o conteudo na raiz do repositorio correspondente e substitua os arquivos indicados.
+2. Primeiro publique o backend no Render. Depois publique o painel.
+3. Painel > Mobilidade > Dinamica automatica. A regra nacional ja e ativa por padrao, se nao houver regra salva desativada ou bloqueio MOBILITY_DYNAMIC_PRICING=false no Render.
+4. Confira os valores e salve a configuracao nacional. Regras estaduais e municipais opcionais; datas nacionais fixas incluidas; feriados moveis e locais precisam de cadastro (recorrentes MM-DD ou especificos AAAA-MM-DD).
+5. Normal e Comfort usam a agenda. Comfort depende da configuracao existente e aprovacao de veiculo. Agenda brasileira de corridas de carro e moto; nao muda permissoes locais. Demanda real continua separada, dependente da tarifa individual.
+6. Confira uma cotacao real e a fila de atencao. Nao e necessario executar novamente o cadastro de tarifas.
+
+Validacao: testes unitarios da agenda, sintaxe Node e transpilacao JSX. Nao foi executado deploy, build completo Vite ou teste integrado ao MongoDB.

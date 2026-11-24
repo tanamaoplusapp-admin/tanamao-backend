@@ -3,6 +3,7 @@ const express=require('express');const {verifyToken}=require('../middleware/veri
 const {asyncHandler,guardEnabled,admin,privateError}=require('../middleware/mobilidade');
 const c=require('../controllers/mobilidadeAdminController');const r=express.Router();
 r.use(guardEnabled,verifyToken,admin);
+r.get('/operacao/resumo',asyncHandler(c.operationalSummary));
 r.get('/perfis',asyncHandler(c.list));
 r.get('/perfis/:profileId',asyncHandler(c.detail));
 r.patch('/perfis/:profileId/cnh',asyncHandler(c.reviewCNH));
@@ -11,6 +12,9 @@ r.patch('/veiculos/:vehicleId/aprovacao',asyncHandler(c.reviewVehicle));
 r.get('/documentos/:documentId/download',asyncHandler(c.download));
 r.get('/permissoes-moto',asyncHandler(c.listMotoPolicies));
 r.patch('/permissoes-moto/:chave',asyncHandler(c.reviewMotoPolicy));
+r.get('/tarifas/dinamica',asyncHandler(c.getAgenda));
+r.put('/tarifas/dinamica',asyncHandler(c.putAgenda));
+r.delete('/tarifas/dinamica',asyncHandler(c.deleteAgenda));
 r.get('/tarifas',asyncHandler(c.getTariffs));
 r.put('/tarifas',asyncHandler(c.putTariff));
 r.post('/tarifas/iniciais',asyncHandler(c.instalarTarifasIniciais));
