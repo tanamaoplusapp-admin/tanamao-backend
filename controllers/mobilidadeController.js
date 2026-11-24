@@ -114,7 +114,7 @@ function vehicleInput(body){
  if(!Number.isFinite(capacidadeKg)||capacidadeKg<0||capacidadeKg>80000||!Number.isFinite(capacidadeM3)||capacidadeM3<0||capacidadeM3>150||!Number.isInteger(lugares)||lugares<1||lugares>60)error(400,'Capacidade invalida');
  const crlvValidade=body.crlvValidade?validateDate(body.crlvValidade):undefined;
  const rntrc=asText(body.rntrc,32);
- return {tipo,placa,marca,modelo,ano,cor:asText(body.cor,35),capacidadeKg,capacidadeM3,lugares,crlvValidade,rntrc};
+ return {tipo,placa,marca,modelo,ano,cor:asText(body.cor,35),capacidadeKg,capacidadeM3,lugares,crlvValidade,rntrc,proprietarioTerceiro:body.proprietarioTerceiro===true};
 }
 async function listVehicles(req,res){await ownedProfile(req);res.json({ok:true,veiculos:await Vehicle.find({userId:own(req)}).sort({createdAt:-1}).lean()});}
 async function createVehicle(req,res){
@@ -126,7 +126,7 @@ async function createVehicle(req,res){
 }
 async function updateVehicle(req,res){
  const {profile}=await ownedProfile(req);assertIdle(profile);const v=await getVehicle(req);
- Object.assign(v,vehicleInput({...v.toObject(),...req.body}));v.dadosAtualizadosEm=new Date();v.status='pendente';v.motivo='Dados alterados: precisa de nova aprovacao';await v.save();
+ Object.assign(v,vehicleInput({...v.toObject(),...req.body}));v.dadosAtualizadosEm=new Date();v.status='pendente';v.motivo='Dados alterados: precisa de nova aprovacao';v.placaConferidaEm=undefined;v.placaConferidaPor=undefined;await v.save();
  if(String(profile.veiculoAtivoId||'')===String(v._id)) {profile.online=false;profile.servicosAtivos=[];}
  profile.status='em_analise';await profile.save();await audit(req,'veiculo.alterado',v._id);
  res.json({ok:true,veiculo:v});
@@ -142,9 +142,10 @@ function validateFile(bytes,mime){if(!Buffer.isBuffer(bytes)||!bytes.length)erro
 async function uploadDocument(req,res){
  const {profile}=await ownedProfile(req);assertIdle(profile);
  if(!req.file)error(400,'Envie arquivo no campo arquivo');
- const tipo=asText(req.body.tipo),allowed=['cnh_frente','cnh_verso','crlv','rntrc'];if(!allowed.includes(tipo))error(400,'Tipo documental invalido');
- const vehicleId=['crlv','rntrc'].includes(tipo)?id(req.body.veiculoId):null;
+ const tipo=asText(req.body.tipo),allowed=['cnh_frente','cnh_verso','crlv','rntrc','foto_frente_placa','foto_traseira_placa'];if(!allowed.includes(tipo))error(400,'Tipo documental invalido');
+ const vehicleId=['crlv','rntrc','foto_frente_placa','foto_traseira_placa'].includes(tipo)?id(req.body.veiculoId):null;
  if(vehicleId){const vehicle=await Vehicle.findOne({_id:vehicleId,userId:own(req)});if(!vehicle)error(404,'Veiculo nao encontrado');}
+ if(['foto_frente_placa','foto_traseira_placa'].includes(tipo) && !['image/jpeg','image/png'].includes(req.file.mimetype))error(400,'A foto do veiculo com placa deve ser JPG ou PNG');
  validateFile(req.file.buffer,req.file.mimetype);
  if(!mongoose.connection.db)error(503,'MongoDB indisponivel');
  const bucket=new mongoose.mongo.GridFSBucket(mongoose.connection.db,{bucketName:'mobilidadeDocumentosPrivados'});
@@ -154,7 +155,7 @@ async function uploadDocument(req,res){
  try{doc=await Document.create({userId:own(req),tipo,veiculoId:vehicleId,arquivoId:stream.id,mime:req.file.mimetype,nome:asText(req.file.originalname,100),tamanho:req.file.size});}
  catch(e){await bucket.delete(stream.id).catch(()=>{});throw e;}
  if(tipo.startsWith('cnh')){profile.cnh.status='pendente';profile.status='em_analise';profile.online=false;profile.servicosAprovados=[];profile.servicosAtivos=[];await profile.save();}
- if(vehicleId){await Vehicle.updateOne({_id:vehicleId,userId:own(req)},{$set:{status:'pendente'}});profile.online=false;profile.servicosAtivos=[];await profile.save();}
+ if(vehicleId){await Vehicle.updateOne({_id:vehicleId,userId:own(req)},{$set:{status:'pendente',motivo:'Documento ou foto alterado: aguardando conferencia manual'},$unset:{placaConferidaEm:1,placaConferidaPor:1}});profile.online=false;profile.servicosAtivos=[];await profile.save();}
  await audit(req,'documento.enviado',doc._id,tipo);
  res.status(201).json({ok:true,documento:{id:doc._id,tipo:doc.tipo,criadoEm:doc.createdAt}});
 }
@@ -180,9 +181,11 @@ async function setAvailability(req,res){
  if(profile.liberacaoManual !== true && !fotoAprovada(profile,usuario))error(403,'Foto do motorista ausente, alterada ou ainda não aprovada. Envie a foto e aguarde a análise no painel');
  if(!usuario||usuario.status==='blocked'||['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo. Regularize o acesso como os demais prestadores');
  if(profile.status!=='aprovado' || (profile.liberacaoManual !== true && !calc.validCnh(profile)))error(403,'Perfil de mobilidade não aprovado ou CNH pendente');
+ if(profile.aprovacaoRestrita && profile.liberacaoManual !== true)error(403,'Aprovação administrativa restrita: finalize a validação documental no painel');
  if(!profile.veiculoAtivoId)error(400,'Selecione um veiculo aprovado');
  const vehicle=await Vehicle.findOne({_id:profile.veiculoAtivoId,userId:own(req)}).lean();
  if(!vehicle || (profile.liberacaoManual === true ? !['aprovado','pendente'].includes(vehicle.status) : vehicle.status !== 'aprovado'))error(403,'Veículo não aprovado');
+ if(profile.liberacaoManual !== true && !vehicle.placaConferidaEm)error(403,'Aguarde a conferência manual da foto frontal, placa e CRLV do veículo');
  if(!profile.ultimaLocalizacaoEm||new Date(profile.ultimaLocalizacaoEm).getTime()<Date.now()-120000)error(409,'Envie localizacao atual antes de ficar online');
  const services=arrayServices(req.body.servicosAtivos);
  for(const svc of services){

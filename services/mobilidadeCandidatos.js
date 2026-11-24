@@ -32,6 +32,7 @@ function veiculoCompativel(perfil, veiculo, solicitacao) {
   if (!veiculo || String(veiculo.userId) !== String(perfil.userId)) return false;
   if(solicitacao.categoriaCorrida==='comfort'&&!veiculoComfort(veiculo))return false;
   if (perfil.liberacaoManual !== true) {
+    if (!veiculo.placaConferidaEm) return false; // Aprovacao manual de foto frontal/placa e CRLV.
     return cnhSupportsVehicle(perfil.cnh?.categoria, veiculo.tipo) &&
       validVehicle(veiculo, solicitacao.servico, solicitacao.passageiros, solicitacao.carga, solicitacao.tipoVeiculo);
   }

@@ -40,7 +40,7 @@ async function reviewCNH(req,res){
  if(!['aprovar','reprovar','solicitar_reenvio'].includes(choice))error(400,'Decisao invalida');
  if(choice!=='aprovar'&&!reason)error(400,'Informe o motivo');
  if(choice==='aprovar'){
-  if(!p.cnh?.numeroCriptografado||!p.cnh?.categoria||!p.cnh?.validade||new Date(p.cnh.validade)<=new Date())error(409,'CNH, categoria ou validade insuficiente para aprovacao');
+  if(!p.cnh?.numeroCriptografado||!p.cnh?.categoria||!p.cnh?.ear||!p.cnh?.validade||new Date(p.cnh.validade)<=new Date())error(409,'CNH, EAR, categoria ou validade insuficiente para aprovacao');
   const document=await Document.exists({userId:p.userId,tipo:'cnh_frente',createdAt:trust({$gte:p.cnh.enviadoEm||new Date(0)})});if(!document)error(409,'Envie documento da CNH antes da aprovacao');
  }
  p.cnh.status=choice==='aprovar'?'aprovado':choice==='reprovar'?'reprovado':'pendente';p.cnh.motivo=reason;p.cnh.avaliadoEm=new Date();p.cnh.avaliadoPor=req.userId;
@@ -54,10 +54,19 @@ async function reviewVehicle(req,res){
  const choice=req.body?.decisao,reason=text(req.body?.motivo);
  if(!['aprovar','reprovar','suspender'].includes(choice))error(400,'Decisao invalida');if(choice!=='aprovar'&&!reason)error(400,'Informe o motivo');
  if(choice==='aprovar'){
-  const document=await Document.exists({userId:v.userId,veiculoId:v._id,tipo:'crlv',createdAt:trust({$gte:v.dadosAtualizadosEm||new Date(0)})});if(!document)error(409,'Envie o CRLV antes da aprovacao');
+  const tipoFoto=v.tipo==='moto'?'foto_traseira_placa':'foto_frente_placa';
+  const atualizados=trust({$gte:v.dadosAtualizadosEm||new Date(0)});
+  const [crlv,foto]=await Promise.all([
+   Document.exists({userId:v.userId,veiculoId:v._id,tipo:'crlv',createdAt:atualizados}),
+   Document.exists({userId:v.userId,veiculoId:v._id,tipo:tipoFoto,mime:trust({$in:['image/jpeg','image/png']}),createdAt:atualizados}),
+  ]);
+  if(!crlv)error(409,'Envie o CRLV atualizado antes da aprovacao');
+  if(!foto)error(409,v.tipo==='moto'?'Envie foto da traseira da moto com placa legivel antes da aprovacao':'Envie foto frontal do veiculo com a placa legivel antes da aprovacao');
+  if(req.body?.placaConferida!==true)error(409,'Confira manualmente se a placa na foto corresponde ao CRLV e confirme no painel');
   if(v.crlvValidade&&new Date(v.crlvValidade)<=new Date())error(409,'CRLV vencido');
  }
  v.status=choice==='aprovar'?'aprovado':choice==='reprovar'?'reprovado':'suspenso';v.motivo=reason;v.avaliadoEm=new Date();v.avaliadoPor=req.userId;
+ if(choice==='aprovar'){v.placaConferidaEm=new Date();v.placaConferidaPor=req.userId;}else{v.placaConferidaEm=undefined;v.placaConferidaPor=undefined;}
  await v.save();
  const p=await Profile.findOne({userId:v.userId});if(p){p.online=false;p.servicosAtivos=[];if(choice!=='aprovar'){p.status='em_analise';p.servicosAprovados=[];}await p.save();}
  await audit(req,`admin.veiculo.${choice}`,v._id,reason);
@@ -75,11 +84,12 @@ async function reviewProfile(req,res){
   if(!possuiProfissaoMotorista(profissional))error(403,'Prestador nao selecionou a profissao Motorista');
   const usuario=await User.findById(p.userId).select('avatar').lean();
   const fotoOk=fotoValida(usuario?.avatar);
-  const cnhOk=Boolean(validCnh(p));
+  const cnhOk=Boolean(validCnh(p)&&p.cnh.ear);
   const vehicles=await Vehicle.find({userId:p.userId,status:'aprovado'}).lean();
-  const veiculosOk=services.every(code=>vehicles.some(v=>cnhSupportsVehicle(p.cnh?.categoria,v.tipo)&&validVehicle(v,code)));
-  // A liberacao manual e individual para o perfil selecionado pelo administrador.
-  // EAR nao participa da elegibilidade. Revogacao: suspender/reprovar o perfil.
+  const veiculosOk=services.every(code=>vehicles.some(v=>v.placaConferidaEm&&cnhSupportsVehicle(p.cnh?.categoria,v.tipo)&&validVehicle(v,code)));
+  // A administracao pode concluir a analise do CADASTRO sem aprovar documentos.
+  // Isso NAO habilita motorista em corridas reais: setAvailability, setLocation e
+  // acceptOffer continuam exigindo CNH aprovada e veiculo regular.
   const restrita=!fotoOk||!cnhOk||!veiculosOk;
   if(!restrita){
    for(const code of services){
@@ -90,14 +100,12 @@ async function reviewProfile(req,res){
     }
    }
   }
-  p.status='aprovado';p.aprovacaoRestrita=restrita;p.liberacaoManual=true;
+  p.status='aprovado';p.aprovacaoRestrita=restrita;
   p.servicosAprovados=[...new Set(services)];
   p.fotoAprovadaUrl=fotoOk?usuario.avatar:null;p.motivo='';
-  // Seleciona o veiculo cadastrado compativel com a modalidade aprovada, caso ainda nao selecionado.
-  if(!p.veiculoAtivoId){const candidatos=await Vehicle.find({userId:p.userId}).lean();const escolhido=candidatos.find(v=>services.some(code=>serviceVehicleCompatible(code,v.tipo)));if(escolhido)p.veiculoAtivoId=escolhido._id;}
- }else{p.status=choice==='suspender'?'suspenso':choice==='reprovar'?'reprovado':'em_analise';p.servicosAprovados=[];p.aprovacaoRestrita=false;p.liberacaoManual=false;}
+ }else{p.status=choice==='suspender'?'suspenso':choice==='reprovar'?'reprovado':'em_analise';p.servicosAprovados=[];p.aprovacaoRestrita=false;}
  p.online=false;p.servicosAtivos=[];p.avaliadoEm=new Date();p.avaliadoPor=req.userId;p.motivo=reason;
- await p.save();await audit(req,`admin.perfil.${choice}`,p._id,choice==='aprovar'&&p.aprovacaoRestrita?'Liberacao manual individual; documentos ainda pendentes':reason);
+ await p.save();await audit(req,`admin.perfil.${choice}`,p._id,choice==='aprovar'&&p.aprovacaoRestrita?'Aprovacao administrativa restrita: documentos pendentes':reason);
  emit(req.app,p.userId,'perfil:aprovacao',{status:p.status,servicos:p.servicosAprovados});
  res.json({ok:true,perfilId:p._id,status:p.status,servicosAprovados:p.servicosAprovados,aprovacaoRestrita:!!p.aprovacaoRestrita});
 }
