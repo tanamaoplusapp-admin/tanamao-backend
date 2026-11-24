@@ -54,12 +54,13 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
 
     const isMobilidadeOferta = payload.type === 'MOBILIDADE_OFERTA' || payload.data?.type === 'MOBILIDADE_OFERTA';
     const expiraEm = new Date(payload.data?.expiraEm || 0).getTime();
-    // TTL restante: evita entregar alertas atrasados de ofertas de 25 segundos.
+    // TTL restante: acompanha o prazo real da oferta, inclusive em tela bloqueada.
     if (isMobilidadeOferta && (!Number.isFinite(expiraEm) || expiraEm <= Date.now())) {
       return false; // Não enviar alertas de corridas já encerradas.
     }
-    const restanteMs = Number.isFinite(expiraEm) && expiraEm > Date.now()
-      ? Math.max(1000, Math.min(25000, expiraEm - Date.now())) : 25000;
+    const restanteMs = isMobilidadeOferta
+      ? Math.max(1000, Math.min(120000, expiraEm - Date.now()))
+      : 25000;
     const normalizedData = normalizeDataPayload({
       ...(payload.data || {}),
 

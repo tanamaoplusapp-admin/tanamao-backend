@@ -5,7 +5,10 @@ const { buscarElegiveis } = require('./mobilidadeCandidatos');
 const PoliticaMoto=require('./mobilidadePoliticaMoto');
 const {emit}=require('./mobilidadeSocket');
 const {enviarPushParaUsuario}=require('./pushService');
-const OFFER_SECONDS=25;
+// O motorista precisa ter tempo para abrir notificacoes com o aparelho bloqueado.
+// O app recebe o prazo real em ofertaExpiraEm; nao precisa de nova build.
+// Permite ajustar no Render: MOBILITY_OFFER_SECONDS (30 a 120, padrao 75).
+const OFFER_SECONDS=Math.min(120,Math.max(30,Math.floor(Number(process.env.MOBILITY_OFFER_SECONDS)||75)));
 const MAX_ATTEMPTS=12;
 async function dispatchOne(app,jobId){
  const job=await Job.findById(jobId).lean();
