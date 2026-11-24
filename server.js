@@ -227,6 +227,9 @@ app.use('/api/admin', adminFinanceRoutes.router || adminFinanceRoutes)
 app.use('/api/admin', adminUsersRoutes.router || adminUsersRoutes)
 
 // BUGS ADMIN
+// Public app error intake, authenticated and separately rate-limited.
+const reportBugAuth = require('./middleware/verifyToken');
+app.post('/api/bugs/report', rateLimit({windowMs:60000,max:15,standardHeaders:true,legacyHeaders:false}), reportBugAuth, require('./controllers/bugsController').report);
 app.use('/api/admin/bugs', adminBugRoutes.router || adminBugRoutes)
 
 // AUDITORIA ADMIN
