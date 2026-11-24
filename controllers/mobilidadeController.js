@@ -129,7 +129,7 @@ async function updateVehicle(req,res){
 }
 async function selectVehicle(req,res){
  const {profile}=await ownedProfile(req);assertIdle(profile);const v=await getVehicle(req);
- if(v.status!=='aprovado')error(403,'Veiculo ainda nao aprovado');
+ if(v.status!=='aprovado' && !(profile.liberacaoManual === true && v.status==='pendente'))error(403,'Veículo ainda não aprovado');
  profile.veiculoAtivoId=v._id;profile.online=false;profile.servicosAtivos=[];await profile.save();
  res.json({ok:true,perfil:publicProfile(profile)});
 }
@@ -159,7 +159,7 @@ async function getAvailability(req,res){const {profile}=await ownedProfile(req);
 async function setLocation(req,res){
  const p=calc.point({...req.body,endereco:'gps',cidade:'GPS',uf:'MS'});
  const {profile}=await ownedProfile(req);
- if(profile.status!=='aprovado'||!calc.validCnh(profile))error(403,'Aprovacao do motorista e CNH valida obrigatorias');
+ if(profile.status!=='aprovado' || (profile.liberacaoManual !== true && !calc.validCnh(profile)))error(403,'Perfil não aprovado ou CNH pendente de aprovação');
  const updated=await Profile.findOneAndUpdate({_id:profile._id},{$set:{localizacao:{type:'Point',coordinates:[p.lng,p.lat]},ultimaLocalizacaoEm:new Date()}},{new:true});
  res.json({ok:true,ultimaLocalizacaoEm:updated.ultimaLocalizacaoEm});
  if(profile.emViagemId){const job=await Job.findOne({_id:profile.emViagemId,motoristaId:own(req)}).lean();if(job&&['aceita','no_local','em_andamento'].includes(job.status))emit(req.app,job.clienteId,'viagem:localizacao',{id:String(job._id),latitude:p.lat,longitude:p.lng,atualizadoEm:updated.ultimaLocalizacaoEm});}
@@ -173,17 +173,17 @@ async function setAvailability(req,res){
  const {prof}=await ownedProfile(req);
  if(!Pagamento.listarFormas(prof).length)error(409,'Ative Pix, Cartao ou Dinheiro em Formas de pagamento do perfil profissional');
  const usuario=await User.findById(own(req)).select('acessoExpiraEm subscriptionStatus status avatar').lean();
- if(!fotoAprovada(profile,usuario))error(403,'Foto do motorista ausente, alterada ou ainda nao aprovada. Envie a foto e aguarde a analise no painel');
+ if(profile.liberacaoManual !== true && !fotoAprovada(profile,usuario))error(403,'Foto do motorista ausente, alterada ou ainda não aprovada. Envie a foto e aguarde a análise no painel');
  if(!usuario||usuario.status==='blocked'||['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo. Regularize o acesso como os demais prestadores');
- if(profile.status!=='aprovado'||!calc.validCnh(profile))error(403,'CNH/perfil de mobilidade nao aprovado ou vencido');
+ if(profile.status!=='aprovado' || (profile.liberacaoManual !== true && !calc.validCnh(profile)))error(403,'Perfil de mobilidade não aprovado ou CNH pendente');
  if(!profile.veiculoAtivoId)error(400,'Selecione um veiculo aprovado');
  const vehicle=await Vehicle.findOne({_id:profile.veiculoAtivoId,userId:own(req)}).lean();
- if(!vehicle||vehicle.status!=='aprovado')error(403,'Veiculo nao aprovado');
+ if(!vehicle || (profile.liberacaoManual === true ? !['aprovado','pendente'].includes(vehicle.status) : vehicle.status !== 'aprovado'))error(403,'Veículo não aprovado');
  if(!profile.ultimaLocalizacaoEm||new Date(profile.ultimaLocalizacaoEm).getTime()<Date.now()-120000)error(409,'Envie localizacao atual antes de ficar online');
  const services=arrayServices(req.body.servicosAtivos);
  for(const svc of services){
   if(!profile.servicosAprovados.includes(svc))error(403,`Modalidade nao aprovada: ${svc}`);
-  if(!calc.cnhSupportsVehicle(profile.cnh.categoria,vehicle.tipo)||!calc.validVehicle(vehicle,svc,1))error(403,`Veiculo incompatível: ${svc}`);
+  if(!serviceVehicleCompatible(svc,vehicle.tipo) || (profile.liberacaoManual !== true && (!calc.cnhSupportsVehicle(profile.cnh?.categoria,vehicle.tipo)||!calc.validVehicle(vehicle,svc,1))) || (profile.liberacaoManual === true && svc.startsWith('corrida') && Number(vehicle.lugares || 0) < 2))error(403,`Veículo incompatível: ${svc}`);
  }
  // A elegibilidade geografica da moto e checada na origem de cada corrida,
  // nao na cidade de cadastro (o motorista pode atender varias cidades).
