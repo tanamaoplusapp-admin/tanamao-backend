@@ -144,6 +144,9 @@ router.post('/register-complete', createLimiter(100), registerComplete);
 
 router.post('/register-profissional', createLimiter(100), async (req, res) => {
   try {
+    let negocio;
+    try { negocio = require('../services/oportunidadesRegras').business(req.body); } catch(e) { return res.status(400).json({ok:false,message:e.message}); }
+    if(negocio.cnpj && await Profissional.exists({cnpj:negocio.cnpj})) return res.status(409).json({ok:false,message:'CNPJ já vinculado a outro cadastro.'});
     const {
       nome,
       email,
@@ -459,6 +462,7 @@ indicadoPor:
     ========================= */
 
     const profissionalData = {
+      ...negocio,
       userId: user._id,
 
       name: nome,

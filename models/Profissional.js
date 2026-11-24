@@ -44,6 +44,10 @@ tipoAtendimento: {
 IDENTIDADE
 ========================= */
 
+tipoPrestador: {type:String, enum:['autonomo','mei','empresa'], default:'autonomo', index:true},
+nomeFantasia: {type:String, trim:true, maxlength:100, default:''},
+cnpj: {type:String, unique:true, sparse:true, select:false},
+
 name:{
 type:String,
 required:true,

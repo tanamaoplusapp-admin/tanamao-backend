@@ -97,6 +97,8 @@ preferenciaProfissional: {
    * PAPEL
    * ============================ */
 
+  // Persist the existing admin account block; independent of mobility approval.
+  status: { type:String, enum:['active','blocked','ativo','bloqueado','inactive','suspended'], default:'active', index:true },
   role:{
     type:String,
     enum:['cliente','empresa','profissional','motorista','admin'],

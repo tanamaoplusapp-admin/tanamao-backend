@@ -1,0 +1,27 @@
+TANAMÃO+ — ATUALIZAÇÃO SERVIÇOS, EMPRESAS E OPORTUNIDADES
+
+INSTALAÇÃO
+1. Faça um commit/backup dos três projetos antes de extrair.
+2. Os ZIPs individuais contêm SOMENTE arquivos novos/modificados. Extraia o conteúdo de cada ZIP na raiz correspondente (backend, aplicativo, painel). NÃO apague os arquivos existentes. Mantenha a atualização anterior de mobilidade/tarifa dinâmica.
+3. Backend: antes de publicar, na raiz, execute node --test tests/oportunidades.test.cjs. Depois revise git diff e publique os arquivos no GitHub/Render. O novo módulo usa as variáveis MongoDB e Firebase já existentes. Não é necessário executar novamente o script de tarifas.
+4. O servidor tenta criar os índices de PedidoAberto e do CNPJ automaticamente quando conectado ao MongoDB. Verifique os logs [oportunidades.tick] / [oportunidades.worker]. Não há exclusão de tabelas nem migração destrutiva.
+5. Painel: na raiz, npm run build; publique após o backend. Menu Serviços e oportunidades.
+6. App: mantenha package.json, eas.json, configurações e assets atuais; npx expo start --clear. Teste os fluxos em contas de teste antes de gerar o IPA. Use eas build --platform ios --profile production --auto-submit se o perfil EAS/submit estiver configurado.
+
+O QUE FOI ENTREGUE
+- Cadastro de prestador em três etapas, com autônomo, MEI ou empresa de serviços; CPF do responsável e CNPJ comercial validado pelo algoritmo numérico tradicional, sem aprovação manual adicional. Não equivale a consulta cadastral oficial da Receita Federal.
+- Área Minha empresa: atalhos para agenda, orçamentos, financeiro, serviços, ofertas, galeria, avaliações, evolução e perfil existentes, além de edição da identidade comercial.
+- Cliente: novo pedido em três etapas, comparação de propostas, preço ou a combinar, visualização do perfil original, chat existente, aceite no pedido ou no perfil contextual. Aceitar encerra a busca; não cria cobrança ou agendamento automaticamente. Use as funções existentes de agendamento/contratação/orçamento para formalizar o serviço.
+- Prestador: oportunidades personalizadas pelo backend, envio/revisão de proposta, acompanhamento do aceite. Filtra por cidade e UF, ID da especialidade principal ou secundária, preferência de gênero, modalidade configurada, disponibilidade em urgência, situação da conta e acesso profissional vigente. Empresas usam o mesmo perfil profissional. A seleção é confirmada pelo cliente a partir do catálogo; não há IA de classificação de texto.
+- Notificações registradas no banco e encaminhadas ao Firebase existente: convite a prestador, nova proposta/revisão ao cliente, aceite ao escolhido e cancelamento a quem propôs. Links abrem o pedido. Processamento em lote pelo servidor, a cada 15s, quando o serviço está ativo; não exige painel aberto. Entrega push depende de token válido e permissões. O backend revalida a compatibilidade ao listar, abrir e enviar uma proposta. Máximo de 60 convites por pedido, em grupos de até 10; expiração por prazo. Oportunidades elegíveis podem aparecer na listagem mesmo antes da notificação.
+- Painel: contagens de pedidos e empresas/MEIs, filtro de pedidos recentes sem propostas, atualização a cada minuto enquanto aberto. Nenhuma nova fila de aprovação.
+- Mobilidade preservada; nenhum arquivo específico de cálculo de tarifa, motorista, veículo ou aprovação de mobilidade foi incluído. O cadastro profissional compartilhado e o schema User foram ajustados, sem retirar as aprovações próprias da mobilidade.
+
+TESTE RECOMENDADO ANTES DA PUBLICAÇÃO
+A. Cliente publica uma solicitação na cidade X e escolhe uma especialidade real. Um prestador e uma empresa da mesma cidade/especialidade devem ver a oportunidade; outro profissional incompatível não. Confirme as preferências e o acesso vigente.
+B. Envie duas propostas com valores diferentes. Confira notificação ao cliente e abertura do pedido. Abra os perfis; confira avaliações e portfólio. Retorne à comparação, converse pelo chat e aceite uma única proposta. Confira notificação ao prestador escolhido. Reenvie o aceite e teste proposta revisada; o backend rejeita um aceite de versão antiga.
+C. Cadastre autônomo, MEI e empresa de teste, e confirme liberação do perfil de serviços no fluxo já existente. Teste a troca para cliente e um cadastro/solicitação de mobilidade sem aprovação indevida.
+D. Verifique a central de oportunidades no painel; teste uma conta bloqueada e permissões de notificação desativadas.
+
+VALIDAÇÃO REALIZADA NESTE AMBIENTE
+13 testes unitários das regras de compatibilidade/CNPJ passaram; sintaxe dos JS/JSX modificados verificada. Não foram executados build EAS, build completo do painel, testes MongoDB/Firebase de integração ou teste de interface no celular. O ZIP do app enviado não contém package.json/eas.json. O ambiente de produção não foi alterado. Não foram adicionadas dependências novas. O site institucional permanece como está; perfis web, anexos de foto/vídeo no pedido, gestão financeira nova, marketing inteligente e automações gerais discutidas anteriormente não foram implementados nesta etapa. Não há vínculo automático entre PedidoAberto e o modelo de Service; a contratação/agendamento usa o fluxo existente via chat/perfil.

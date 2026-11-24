@@ -1193,6 +1193,9 @@ if (!user.preferenciaAtendimento) {
   profissoesDetalhadas,
 } = req.body || {};
 
+  let negocio;
+  try { negocio = require('../services/oportunidadesRegras').business(req.body); } catch(e) { return res.status(400).json({ok:false,message:e.message}); }
+  if(negocio.cnpj && await Profissional.exists({cnpj:negocio.cnpj})) {return res.status(409).json({ok:false,message:'CNPJ já vinculado a outro cadastro.'});}
   const cpfFinal =
     cpf ||
     user.cpf;
@@ -1402,6 +1405,7 @@ if (
   ========================= */
 
   const profissionalData = {
+    ...negocio,
     userId: user._id,
 
     name: user.name,

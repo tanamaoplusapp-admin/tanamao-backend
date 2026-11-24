@@ -242,6 +242,7 @@ app.use('/api/admin', adminCentralMensalidadeRoutes.router || adminCentralMensal
 const authRoutes = require('./routes/authRoutes');
 // Mobilidade Tanamao+: endpoints isolados e protegidos por flag.
 // Nao altera rotas /api/motorista ou /api/drivers existentes.
+app.use('/api/pedidos-abertos', require('./routes/pedidosAbertosRoutes'));
 app.use('/api/mobilidade', require('./routes/mobilidadeRoutes'));
 app.use('/api/admin/mobilidade', require('./routes/mobilidadeAdminRoutes'));
 
@@ -433,6 +434,7 @@ const PORT = process.env.PORT || 5000;
 
 // Redistribui ofertas expiradas; ativo somente quando habilitado por variavel de ambiente.
 require('./services/mobilidadeDespacho').start(app);
+require('./services/oportunidades').start();
 
 server.listen(PORT, '0.0.0.0', () =>
   console.log(`🚀 ${config.appName} rodando com WebSocket na porta ${PORT}`)
