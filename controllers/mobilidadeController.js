@@ -497,7 +497,17 @@ async function messages(req,res){
  const row=await Message.create({solicitacaoId:j._id,autorId:user,texto,codigoRapido:codigo||null});
  const outro=cliente?j.motoristaId:j.clienteId;
  emit(req.app,outro,'viagem:mensagem',{viagemId:String(j._id),mensagem:{id:row._id,autorId:user,texto,createdAt:row.createdAt}});
- Promise.resolve().then(()=>enviarPushParaUsuario(outro,{title:'Mensagem no Tanamao+',body:'Voce tem uma nova mensagem sobre a viagem.',type:'MOBILIDADE_MENSAGEM',data:{mobilidadeSolicitacaoId:String(j._id)}})).catch(()=>{});
+ // A notificação aponta para a viagem e informa o papel do DESTINATARIO,
+ // nao do remetente; isso permite abrir o chat correto dos dois lados.
+ if(outro){
+  const destinatarioTipo=cliente?'profissional':'cliente';
+  Promise.resolve().then(()=>enviarPushParaUsuario(outro,{
+    title:cliente?'Mensagem do passageiro':'Mensagem do motorista',
+    body:'Toque para ler e responder no chat da corrida.',
+    type:'MOBILIDADE_MENSAGEM',
+    data:{mobilidadeSolicitacaoId:String(j._id),solicitacaoId:String(j._id),destinatarioTipo,abrirChat:'1'}
+  })).catch(e=>console.warn('[mobilidade chat] Falha ao enviar push:',e?.message||e));
+ }
  res.status(201).json({ok:true,mensagem:row});
 }
 
