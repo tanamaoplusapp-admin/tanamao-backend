@@ -630,7 +630,7 @@ if (user.role === 'profissional') {
   const agora = new Date();
 
   const expira = new Date(
-    agora.getTime() + 45 * 24 * 60 * 60 * 1000
+    agora.getTime() + 10 * 24 * 60 * 60 * 1000
   );
 
   user.perfilAtivo = true;
@@ -1480,7 +1480,7 @@ profissoesDetalhadas:
   const expira =
     new Date(
       agora.getTime() +
-      45 * 24 * 60 * 60 * 1000
+      10 * 24 * 60 * 60 * 1000
     );
 
   user.temPerfilProfissional =
