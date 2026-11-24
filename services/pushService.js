@@ -53,6 +53,7 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
         : 1;
 
     const isMobilidadeOferta = payload.type === 'MOBILIDADE_OFERTA' || payload.data?.type === 'MOBILIDADE_OFERTA';
+    const isMobilidadeCliente = payload.type === 'MOBILIDADE_CLIENTE_STATUS' || payload.data?.type === 'MOBILIDADE_CLIENTE_STATUS';
     const expiraEm = new Date(payload.data?.expiraEm || 0).getTime();
     // TTL restante: acompanha o prazo real da oferta, inclusive em tela bloqueada.
     if (isMobilidadeOferta && (!Number.isFinite(expiraEm) || expiraEm <= Date.now())) {
@@ -115,7 +116,7 @@ exports.enviarPushParaUsuario = async (userId, payload = {}) => {
         priority: 'high',
         ...(isMobilidadeOferta ? { ttl: restanteMs } : {}),
         notification: {
-          channelId: isMobilidadeOferta ? 'tanamao-corridas-v2' : 'default',
+          channelId: isMobilidadeOferta ? 'tanamao-corridas-v2' : isMobilidadeCliente ? 'tanamao-corridas-cliente-v1' : 'default',
           sound: 'default',
           priority: 'high',
           icon: 'ic_notification',

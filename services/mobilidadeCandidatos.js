@@ -13,6 +13,7 @@ const { fotoAprovada } = require('./mobilidadeFoto');
 const Vehicle = require('../models/MobilidadeVeiculo');
 const { kilometers, validCnh, validVehicle, cnhSupportsVehicle } = require('./mobilidadeCalculo');
 const PoliticaMoto = require('./mobilidadePoliticaMoto');
+const {veiculoComfort}=require('./mobilidadeComfort');
 const LIMIT_KM = Math.min(100, Math.max(1, Number(process.env.MOBILITY_MAX_PICKUP_KM) || 25));
 // Diagnóstico agregado, opcional, sem dados do passageiro, placa ou GPS.
 const diagnostico = (fase, quantidade) => {
@@ -29,6 +30,7 @@ function documentosAutorizados(perfil, usuario) {
 
 function veiculoCompativel(perfil, veiculo, solicitacao) {
   if (!veiculo || String(veiculo.userId) !== String(perfil.userId)) return false;
+  if(solicitacao.categoriaCorrida==='comfort'&&!veiculoComfort(veiculo))return false;
   if (perfil.liberacaoManual !== true) {
     return cnhSupportsVehicle(perfil.cnh?.categoria, veiculo.tipo) &&
       validVehicle(veiculo, solicitacao.servico, solicitacao.passageiros, solicitacao.carga, solicitacao.tipoVeiculo);

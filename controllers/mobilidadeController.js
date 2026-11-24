@@ -15,6 +15,8 @@ const Message=require('../models/MobilidadeMensagem');
 const Dinamica=require('../services/mobilidadeDinamica');
 const ChatRapido=require('../services/mobilidadeChatRapido');
 const {enviarPushParaUsuario}=require('../services/pushService');
+const {notificarClienteEtapa}=require('../services/mobilidadeNotificacoesCliente');
+const Comfort=require('../services/mobilidadeComfort');
 const Avaliacao=require('../models/Avaliacao');
 const AvaliacaoMobilidade=require('../models/MobilidadeAvaliacao');
 const Profissional=require('../models/Profissional');
@@ -48,7 +50,7 @@ function assertIdle(profile){if(profile.emViagemId)error(409,'Finalize a viagem 
 function publicProfile(profile){const x=profile.toObject?profile.toObject():{...profile};if(x.cnh){delete x.cnh.numeroCriptografado;}return x;}
 async function getVehicle(req){const v=await Vehicle.findOne({_id:id(req.params.vehicleId),userId:own(req)});if(!v)error(404,'Veiculo nao encontrado');return v;}
 
-async function catalog(req,res){res.json({ok:true,servicos:SERVICES,veiculos:VEHICLES,formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',regras:{corridaMotoHabilitadaPorLocalidade:true,aprovacaoCNHManual:true,documentosPrivados:true}});}
+async function catalog(req,res){res.json({ok:true,servicos:SERVICES,veiculos:VEHICLES,formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',regras:{corridaMotoHabilitadaPorLocalidade:true,aprovacaoCNHManual:true,documentosPrivados:true},categoriaCarro:{normal:true,comfortConfigurado:Comfort.configurado()}});}
 
 // Consulta antecipada pelo ponto de embarque. Usa a mesma verificacao
 // de cidade/PAIS que a cotacao para nao confiar na cidade informada pelo cliente.
@@ -56,8 +58,9 @@ async function modalidadesOrigem(req,res){
  const origem=calc.point(req.body?.origem);
  await validarLocalidade(origem, req.body?.origem?.validacao);
  const corridaMoto=await PoliticaMoto.consultar(origem);
+ const disponivelComfort=await Comfort.disponivelNaOrigem(origem);
  res.set('Cache-Control','private, no-store');
- res.json({ok:true,origem:{cidade:origem.cidade,uf:origem.uf,pais:origem.pais},corridaMoto,
+ res.json({ok:true,origem:{cidade:origem.cidade,uf:origem.uf,pais:origem.pais},corridaMoto,categoriaCarro:{normal:true,comfort:disponivelComfort},
   observacao:'Modalidades de entrega e corridas de carro seguem suas proprias regras e aprovacao.'});
 }
 async function getProfile(req,res){const {profile,prof}=await ownedProfile(req);const [vehicles,usuario]=await Promise.all([Vehicle.find({userId:own(req)}).sort({createdAt:-1}).lean(),User.findById(own(req)).select('avatar').lean()]);res.set('Cache-Control','private, no-store');res.json({ok:true,perfil:publicProfile(profile),veiculos:vehicles,fotoMotorista:usuario?.avatar||null,fotoAprovada:fotoAprovada(profile,usuario),formasPagamento:Pagamento.listarFormas(prof),recebimento:'diretamente_ao_prestador'});}
@@ -241,11 +244,15 @@ function requestData(body){
 }
 async function quote(req,res){
  const params=requestData(req.body||{});
+ params.categoriaCorrida=Comfort.categoriaCorrida(req.body?.categoriaCorrida,params.servico);
  await Promise.all([
   validarLocalidade(params.origem, req.body?.origem?.validacao),
   validarLocalidade(params.destino, req.body?.destino?.validacao),
  ]);
  if(params.servico==='corrida_moto'){const policy=await PoliticaMoto.consultar(params.origem);if(!policy.permitida)error(403,policy.mensagem);}
+ if(params.categoriaCorrida==='comfort') {
+  if(!Comfort.configurado()||!(await Comfort.disponivelNaOrigem(params.origem))) error(409,'Comfort indisponível nesta origem. Selecione Normal.');
+ }
  const cliente=await User.findById(own(req)).select('genero preferenciaProfissional').lean();
  const preferencia=Preferencias.preferenciaParaCotacao(cliente,req.body?.preferenciaMotorista);
  const localidades=calc.tarifaLocalidades(params.origem,params.destino);
@@ -267,10 +274,13 @@ async function quote(req,res){
    value=Math.min(value,Math.floor(precoCarro*0.85));
   }
  }
- const multiplicadorDinamico=value>valorBaseCentavos?Math.round(value/valorBaseCentavos*100)/100:1;
- const adicionalDinamicoCentavos=Math.max(0,value-valorBaseCentavos);
- const rec=await Quote.create({...params,...preferencia,clienteId:own(req),distanciaKm:route.km,duracaoMin:route.min,metodoRota:route.method,valorCentavos:value,valorBaseCentavos:Math.min(valorBaseCentavos,value),multiplicadorDinamico,adicionalDinamicoCentavos,tarifaId:tariff._id,expiraEm:new Date(Date.now()+5*60000)});
- res.status(201).json({ok:true,cotacao:{id:rec._id,servico:rec.servico,veiculo:rec.tipoVeiculo,distanciaKm:rec.distanciaKm,duracaoMin:rec.duracaoMin,metodoRota:rec.metodoRota,valorCentavos:rec.valorCentavos,valorBaseCentavos:rec.valorBaseCentavos,adicionalDinamicoCentavos:rec.adicionalDinamicoCentavos,multiplicadorDinamico:rec.multiplicadorDinamico,expiraEm:rec.expiraEm,preferenciaMotorista:rec.preferenciaMotorista},formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',aviso:route.method==='aproximacao'?'Estimativa tecnica, nao e rota rodoviaria real. Confira antes de cobrar.':undefined});
+ const valorAntesComfort=value;
+ const adicionalComfortCentavos=params.categoriaCorrida==='comfort'?Comfort.adicionalComfort(valorAntesComfort):0;
+ value+=adicionalComfortCentavos;
+ const multiplicadorDinamico=valorAntesComfort>valorBaseCentavos?Math.round(valorAntesComfort/valorBaseCentavos*100)/100:1;
+ const adicionalDinamicoCentavos=Math.max(0,valorAntesComfort-valorBaseCentavos);
+ const rec=await Quote.create({...params,...preferencia,clienteId:own(req),distanciaKm:route.km,duracaoMin:route.min,metodoRota:route.method,valorCentavos:value,valorBaseCentavos:Math.min(valorBaseCentavos,value),multiplicadorDinamico,adicionalDinamicoCentavos,adicionalComfortCentavos,tarifaId:tariff._id,expiraEm:new Date(Date.now()+5*60000)});
+ res.status(201).json({ok:true,cotacao:{id:rec._id,servico:rec.servico,veiculo:rec.tipoVeiculo,distanciaKm:rec.distanciaKm,duracaoMin:rec.duracaoMin,metodoRota:rec.metodoRota,valorCentavos:rec.valorCentavos,valorBaseCentavos:rec.valorBaseCentavos,adicionalDinamicoCentavos:rec.adicionalDinamicoCentavos,adicionalComfortCentavos:rec.adicionalComfortCentavos,categoriaCorrida:rec.categoriaCorrida,multiplicadorDinamico:rec.multiplicadorDinamico,expiraEm:rec.expiraEm,preferenciaMotorista:rec.preferenciaMotorista},formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',aviso:route.method==='aproximacao'?'Estimativa tecnica, nao e rota rodoviaria real. Confira antes de cobrar.':undefined});
 }
 async function createRequest(req,res){
  const quoteId=id(req.body?.cotacaoId),client=own(req);
@@ -284,7 +294,7 @@ async function createRequest(req,res){
  if(!claimed)error(409,'Esta cotacao ja foi confirmada');
  let job;
  try{
-  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,origem:cotacao.origem,destino:cotacao.destino,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,pagamento:{metodo:formaPagamento,status:'pendente'}});
+  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,categoriaCorrida:cotacao.categoriaCorrida||'normal',adicionalComfortCentavos:cotacao.adicionalComfortCentavos||0,origem:cotacao.origem,destino:cotacao.destino,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,pagamento:{metodo:formaPagamento,status:'pendente'}});
  }catch(e){await Quote.updateOne({_id:cotacao._id,usadoEmSolicitacao:jobId},{$set:{usadoEmSolicitacao:null}});throw e;}
  await audit(req,'solicitacao.criada',job._id,job.servico);
  try{await dispatchOne(req.app,job._id);}catch(e){console.error('[mobilidade] solicitacao registrada; tentativa de despacho sera repetida:',e.message);}
@@ -374,6 +384,7 @@ async function acceptOffer(req,res){
  finally{if(!accepted)await Profile.updateOne({_id:profile._id,emViagemId:job._id},{$set:{emViagemId:null}});}
  if(!accepted)error(409,await motivoOfertaIndisponivel(job._id,user));
  emit(req.app,job.clienteId,'viagem:atualizada',{id:String(job._id),status:'aceita',motoristaId:String(user)});
+ notificarClienteEtapa(job.clienteId,job._id,'aceita');
  res.json({ok:true,solicitacao:accepted});
 }
 async function rejectOffer(req,res){
@@ -389,7 +400,7 @@ async function assignedJob(req,expected){
  if(!job)error(404,'Viagem nao encontrada para este motorista');
  if(expected&&!expected.includes(job.status))error(409,'Transicao de status nao permitida');return job;
 }
-async function driverArrive(req,res){const j=await assignedJob(req,['aceita']);const updated=await Job.findOneAndUpdate({_id:j._id,status:'aceita',motoristaId:own(req)},{$set:{status:'no_local',chegadaEm:new Date()}},{new:true});if(!updated)error(409,'Status ja mudou');emit(req.app,j.clienteId,'viagem:atualizada',{id:String(j._id),status:'no_local'});res.json({ok:true,solicitacao:updated});}
+async function driverArrive(req,res){const j=await assignedJob(req,['aceita']);const updated=await Job.findOneAndUpdate({_id:j._id,status:'aceita',motoristaId:own(req)},{$set:{status:'no_local',chegadaEm:new Date()}},{new:true});if(!updated)error(409,'Status ja mudou');emit(req.app,j.clienteId,'viagem:atualizada',{id:String(j._id),status:'no_local'});notificarClienteEtapa(j.clienteId,j._id,'no_local');res.json({ok:true,solicitacao:updated});}
 // Transicoes sem PIN: somente o motorista designado pode iniciar e concluir,
 // sempre na ordem aceita -> no_local -> em_andamento -> concluida.
 async function tripTransition(req,res,phase){
@@ -407,6 +418,7 @@ async function tripTransition(req,res,phase){
  Promise.resolve().then(()=>audit(req,phase==='iniciar'?'viagem.iniciada':'viagem.concluida',job._id))
   .catch(e=>console.warn('[mobilidade] falha ao registrar auditoria de etapa:',e.message));
  emit(req.app,job.clienteId,'viagem:atualizada',{id:String(job._id),status:next});
+ notificarClienteEtapa(job.clienteId,job._id,next);
  res.json({ok:true,solicitacao:updated});
 }
 const startTrip=(req,res)=>tripTransition(req,res,'iniciar');

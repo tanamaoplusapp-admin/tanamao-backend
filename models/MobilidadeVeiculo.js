@@ -12,6 +12,7 @@ const schema = new S({
   capacidadeKg:{type:Number,min:0,max:80000,default:0},
   capacidadeM3:{type:Number,min:0,max:150,default:0},
   lugares:{type:Number,min:1,max:60,default:1},
+  confortoAprovado:{type:Boolean,default:false}, // Somente administrador pode marcar.
   crlvValidade:{type:Date}, dadosAtualizadosEm:{type:Date,default:Date.now}, rntrc:{type:String,maxlength:32},
   status:{type:String,enum:['pendente','aprovado','reprovado','suspenso'],default:'pendente',index:true},
   motivo:{type:String,maxlength:500}, avaliadoEm:Date, avaliadoPor:{type:S.Types.ObjectId,ref:'User'},
