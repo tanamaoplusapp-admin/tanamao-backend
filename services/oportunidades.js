@@ -1,5 +1,7 @@
 'use strict';
 const mongoose=require('mongoose');const Pedido=require('../models/PedidoAberto');const Prof=require('../models/Profissional');const User=require('../models/user');const Notification=require('../models/Notification');const {sendNotification}=require('./notificationService');const R=require('./oportunidadesRegras');
+// Global sanitizeFilter remains enabled. Trust only server-defined operators, never a request object.
+const T = operators => mongoose.trusted(operators);
 const oid=x=>new mongoose.Types.ObjectId(String(x));
 const fields='name role cidade estado genero preferenciaAtendimento preferenciaProfissional receberServicos status statusCadastro perfilAtivo notificacoesAtivas pushEnabled acessoExpiraEm active';
 async function user(id){return User.findById(id).select(fields).lean();}
@@ -7,9 +9,9 @@ async function profile(id){return Prof.findOne({userId:id}).select('userId name 
 async function eligible(pedido,p,u,client){return R.matches(pedido,p,u,client||await user(pedido.cliente));}
 async function candidates(pedido){
  const client=await user(pedido.cliente); if(!R.enabled(client))return [];
- const profiles=await Prof.find({userId:{$exists:true,$ne:null},$or:[{profissaoId:pedido.profissaoId},{'profissoesDetalhadas.profissaoId':pedido.profissaoId}]}).setOptions({sanitizeFilter:false}).select('userId profissaoId profissoesDetalhadas endereco tipoAtendimento status statusCadastro online operationalStatus aceitaServicoImediato atendeEmergencia metrics').lean();
+ const profiles=await Prof.find({userId:T({$exists:true,$ne:null}),$or:[{profissaoId:pedido.profissaoId},{'profissoesDetalhadas.profissaoId':pedido.profissaoId}]}).select('userId profissaoId profissoesDetalhadas endereco tipoAtendimento status statusCadastro online operationalStatus aceitaServicoImediato atendeEmergencia metrics').lean();
  const local=profiles.filter(p=>(!p.endereco?.cidade&&!p.endereco?.cidadeSlug||R.city(p.endereco?.cidade||p.endereco?.cidadeSlug)===pedido.cidadeSlug)&&(!p.endereco?.estado||R.uf(p.endereco?.estado)===pedido.uf));
- const accounts=await User.find({_id:{$in:local.map(p=>p.userId)}}).setOptions({sanitizeFilter:false}).select(fields).lean(); const map=new Map(accounts.map(u=>[R.id(u._id),u]));
+ const accounts=await User.find({_id:T({$in:local.map(p=>p.userId)})}).select(fields).lean(); const map=new Map(accounts.map(u=>[R.id(u._id),u]));
  const excluded=new Set((pedido.convidados||[]).map(R.id));
  return local.filter(p=>!excluded.has(R.id(p.userId))&&R.matches(pedido,p,map.get(R.id(p.userId)),client)).sort((a,b)=>R.rank(pedido,b)-R.rank(pedido,a)||R.id(a.userId).localeCompare(R.id(b.userId))).filter((p,i,all)=>all.findIndex(x=>R.id(x.userId)===R.id(p.userId))===i);
 }
@@ -20,9 +22,9 @@ async function ensureIndexes(){if(indexed)return;await Pedido.createIndexes();aw
 async function tick(){if(busy||mongoose.connection.readyState!==1)return; busy=true;try{
  await ensureIndexes();
  // Mark expired offers without deleting history; do not send old invitations.
- await Pedido.updateMany({status:'aberto',expiraEm:{$lte:new Date()}},{$set:{status:'expirado'}});
+ await Pedido.updateMany({status:'aberto',expiraEm:T({$lte:new Date()})},{$set:{status:'expirado'}});
  for(let i=0;i<12;i++){
-  const now=new Date();const doc=await Pedido.findOneAndUpdate({$and:[{$or:[{processandoAte:null},{processandoAte:{$lte:now}}]},{$or:[{status:'aberto',expiraEm:{$gt:now},proximaBusca:{$lte:now}},{eventos:{$elemMatch:{done:false}}}]}]},{$set:{processandoAte:new Date(Date.now()+180000)}},{new:true,sort:{updatedAt:1}}).lean();if(!doc)break;
+  const now=new Date();const doc=await Pedido.findOneAndUpdate({$and:[{$or:[{processandoAte:null},{processandoAte:T({$lte:now})}]},{$or:[{status:'aberto',expiraEm:T({$gt:now}),proximaBusca:T({$lte:now})},{eventos:T({$elemMatch:{done:false}})}]}]},{$set:{processandoAte:new Date(Date.now()+180000)}},{new:true,sort:{updatedAt:1}}).lean();if(!doc)break;
   try{
    if(open(doc)&&new Date(doc.proximaBusca)<=now){
     const remaining=Math.max(0,60-(doc.convidados||[]).length);
@@ -30,7 +32,7 @@ async function tick(){if(busy||mongoose.connection.readyState!==1)return; busy=t
     const events=group.map(p=>event(`invite:${p.userId}`,p.userId,'PEDIDO_ABERTO_OPORTUNIDADE','profissional','Nova oportunidade de trabalho','Um cliente da sua cidade precisa de um serviço da sua especialidade. Confira e envie sua proposta.'));
     const update={$set:{proximaBusca:new Date(Date.now()+(group.length&&remaining>group.length?5:30)*60000)}};
     if(group.length){update.$addToSet={convidados:{$each:group.map(p=>p.userId)}};update.$push={eventos:{$each:events}};}
-    await Pedido.updateOne({_id:doc._id,status:'aberto',expiraEm:{$gt:new Date()}},update);
+    await Pedido.updateOne({_id:doc._id,status:'aberto',expiraEm:T({$gt:new Date()})},update);
    }
    const current=await Pedido.findById(doc._id).lean();
    for(const e of (current.eventos||[]).filter(x=>!x.done).slice(0,30)){

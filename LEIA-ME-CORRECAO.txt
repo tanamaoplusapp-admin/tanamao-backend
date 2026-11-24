@@ -1,0 +1,20 @@
+TANAMÃO+ — CORREÇÃO URGENTE DE PEDIDOS ABERTOS (24/11/2026)
+
+Extraia este ZIP na raiz do backend atual (sobre a atualização de serviços anterior).
+Não substitua o projeto inteiro. Preserve os demais arquivos e as variáveis do Render.
+
+Antes de publicar, com dependências existentes instaladas:
+  node --test tests/oportunidades-filtros.test.cjs tests/oportunidades.test.cjs
+
+Publicação:
+  git add routes/pedidosAbertosRoutes.js services/oportunidades.js models/PedidoAberto.js tests/oportunidades-filtros.test.cjs
+  git commit -m "Corrigir filtros MongoDB de pedidos e oportunidades"
+  git push
+
+O Render está configurado com auto-deploy. Após o deploy, teste o app atual. Não é necessário gerar novo IPA apenas para esta correção.
+
+Causa confirmada nos logs: erro HTTP 500 em /api/pedidos-abertos/catalogo e /api/pedidos-abertos/oportunidades; CastError nos filtros $in/$ne e $lte no worker. A proteção global sanitizeFilter=true continua ligada. Somente operadores construídos pelo servidor são marcados com mongoose.trusted(). As respostas autenticadas do módulo passam a não utilizar cache condicional.
+
+Verifique nos logs que não há repetição dos erros [oportunidades.tick] e [pedidos-abertos]. Teste a publicação, listagem em um prestador compatível, proposta, aceite e notificações. Nenhuma mudança nas tarifas, aprovações ou rotas de mobilidade. Não precisa executar seed ou migração.
+
+Validação local: sintaxe dos arquivos e 13 testes de regras anteriores. O novo teste de casting necessita das dependências do backend, não disponíveis neste ambiente (npm indisponível); deve ser executado na instalação real. Sem teste integrado com banco/Firebase nem deploy realizado por aqui.
