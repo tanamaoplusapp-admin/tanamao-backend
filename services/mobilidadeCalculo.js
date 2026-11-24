@@ -44,19 +44,73 @@ function tarifaLocalidades(origem,destino){
 }
 function serviceFor(tipo,veiculo,origem,destino){if(!VEHICLES.includes(veiculo))fail(400,'Veiculo desconhecido');if(tipo==='corrida'){if(!['moto','carro'].includes(veiculo))fail(400,'Corridas exigem moto ou carro');return `corrida_${veiculo}`;}if(tipo==='entrega'){if(veiculo==='caminhao')fail(400,'Para caminhao selecione frete');return veiculo==='moto'?'entrega_moto':'entrega_carro';}if(tipo==='frete'){if(veiculo==='moto')fail(400,'Frete de carga nao aceita moto');return scope(origem,destino);}fail(400,'Tipo invalido');}
 function kilometers(a,b){const R=6371,toRad=x=>x*Math.PI/180;const dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng);const aa=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa));}
+function addressForRoute(p){
+ const address=String(p?.endereco||'').trim();
+ const city=String(p?.cidade||'').trim();
+ if(!address || !city) return null;
+ if(norm(address).includes(norm(city))) return address;
+ const state=String(p?.uf||'').trim();
+ const country=p?.pais==='PY'?'Paraguai':'Brasil';
+ return [address,city,state,country].filter(Boolean).join(', ');
+}
+function parseGoogleRoute(data){
+ const r=data?.routes?.[0];
+ const meters=Number(r?.distanceMeters);
+ if(!r || !Number.isFinite(meters) || meters<=0) return null;
+ const durationSeconds=Number.parseFloat(String(r.duration||''));
+ return {
+  km:meters/1000,
+  min:Math.max(1,Math.ceil((Number.isFinite(durationSeconds)?durationSeconds:0)/60)),
+  method:'google_routes',
+ };
+}
 async function route(a,b){
- const googleKey=process.env.MOBILITY_GOOGLE_ROUTES_API_KEY;
- if(googleKey){
-  try{
-   const {data}=await axios.post('https://routes.googleapis.com/directions/v2:computeRoutes',{
-    origin:{location:{latLng:{latitude:a.lat,longitude:a.lng}}},destination:{location:{latLng:{latitude:b.lat,longitude:b.lng}}},travelMode:'DRIVE',routingPreference:'TRAFFIC_UNAWARE',languageCode:'pt-BR'
-   },{timeout:7000,headers:{'X-Goog-Api-Key':googleKey,'X-Goog-FieldMask':'routes.distanceMeters,routes.duration'}});
-   const first=data.routes?.[0];if(first?.distanceMeters){return {km:first.distanceMeters/1000,min:Math.max(1,Math.ceil((parseFloat(first.duration)||0)/60)),method:'google_routes'};}
-  }catch(e){if(!approximateEnabled())fail(503,'Servico de rotas indisponivel');}
+ const key=String(process.env.MOBILITY_GOOGLE_ROUTES_API_KEY||'').trim();
+ const approx=approximateEnabled();
+ if(key){
+  if(kilometers(a,b)<0.015) fail(400,'Origem e destino estão no mesmo local. Selecione dois pontos diferentes.');
+  async function query(origin,destination,kind){
+   try{
+    const {data}=await axios.post('https://routes.googleapis.com/directions/v2:computeRoutes',{
+     origin,destination,travelMode:'DRIVE',routingPreference:'TRAFFIC_UNAWARE',languageCode:'pt-BR'
+    },{timeout:8500,headers:{'X-Goog-Api-Key':key,'X-Goog-FieldMask':'routes.distanceMeters,routes.duration'}});
+    return parseGoogleRoute(data);
+   }catch(e){
+    const status=e?.response?.status;
+    // Apenas código HTTP/tipo da tentativa: nunca registrar chave, coordenadas ou endereços.
+    console.warn('[mobilidade/cotacao/rota] Falha Google Routes',kind,status||e?.code||'erro');
+    if(kind==='endereco' && (status===400 || status===404))return null;
+    if(kind==='coordenadas' && (status===400 || status===404))return null;
+    if(!approx)fail(503,'O serviço de rotas está indisponível. Tente novamente em instantes.');
+    return null;
+   }
+  }
+  const coords=(p)=>({location:{latLng:{latitude:p.lat,longitude:p.lng}}});
+  const direct=await query(coords(a),coords(b),'coordenadas');
+  if(direct)return direct;
+  // O Google pode não encontrar acesso rodoviário ao ponto exato. Uma segunda
+  // tentativa usa os endereços fornecidos, mas nunca inventa uma estimativa.
+  const addressA=addressForRoute(a),addressB=addressForRoute(b);
+  if(addressA && addressB && norm(addressA)!==norm(addressB)){
+   const byAddress=await query({address:addressA},{address:addressB},'endereco');
+   if(byAddress){
+    // Evita cotar outra localidade quando um endereço textual é ambíguo.
+    const straight=kilometers(a,b);
+    if(byAddress.km<=Math.max(8,straight*8))return byAddress;
+    console.warn('[mobilidade/cotacao/rota] Rota por endereco muito distante dos pontos selecionados');
+   }
+  }
+  if(!approx){
+   console.warn('[mobilidade/cotacao/rota] Sem trajeto dirigível entre os pontos selecionados');
+   fail(422,'Não encontramos uma rota de carro entre esses pontos. Ajuste a origem e o destino no mapa.');
+  }
  }
- if(!approximateEnabled())fail(503,'Configure MOBILITY_GOOGLE_ROUTES_API_KEY ou habilite estimativas apenas para testes');
- const km=Math.max(0.8,Math.round(kilometers(a,b)*1.3*100)/100);const velocidade=km>70?65:28;
- return {km,min:Math.max(3,Math.ceil(km/velocidade*60)),method:'aproximacao'};
+ if(!approx){
+  console.warn('[mobilidade/cotacao/rota] Chave de rota ausente na execução');
+  fail(503,'Cálculo de rotas temporariamente indisponível. Tente novamente.');
+ }
+ const km=Math.max(0.8,Math.round(kilometers(a,b)*1.3*100)/100);const speed=km>70?65:28;
+ return {km,min:Math.max(3,Math.ceil(km/speed*60)),method:'aproximacao'};
 }
 function price(tariff,km,min,carga={}){const x=tariff.bandeiradaCentavos+Math.ceil(km*tariff.porKmCentavos)+Math.ceil(min*tariff.porMinutoCentavos)+Math.ceil((carga.pesoKg||0)*(tariff.porKgCentavos||0))+Math.ceil((carga.volumeM3||0)*(tariff.porM3Centavos||0));if(!Number.isSafeInteger(x)||x<0||x>100000000)fail(409,'Valor de frete fora do limite; revise a tarifa');return Math.max(tariff.minimoCentavos,x);}
 function validateCargo(raw,service){const data=raw&&typeof raw==='object'?raw:{};const pesoKg=Number(data.pesoKg||0),volumeM3=Number(data.volumeM3||0);if(!Number.isFinite(pesoKg)||pesoKg<0||pesoKg>80000||!Number.isFinite(volumeM3)||volumeM3<0||volumeM3>150)fail(400,'Dimensoes de carga invalidas');if((service.startsWith('entrega')||service.startsWith('frete'))&&(!pesoKg||!String(data.descricao||'').trim()))fail(400,'Carga requer descricao e peso');return {pesoKg,volumeM3,descricao:String(data.descricao||'').trim().slice(0,500)};}
