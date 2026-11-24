@@ -20,9 +20,10 @@ const AvaliacaoMobilidade=require('../models/MobilidadeAvaliacao');
 const Profissional=require('../models/Profissional');
 const {ownedProfessional,id,error,audit}=require('../middleware/mobilidade');
 const {SERVICES,VEHICLES,serviceVehicleCompatible}=require('../config/mobilidade');
-const {encrypt,decrypt,pin,comparePin}=require('../services/mobilidadeCrypto');
+const {encrypt}=require('../services/mobilidadeCrypto');
 const calc=require('../services/mobilidadeCalculo');
 const {dispatchOne}=require('../services/mobilidadeDespacho');
+const {documentosAutorizados,veiculoCompativel}=require('../services/mobilidadeCandidatos');
 const {emit}=require('../services/mobilidadeSocket');
 const Pagamento=require('../services/mobilidadePagamento');
 const Preferencias=require('../services/mobilidadePreferencias');
@@ -93,8 +94,8 @@ async function setCNH(req,res){
  if(!/^\d{11}$/.test(numero))error(400,'Numero da CNH invalido');
  if(!['A','B','AB','C','AC','D','AD','E','AE'].includes(categoria))error(400,'Categoria da CNH invalida');
  if(validade<=new Date())error(400,'CNH ja vencida');
- // EAR e informacao facultativa no cadastro; so verdadeiro se confirmado explicitamente.
- profile.cnh={numeroCriptografado:encrypt(numero),ultimos4:numero.slice(-4),categoria,validade,ear:req.body.ear===true,enviadoEm:new Date(),status:'pendente'};
+ if(typeof req.body.ear!=='boolean')error(400,'Informe se a CNH possui EAR');
+ profile.cnh={numeroCriptografado:encrypt(numero),ultimos4:numero.slice(-4),categoria,validade,ear:req.body.ear,enviadoEm:new Date(),status:'pendente'};
  profile.status='em_analise';profile.online=false;profile.servicosAprovados=[];profile.servicosAtivos=[];
  await profile.save();await audit(req,'cnh.enviada',profile._id);
  res.json({ok:true,mensagem:'CNH registrada e aguardando verificacao manual',perfil:publicProfile(profile)});
@@ -128,7 +129,7 @@ async function updateVehicle(req,res){
 }
 async function selectVehicle(req,res){
  const {profile}=await ownedProfile(req);assertIdle(profile);const v=await getVehicle(req);
- if(v.status!=='aprovado'&&!profile.liberacaoManual)error(403,'Veiculo ainda nao aprovado');
+ if(v.status!=='aprovado')error(403,'Veiculo ainda nao aprovado');
  profile.veiculoAtivoId=v._id;profile.online=false;profile.servicosAtivos=[];await profile.save();
  res.json({ok:true,perfil:publicProfile(profile)});
 }
@@ -158,7 +159,7 @@ async function getAvailability(req,res){const {profile}=await ownedProfile(req);
 async function setLocation(req,res){
  const p=calc.point({...req.body,endereco:'gps',cidade:'GPS',uf:'MS'});
  const {profile}=await ownedProfile(req);
- if(profile.status!=='aprovado'||(!profile.liberacaoManual&&!calc.validCnh(profile)))error(403,'Perfil nao aprovado ou CNH pendente de aprovacao manual');
+ if(profile.status!=='aprovado'||!calc.validCnh(profile))error(403,'Aprovacao do motorista e CNH valida obrigatorias');
  const updated=await Profile.findOneAndUpdate({_id:profile._id},{$set:{localizacao:{type:'Point',coordinates:[p.lng,p.lat]},ultimaLocalizacaoEm:new Date()}},{new:true});
  res.json({ok:true,ultimaLocalizacaoEm:updated.ultimaLocalizacaoEm});
  if(profile.emViagemId){const job=await Job.findOne({_id:profile.emViagemId,motoristaId:own(req)}).lean();if(job&&['aceita','no_local','em_andamento'].includes(job.status))emit(req.app,job.clienteId,'viagem:localizacao',{id:String(job._id),latitude:p.lat,longitude:p.lng,atualizadoEm:updated.ultimaLocalizacaoEm});}
@@ -172,17 +173,17 @@ async function setAvailability(req,res){
  const {prof}=await ownedProfile(req);
  if(!Pagamento.listarFormas(prof).length)error(409,'Ative Pix, Cartao ou Dinheiro em Formas de pagamento do perfil profissional');
  const usuario=await User.findById(own(req)).select('acessoExpiraEm subscriptionStatus status avatar').lean();
- if(!profile.liberacaoManual&&!fotoAprovada(profile,usuario))error(403,'Foto do motorista ausente, alterada ou ainda nao aprovada. Envie a foto e aguarde a analise no painel');
+ if(!fotoAprovada(profile,usuario))error(403,'Foto do motorista ausente, alterada ou ainda nao aprovada. Envie a foto e aguarde a analise no painel');
  if(!usuario||usuario.status==='blocked'||['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo. Regularize o acesso como os demais prestadores');
- if(profile.status!=='aprovado'||(!profile.liberacaoManual&&!calc.validCnh(profile)))error(403,'Perfil nao aprovado ou CNH pendente de aprovacao manual');
+ if(profile.status!=='aprovado'||!calc.validCnh(profile))error(403,'CNH/perfil de mobilidade nao aprovado ou vencido');
  if(!profile.veiculoAtivoId)error(400,'Selecione um veiculo aprovado');
  const vehicle=await Vehicle.findOne({_id:profile.veiculoAtivoId,userId:own(req)}).lean();
- if(!vehicle||(!profile.liberacaoManual&&vehicle.status!=='aprovado'))error(403,'Veiculo nao aprovado');
+ if(!vehicle||vehicle.status!=='aprovado')error(403,'Veiculo nao aprovado');
  if(!profile.ultimaLocalizacaoEm||new Date(profile.ultimaLocalizacaoEm).getTime()<Date.now()-120000)error(409,'Envie localizacao atual antes de ficar online');
  const services=arrayServices(req.body.servicosAtivos);
  for(const svc of services){
   if(!profile.servicosAprovados.includes(svc))error(403,`Modalidade nao aprovada: ${svc}`);
-  if((!profile.liberacaoManual&&!calc.cnhSupportsVehicle(profile.cnh?.categoria,vehicle.tipo))||!(profile.liberacaoManual?serviceVehicleCompatible(svc,vehicle.tipo):calc.validVehicle(vehicle,svc,1)))error(403,`Veiculo incompatível: ${svc}`);
+  if(!calc.cnhSupportsVehicle(profile.cnh.categoria,vehicle.tipo)||!calc.validVehicle(vehicle,svc,1))error(403,`Veiculo incompatível: ${svc}`);
  }
  // A elegibilidade geografica da moto e checada na origem de cada corrida,
  // nao na cidade de cadastro (o motorista pode atender varias cidades).
@@ -281,23 +282,22 @@ async function createRequest(req,res){
  const jobId=new mongoose.Types.ObjectId();
  const claimed=await Quote.findOneAndUpdate({_id:cotacao._id,clienteId:client,usadoEmSolicitacao:null,expiraEm:trust({$gt:new Date()})},{$set:{usadoEmSolicitacao:jobId}},{new:true});
  if(!claimed)error(409,'Esta cotacao ja foi confirmada');
- const code1=pin(),code2=pin();
  let job;
  try{
-  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,origem:cotacao.origem,destino:cotacao.destino,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,pagamento:{metodo:formaPagamento,status:'pendente'},codigoInicioCriptografado:encrypt(code1),codigoConclusaoCriptografado:encrypt(code2)});
+  job=await Job.create({_id:jobId,cotacaoId:cotacao._id,clienteId:client,servico:cotacao.servico,tipoVeiculo:cotacao.tipoVeiculo,origem:cotacao.origem,destino:cotacao.destino,carga:cotacao.carga,passageiros:cotacao.passageiros,clienteGenero:cotacao.clienteGenero,preferenciaMotorista:cotacao.preferenciaMotorista,distanciaKm:cotacao.distanciaKm,duracaoMin:cotacao.duracaoMin,metodoRota:cotacao.metodoRota,valorCentavos:cotacao.valorCentavos,valorBaseCentavos:cotacao.valorBaseCentavos,multiplicadorDinamico:cotacao.multiplicadorDinamico,adicionalDinamicoCentavos:cotacao.adicionalDinamicoCentavos,pagamento:{metodo:formaPagamento,status:'pendente'}});
  }catch(e){await Quote.updateOne({_id:cotacao._id,usadoEmSolicitacao:jobId},{$set:{usadoEmSolicitacao:null}});throw e;}
  await audit(req,'solicitacao.criada',job._id,job.servico);
  try{await dispatchOne(req.app,job._id);}catch(e){console.error('[mobilidade] solicitacao registrada; tentativa de despacho sera repetida:',e.message);}
  const state=await Job.findById(job._id).select('status').lean();
- res.status(201).json({ok:true,solicitacao:{id:job._id,status:state?.status||job.status,valorCentavos:job.valorCentavos,metodoRota:job.metodoRota,pagamento:{metodo:formaPagamento,status:'pendente'}},codigos:{inicio:code1,conclusao:code2},aviso:'Codigos sao exclusivos do cliente e nao devem ser enviados automaticamente ao motorista.'});
+ res.status(201).json({ok:true,solicitacao:{id:job._id,status:state?.status||job.status,valorCentavos:job.valorCentavos,metodoRota:job.metodoRota,pagamento:{metodo:formaPagamento,status:'pendente'}}});
 }
 async function listClientJobs(req,res){const jobs=await Job.find({clienteId:own(req)}).sort({createdAt:-1}).limit(60).lean();res.json({ok:true,solicitacoes:jobs});}
 async function readJob(req,res){
- const job=await Job.findById(id(req.params.jobId)).select('+codigoInicioCriptografado +codigoConclusaoCriptografado').lean();if(!job)error(404,'Solicitacao nao encontrada');
+ const job=await Job.findById(id(req.params.jobId)).lean();if(!job)error(404,'Solicitacao nao encontrada');
  const user=own(req),asClient=String(job.clienteId)===String(user),asDriver=String(job.motoristaId||'')===String(user),isAdmin=req.user?.role==='admin';
  if(!asClient&&!asDriver&&!isAdmin)error(403,'Sem acesso a esta solicitacao');
  const item={...job};delete item.codigoInicioCriptografado;delete item.codigoConclusaoCriptografado;
- if(asClient){item.codigos={inicio:decrypt(job.codigoInicioCriptografado),conclusao:decrypt(job.codigoConclusaoCriptografado)};}
+
  if(!asClient&&!isAdmin){delete item.clienteId;delete item.clienteGenero;}
  res.json({ok:true,solicitacao:item});
 }
@@ -336,29 +336,43 @@ async function getDriverOffers(req,res){
  const enriched=offers.map(o=>({...o,distanciaAteColetaKm:Array.isArray(xy)&&xy.length===2?Math.round(calc.kilometers({lat:xy[1],lng:xy[0]},o.origem)*10)/10:null}));
  res.json({ok:true,ofertas:enriched});
 }
+// Mensagens específicas para ofertas que mudaram de situação enquanto o motorista as via.
+async function motivoOfertaIndisponivel(jobId, motoristaId){
+ const atual=await Job.findById(jobId).select('status motoristaId ofertaMotoristaId ofertaExpiraEm').lean();
+ if(!atual) return 'A solicitação não existe mais.';
+ if(atual.status==='cancelada')return 'O cliente cancelou a corrida.';
+ if(atual.status==='sem_motorista')return 'A busca por motoristas foi encerrada.';
+ if(['aceita','no_local','em_andamento','concluida'].includes(atual.status))
+   return String(atual.motoristaId||'')===String(motoristaId)
+     ? 'Esta corrida já está atribuída a você. Abra suas viagens.'
+     : 'Esta corrida já foi aceita por outro motorista.';
+ if(atual.status==='ofertada' && new Date(atual.ofertaExpiraEm||0)<=new Date())
+   return 'O tempo para aceitar esta corrida terminou.';
+ return 'Esta oferta deixou de estar disponível.';
+}
 async function acceptOffer(req,res){
  const {profile}=await ownedProfile(req),user=own(req),jobId=id(req.params.jobId);
  const job=await Job.findOne({_id:jobId,status:'ofertada',ofertaMotoristaId:user,ofertaExpiraEm:trust({$gt:new Date()})}).lean();
- if(!job)error(409,'Oferta expirada ou indisponivel');
+ if(!job)error(409,await motivoOfertaIndisponivel(jobId,user));
  const usuario=await User.findById(user).select('acessoExpiraEm subscriptionStatus status genero preferenciaAtendimento avatar').lean();
  if(!usuario||usuario.status==='blocked')error(403,'Conta bloqueada');
- if(!profile.liberacaoManual&&!fotoAprovada(profile,usuario))error(403,'Foto do motorista nao aprovada ou alterada');
+ if(!documentosAutorizados(profile,usuario))error(403,'O perfil ainda não está liberado no painel de mobilidade');
   if(['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo');
- if(profile.status!=='aprovado'||(!profile.liberacaoManual&&!calc.validCnh(profile)))error(403,'Perfil nao aprovado ou CNH pendente de aprovacao manual');
+ if(profile.status!=='aprovado')error(403,'Motorista não aprovado');
  if(!profile.online||profile.emViagemId)error(403,'Motorista indisponivel');
  if(!profile.servicosAtivos.includes(job.servico)||!profile.servicosAprovados.includes(job.servico))error(403,'Modalidade nao autorizada');
  if(job.servico==='corrida_moto'){const policy=await PoliticaMoto.consultar(job.origem);if(!policy.permitida)error(403,policy.mensagem);}
  if(!Preferencias.compativel(job,usuario))error(403,'Preferencia de atendimento incompativel');
  const prof=await Pagamento.buscarPreferencias(profile.profissionalId);if(!Pagamento.aceitaForma(prof,job.pagamento?.metodo))error(403,'Forma de pagamento nao aceita');
  const vehicle=await Vehicle.findOne({_id:profile.veiculoAtivoId,userId:user}).lean();
- if((!profile.liberacaoManual&&!calc.cnhSupportsVehicle(profile.cnh?.categoria,vehicle?.tipo))||!(profile.liberacaoManual?(vehicle&&serviceVehicleCompatible(job.servico,vehicle.tipo)&&(!job.tipoVeiculo||job.tipoVeiculo===vehicle.tipo)&&(!job.servico.startsWith('corrida')||vehicle.lugares>job.passageiros)):calc.validVehicle(vehicle,job.servico,job.passageiros,job.carga,job.tipoVeiculo)))error(403,'Veiculo nao compativel com esta viagem');
+ if(!veiculoCompativel(profile,vehicle,job))error(403,'Veículo não compatível com esta viagem');
  const reserva={_id:profile._id,emViagemId:null,online:true,status:'aprovado'};
  const reserved=await Profile.findOneAndUpdate(reserva,{$set:{emViagemId:job._id}},{new:true});
  if(!reserved)error(409,'Voce ja possui viagem ativa ou nao esta disponivel');
  let accepted;
  try{accepted=await Job.findOneAndUpdate({_id:job._id,status:'ofertada',ofertaMotoristaId:user,ofertaExpiraEm:trust({$gt:new Date()})},{$set:{status:'aceita',motoristaId:user,veiculoId:vehicle._id,aceiteEm:new Date(),ofertaMotoristaId:null,ofertaVeiculoId:null,ofertaExpiraEm:null}},{new:true});}
  finally{if(!accepted)await Profile.updateOne({_id:profile._id,emViagemId:job._id},{$set:{emViagemId:null}});}
- if(!accepted)error(409,'Oferta ja aceita por outro motorista ou expirada');
+ if(!accepted)error(409,await motivoOfertaIndisponivel(job._id,user));
  emit(req.app,job.clienteId,'viagem:atualizada',{id:String(job._id),status:'aceita',motoristaId:String(user)});
  res.json({ok:true,solicitacao:accepted});
 }
@@ -371,31 +385,50 @@ async function rejectOffer(req,res){
 }
 async function driverTrips(req,res){await ownedProfile(req);const jobs=await Job.find({motoristaId:own(req)}).sort({createdAt:-1}).limit(100).select('-clienteId -clienteGenero').lean();res.json({ok:true,viagens:jobs});}
 async function assignedJob(req,expected){
- await ownedProfile(req);const job=await Job.findOne({_id:id(req.params.jobId),motoristaId:own(req)}).select('+codigoInicioCriptografado +codigoConclusaoCriptografado');
+ await ownedProfile(req);const job=await Job.findOne({_id:id(req.params.jobId),motoristaId:own(req)});
  if(!job)error(404,'Viagem nao encontrada para este motorista');
  if(expected&&!expected.includes(job.status))error(409,'Transicao de status nao permitida');return job;
 }
 async function driverArrive(req,res){const j=await assignedJob(req,['aceita']);const updated=await Job.findOneAndUpdate({_id:j._id,status:'aceita',motoristaId:own(req)},{$set:{status:'no_local',chegadaEm:new Date()}},{new:true});if(!updated)error(409,'Status ja mudou');emit(req.app,j.clienteId,'viagem:atualizada',{id:String(j._id),status:'no_local'});res.json({ok:true,solicitacao:updated});}
-async function codeTransition(req,res,phase){
- const job=await assignedJob(req,phase==='iniciar'?['no_local']:['em_andamento']);
- if(job.codigoErradoTentativas>=5)error(423,'Muitas tentativas; suporte administrativo necessario');
- const key=phase==='iniciar'?'codigoInicioCriptografado':'codigoConclusaoCriptografado';
- if(!comparePin(job[key],req.body?.codigo)){
-  await Job.updateOne({_id:job._id},{$inc:{codigoErradoTentativas:1}});error(403,'Codigo incorreto');
- }
- const next=phase==='iniciar'?'em_andamento':'concluida';const set={status:next,codigoErradoTentativas:0};set[phase==='iniciar'?'inicioEm':'conclusaoEm']=new Date();
- const updated=await Job.findOneAndUpdate({_id:job._id,status:job.status,motoristaId:own(req)},{$set:set},{new:true});if(!updated)error(409,'Status ja mudou');
+// Transicoes sem PIN: somente o motorista designado pode iniciar e concluir,
+// sempre na ordem aceita -> no_local -> em_andamento -> concluida.
+async function tripTransition(req,res,phase){
+ const current=phase==='iniciar'?'no_local':'em_andamento';
+ const next=phase==='iniciar'?'em_andamento':'concluida';
+ const job=await assignedJob(req,[current]);
+ const fields={status:next};
+ fields[phase==='iniciar'?'inicioEm':'conclusaoEm']=new Date();
+ const updated=await Job.findOneAndUpdate(
+  {_id:job._id,status:current,motoristaId:own(req)},
+  {$set:fields},{new:true}
+ );
+ if(!updated)error(409,'A viagem ja mudou de etapa. Atualize a tela.');
  if(next==='concluida')await Profile.updateOne({userId:own(req),emViagemId:job._id},{$set:{emViagemId:null}});
+ Promise.resolve().then(()=>audit(req,phase==='iniciar'?'viagem.iniciada':'viagem.concluida',job._id))
+  .catch(e=>console.warn('[mobilidade] falha ao registrar auditoria de etapa:',e.message));
  emit(req.app,job.clienteId,'viagem:atualizada',{id:String(job._id),status:next});
  res.json({ok:true,solicitacao:updated});
 }
-const startTrip=(req,res)=>codeTransition(req,res,'iniciar');
-const finishTrip=(req,res)=>codeTransition(req,res,'concluir');
+const startTrip=(req,res)=>tripTransition(req,res,'iniciar');
+const finishTrip=(req,res)=>tripTransition(req,res,'concluir');
 async function clientCancel(req,res){
  const reason=asText(req.body?.motivo,400),j=await Job.findOneAndUpdate({_id:id(req.params.jobId),clienteId:own(req),status:trust({$in:['procurando','ofertada','aceita','no_local']})},{$set:{status:'cancelada',canceladoEm:new Date(),cancelamentoMotivo:reason,ofertaExpiraEm:null,'pagamento.status':'cancelado'}},{new:true});
  if(!j)error(409,'Nao e possivel cancelar esta solicitacao ou ela nao existe');
- if(j.motoristaId){await Profile.updateOne({userId:j.motoristaId,emViagemId:j._id},{$set:{emViagemId:null}});emit(req.app,j.motoristaId,'viagem:atualizada',{id:String(j._id),status:'cancelada'});}
- if(j.ofertaMotoristaId)emit(req.app,j.ofertaMotoristaId,'oferta:cancelada',{id:String(j._id)});
+ if(j.motoristaId){
+  await Profile.updateOne({userId:j.motoristaId,emViagemId:j._id},{$set:{emViagemId:null}});
+  emit(req.app,j.motoristaId,'viagem:atualizada',{id:String(j._id),status:'cancelada',motivo:'cliente_cancelou'});
+  await enviarPushParaUsuario(j.motoristaId,{
+    title:'Corrida cancelada',body:'O cliente cancelou a corrida que você aceitou.',type:'MOBILIDADE_CANCELADA',
+    data:{mobilidadeSolicitacaoId:String(j._id),motivo:'cliente_cancelou'}
+  });
+ }
+ if(j.ofertaMotoristaId){
+  emit(req.app,j.ofertaMotoristaId,'oferta:cancelada',{id:String(j._id),motivo:'cliente_cancelou'});
+  await enviarPushParaUsuario(j.ofertaMotoristaId,{
+    title:'Solicitação cancelada',body:'O cliente cancelou a solicitação antes da sua resposta.',type:'MOBILIDADE_CANCELADA',
+    data:{mobilidadeSolicitacaoId:String(j._id),motivo:'cliente_cancelou'}
+  });
+ }
  res.json({ok:true,solicitacao:{id:j._id,status:'cancelada'}});
 }
 // Registro declaratorio, nao processa Pix nem cartao e nao substitui comprovante.
@@ -495,37 +528,4 @@ async function driverRatings(req,res){
  res.json({ok:true,avaliacoes});
 }
 
-// Rota de navegacao restrita aos participantes de uma corrida.
-async function tripNavigation(req,res){
- const job=await Job.findById(id(req.params.jobId)).lean();
- if(!job)error(404,'Corrida não encontrada');
- const usuario=String(own(req));
- const cliente=String(job.clienteId)===usuario;
- const motorista=String(job.motoristaId||'')===usuario;
- if(!cliente&&!motorista)error(403,'Sem acesso à rota desta corrida');
- if(!['aceita','no_local','em_andamento'].includes(job.status))error(409,'Rota disponível apenas durante uma viagem ativa');
- const profile=await Profile.findOne({userId:job.motoristaId}).select('localizacao ultimaLocalizacaoEm').lean();
- if(!profile?.localizacao?.coordinates||!profile.ultimaLocalizacaoEm||Date.now()-new Date(profile.ultimaLocalizacaoEm).getTime()>120000)
-  return res.json({ok:true,disponivel:false,motivo:'Aguardando GPS atualizado do motorista'});
- const [lng,lat]=profile.localizacao.coordinates;
- const origem={lat,lng};
- const destino=job.status==='em_andamento'?job.destino:job.origem;
- const etapa=job.status==='em_andamento'?'destino':'embarque';
- const key=process.env.MOBILITY_GOOGLE_ROUTES_API_KEY;
- if(!key)return res.json({ok:true,disponivel:false,motivo:'Serviço de rotas não configurado',etapa});
- try{
-  const axios=require('axios');
-  const {data}=await axios.post('https://routes.googleapis.com/directions/v2:computeRoutes',{
-   origin:{location:{latLng:{latitude:origem.lat,longitude:origem.lng}}},
-   destination:{location:{latLng:{latitude:destino.lat,longitude:destino.lng}}},
-   travelMode:'DRIVE',routingPreference:'TRAFFIC_AWARE',languageCode:'pt-BR'
-  },{timeout:7000,headers:{'X-Goog-Api-Key':key,'X-Goog-FieldMask':'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline'}});
-  const route=data.routes?.[0];
-  if(!route?.polyline?.encodedPolyline)return res.json({ok:true,disponivel:false,motivo:'Rota não encontrada',etapa});
-  res.set('Cache-Control','private, no-store');
-  res.json({ok:true,disponivel:true,etapa,polyline:route.polyline.encodedPolyline,distanciaMetros:route.distanceMeters,
-   duracaoMinutos:Math.max(1,Math.ceil(parseFloat(route.duration||'0')/60))});
- }catch(e){res.status(503).json({ok:false,erro:'Serviço de rotas temporariamente indisponível'});}
-}
-
-module.exports={tripNavigation,reviewTrip,driverRatings,catalog,modalidadesOrigem,getProfile,setProfile,solicitarRevisaoFoto,setCNH,listVehicles,createVehicle,updateVehicle,selectVehicle,upload,uploadDocument,listDocuments,setLocation,getAvailability,setAvailability,getDriverDashboard,addMaintenance,getMaintenance,quote,createRequest,listClientJobs,readJob,clientDriverTracking,getDriverOffers,getDemandAreas,acceptOffer,rejectOffer,driverTrips,driverArrive,startTrip,finishTrip,clientCancel,driverPaymentReceived,clientPaymentReview,messages,mensagensRapidas,ownedProfile};
+module.exports={reviewTrip,driverRatings,catalog,modalidadesOrigem,getProfile,setProfile,solicitarRevisaoFoto,setCNH,listVehicles,createVehicle,updateVehicle,selectVehicle,upload,uploadDocument,listDocuments,setLocation,getAvailability,setAvailability,getDriverDashboard,addMaintenance,getMaintenance,quote,createRequest,listClientJobs,readJob,clientDriverTracking,getDriverOffers,getDemandAreas,acceptOffer,rejectOffer,driverTrips,driverArrive,startTrip,finishTrip,clientCancel,driverPaymentReceived,clientPaymentReview,messages,mensagensRapidas,ownedProfile};

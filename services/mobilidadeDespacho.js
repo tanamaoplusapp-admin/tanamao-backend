@@ -43,11 +43,11 @@ async function redispatch(app){
  const maxBuscaMs=Math.min(10*60000,Math.max(60000,Number(process.env.MOBILITY_SEARCH_TIMEOUT_MS)||180000));
  const cutoff=new Date(Date.now()-maxBuscaMs);
  const timedOut=await Job.find({status:trust({$in:['procurando','ofertada']}),createdAt:trust({$lt:cutoff})}).limit(30).lean();
- for(const job of timedOut){const updated=await Job.findOneAndUpdate({_id:job._id,status:trust({$in:['procurando','ofertada']})},{$set:{status:'sem_motorista',ofertaMotoristaId:null,ofertaVeiculoId:null,ofertaExpiraEm:null,'pagamento.status':'cancelado'}},{new:true});if(updated){emit(app,job.clienteId,'solicitacao:status',{id:String(job._id),status:'sem_motorista'});if(job.ofertaMotoristaId)emit(app,job.ofertaMotoristaId,'oferta:cancelada',{id:String(job._id)});}}
+ for(const job of timedOut){const updated=await Job.findOneAndUpdate({_id:job._id,status:trust({$in:['procurando','ofertada']})},{$set:{status:'sem_motorista',ofertaMotoristaId:null,ofertaVeiculoId:null,ofertaExpiraEm:null,'pagamento.status':'cancelado'}},{new:true});if(updated){emit(app,job.clienteId,'solicitacao:status',{id:String(job._id),status:'sem_motorista'});if(job.ofertaMotoristaId)emit(app,job.ofertaMotoristaId,'oferta:cancelada',{id:String(job._id),motivo:'busca_encerrada'});}}
  const expired=await Job.find({status:'ofertada',ofertaExpiraEm:trust({$lte:now})}).limit(50).lean();
  for(const job of expired){
   const updated=await Job.findOneAndUpdate({_id:job._id,status:'ofertada',ofertaMotoristaId:job.ofertaMotoristaId,ofertaExpiraEm:trust({$lte:now})},{$set:{status:'procurando',ofertaMotoristaId:null,ofertaVeiculoId:null,ofertaExpiraEm:null},$addToSet:{ignorados:job.ofertaMotoristaId}},{new:true});
-  if(updated){emit(app,job.ofertaMotoristaId,'oferta:expirada',{id:String(job._id)});await dispatchOne(app,job._id);}
+  if(updated){emit(app,job.ofertaMotoristaId,'oferta:expirada',{id:String(job._id),motivo:'tempo_esgotado'});await dispatchOne(app,job._id);}
  }
  const open=await Job.find({status:'procurando',tentativas:trust({$lt:MAX_ATTEMPTS})}).sort({createdAt:1}).limit(35).lean();
  for(const job of open)await dispatchOne(app,job._id);

@@ -15,8 +15,10 @@ const schema=new S({
  ofertaMotoristaId:{type:S.Types.ObjectId,default:null},
  ofertaVeiculoId:{type:S.Types.ObjectId,default:null},ofertaExpiraEm:Date,
  ignorados:[{type:S.Types.ObjectId}],tentativas:{type:Number,default:0},
- codigoInicioCriptografado:{type:String,select:false},codigoConclusaoCriptografado:{type:String,select:false},
- codigoErradoTentativas:{type:Number,default:0},
+ // Campos legados: ocultos por padrão. Não são mais criados nem usados no fluxo.
+ codigoInicioCriptografado:{type:String,select:false},
+ codigoConclusaoCriptografado:{type:String,select:false},
+ codigoErradoTentativas:{type:Number,select:false},
  aceiteEm:Date,chegadaEm:Date,inicioEm:Date,conclusaoEm:Date,canceladoEm:Date,
  cancelamentoMotivo:{type:String,maxlength:400},
  // Mesmos meios aceitos por qualquer prestador (recebimento fora do app).
