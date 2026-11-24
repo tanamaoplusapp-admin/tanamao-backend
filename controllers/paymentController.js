@@ -64,7 +64,7 @@ const PLANOS = {
 
   '30_dias': {
     dias: 30,
-    valor: 59.99
+    valor: 49.99
   }
 }
 
@@ -310,8 +310,10 @@ const criarCheckoutCartao = async (req, res) => {
     VALIDAÇÕES
     ============================= */
 
-    const amount = Number(value)
-    const dias = Number(quantidade)
+    // O preço de acesso por 30 dias é definido pelo servidor, nunca pelo app.
+    const plano30Dias = plano === '30_dias' || Number(quantidade) === 30
+    const amount = plano30Dias ? PLANOS['30_dias'].valor : Number(value)
+    const dias = plano30Dias ? 30 : Number(quantidade)
 
     if (!userId) {
       return res.status(401).json({

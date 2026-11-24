@@ -98,7 +98,7 @@ function inferExpectedAmount(planInfo) {
     1: 9.99,
     7: 14.99,
     15: 29.99,
-    30: 59.99,
+    30: 49.99,
   };
 
   return prices[planInfo.dias] || null;
@@ -251,7 +251,10 @@ console.log('PAYMENT METADATA:', payment.metadata)
     const expectedAmount = inferExpectedAmount(planInfo);
     const paidAmount = normalizeMoney(payment.transaction_amount);
 
-    if (expectedAmount !== null && normalizeMoney(expectedAmount) !== paidAmount) {
+    // Cobranças de R$59,99 já emitidas antes da mudança continuam válidas.
+    // O backend não gera novas cobranças por esse valor.
+    const pagamentoLegado30Dias = planInfo?.dias === 30 && paidAmount === 59.99;
+    if (expectedAmount !== null && normalizeMoney(expectedAmount) !== paidAmount && !pagamentoLegado30Dias) {
       await Transaction.findOneAndUpdate(
         { mpPaymentId: String(payment.id) },
         {
