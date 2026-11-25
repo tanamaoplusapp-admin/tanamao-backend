@@ -1,6 +1,7 @@
 'use strict';
 // Autorizacao de demonstracao entre duas contas identificadas. NUNCA substitui
 // aprovacao documental, habilitacao legal ou permissao para viagens comerciais.
+const trust = require('mongoose').trusted;
 const Profile = require('../models/MobilidadePerfil');
 const { serviceVehicleCompatible } = require('../config/mobilidade');
 const ativo = () => process.env.MOBILITY_TEST_MODE_ENABLED === 'true';
@@ -25,10 +26,10 @@ async function existeClienteComTeste(clienteId, servico, agora = new Date()) {
   if (!ativo() || servico !== 'corrida_carro') return false;
   const row = await Profile.exists({
     'liberacaoTeste.clienteTesteId': clienteId,
-    'liberacaoTeste.expiraEm': { $gt: agora },
+    'liberacaoTeste.expiraEm': trust({ $gt: agora }),
     'liberacaoTeste.revogadaEm': null,
     'liberacaoTeste.servicos': servico,
-    status: { $nin: ['suspenso', 'reprovado'] },
+    status: trust({ $nin: ['suspenso', 'reprovado'] }),
   });
   return !!row;
 }
