@@ -9,6 +9,13 @@ const schema = new S({
   servicosSolicitados: [{ type: String, enum: SERVICES }],
   servicosAprovados: [{ type: String, enum: SERVICES }],
   servicosAtivos: [{ type: String, enum: SERVICES }],
+  fotoAprovadaUrl: {type:String, maxlength:2048},
+  liberacaoTeste: {
+    clienteTesteId: {type:S.Types.ObjectId, ref:'User'},
+    veiculoId: {type:S.Types.ObjectId, ref:'MobilidadeVeiculo'},
+    servicos: [{type:String, enum:SERVICES}],
+    expiraEm: Date, revogadaEm: Date,
+  },
   aprovacaoRestrita: { type: Boolean, default: false },
   status: { type: String, enum: ['incompleto','em_analise','aprovado','reprovado','suspenso'], default:'incompleto', index:true },
   cnh: {
@@ -28,6 +35,10 @@ const schema = new S({
   cidadeBase: {type:String, maxlength:80}, ufBase: {type:String, uppercase:true, maxlength:2},
   motivo: {type:String, maxlength:500}, avaliadoEm:Date, avaliadoPor:{type:S.Types.ObjectId, ref:'User'},
 }, {timestamps:true, minimize:false});
+schema.virtual('liberacaoManual').get(function(){
+  const r=this.liberacaoTeste;
+  return process.env.MOBILITY_TEST_MODE_ENABLED==='true' && this.status==='aprovado' && !!r?.clienteTesteId && !!r?.veiculoId && String(r.veiculoId)===String(this.veiculoAtivoId) && !r.revogadaEm && new Date(r.expiraEm)>new Date() && r.servicos?.includes('corrida_carro');
+});
 schema.index({localizacao:'2dsphere'}, {sparse:true});
 schema.index({online:1,status:1,ultimaLocalizacaoEm:-1});
 module.exports = mongoose.models.MobilidadePerfil || mongoose.model('MobilidadePerfil',schema);

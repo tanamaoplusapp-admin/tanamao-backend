@@ -1,6 +1,7 @@
 'use strict';
 // One shared eligibility query for real dispatch and the passenger's aggregate search status.
 // Never return individual candidate coordinates or IDs to a passenger.
+const Teste = require('./mobilidadeTeste');
 const trust = require('mongoose').trusted;
 const Profile = require('../models/MobilidadePerfil');
 const Profissional = require('../models/Profissional');
@@ -73,18 +74,21 @@ async function buscarElegiveis(job) {
     }).select('_id profissaoNome profissoes profissoesDetalhadas').lean(),
     User.find({
       _id: trust({ $in: profiles.map(p => p.userId) }),
-      status: trust({ $ne: 'blocked' }),
-      acessoExpiraEm: trust({ $gt: new Date() }), subscriptionStatus: trust({ $nin: ['overdue', 'blocked'] }),
-    }).select('_id genero preferenciaAtendimento avatar').lean(),
+      status: trust({ $nin: ['blocked','bloqueado','suspended','inactive'] }),
+    }).select('_id genero preferenciaAtendimento avatar acessoExpiraEm subscriptionStatus').lean(),
   ]);
   const permitted = new Set(professionals.filter(possuiProfissaoMotorista).map(p => String(p._id)));
   diagnostico('prestadores_aceitam_pagamento_e_sao_motoristas', permitted.size);
   diagnostico('contas_com_acesso_ativo', users.length);
   const userById = new Map(users.map(u => [String(u._id), u]));
+  const clienteTeste=await Teste.existeClienteComTeste(job.clienteId,job.servico);
   const eligibleProfiles = profiles.filter(p => {
+    const reservado=!!p.liberacaoTeste?.clienteTesteId;
+    p.liberacaoManual=Teste.autorizadoPara(p,job.clienteId,job.servico);
+    if ((reservado && !p.liberacaoManual) || (clienteTeste && !p.liberacaoManual)) return false;
     const account = userById.get(String(p.userId));
     return betaAllowed(p.userId) && permitted.has(String(p.profissionalId)) &&
-      account && documentosAutorizados(p, account) && compativel(job, account) &&
+      account && (p.liberacaoManual || (account.acessoExpiraEm && new Date(account.acessoExpiraEm)>new Date() && !['overdue','blocked'].includes(account.subscriptionStatus))) && documentosAutorizados(p, account) && compativel(job, account) &&
       Array.isArray(p.localizacao?.coordinates) &&
       p.localizacao.coordinates.length === 2;
   });

@@ -8,7 +8,7 @@ const compara = (a, b) => !!a && !!b && String(a) === String(b);
 const seguro = p => !!p && !['suspenso', 'reprovado'].includes(p.status);
 function perfilEmTeste(p, agora = new Date()) {
   const r = p?.liberacaoTeste;
-  return ativo() && seguro(p) && !!r?.clienteTesteId && !!r?.veiculoId &&
+  return ativo() && seguro(p) && p.status === 'aprovado' && String(r?.veiculoId) === String(p.veiculoAtivoId) && !!r?.clienteTesteId && !!r?.veiculoId &&
     !r?.revogadaEm && !!r?.expiraEm && new Date(r.expiraEm).getTime() > agora.getTime() &&
     Array.isArray(r.servicos) && r.servicos.includes('corrida_carro');
 }

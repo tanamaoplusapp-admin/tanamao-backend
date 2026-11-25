@@ -38,6 +38,7 @@ const {validarLocalidade}=require('../services/mobilidadeGeocoding');
 const PoliticaMoto=require('../services/mobilidadePoliticaMoto');
 const User=require('../models/user');
 const {fotoAprovada,fotoValida}=require('../services/mobilidadeFoto');
+const Teste=require('../services/mobilidadeTeste');
 const own=req=>id(req.userId||req.user?._id);
 const validateDate=value=>{const d=new Date(value);if(!value||Number.isNaN(d.getTime()))error(400,'Data invalida');return d;};
 const asText=(x,max=200)=>String(x||'').trim().slice(0,max);
@@ -51,7 +52,7 @@ async function ownedProfile(req,create=false){
  return {profile,prof,owner};
 }
 function assertIdle(profile){if(profile.emViagemId)error(409,'Finalize a viagem em andamento primeiro');}
-function publicProfile(profile){const x=profile.toObject?profile.toObject():{...profile};if(x.cnh){delete x.cnh.numeroCriptografado;}return x;}
+function publicProfile(profile){const x=profile.toObject?profile.toObject():{...profile};if(x.cnh){delete x.cnh.numeroCriptografado;}x.liberacaoManual=profile.liberacaoManual===true;delete x.liberacaoTeste;return x;}
 async function getVehicle(req){const v=await Vehicle.findOne({_id:id(req.params.vehicleId),userId:own(req)});if(!v)error(404,'Veiculo nao encontrado');return v;}
 
 async function catalog(req,res){res.json({ok:true,servicos:SERVICES,veiculos:VEHICLES,formasPagamento:Pagamento.FORMAS,recebimento:'diretamente_ao_prestador',regras:{corridaMotoHabilitadaPorLocalidade:true,aprovacaoCNHManual:true,documentosPrivados:true},categoriaCarro:{normal:true,comfortConfigurado:Comfort.configurado()}});}
@@ -136,6 +137,7 @@ async function updateVehicle(req,res){
 }
 async function selectVehicle(req,res){
  const {profile}=await ownedProfile(req);assertIdle(profile);const v=await getVehicle(req);
+ if(profile.liberacaoManual===true && String(v._id)!==String(profile.liberacaoTeste.veiculoId))error(403,'Veiculo fora do teste');
  if(v.status!=='aprovado' && !(profile.liberacaoManual === true && v.status==='pendente'))error(403,'Veículo ainda não aprovado');
  profile.veiculoAtivoId=v._id;profile.online=false;profile.servicosAtivos=[];await profile.save();
  res.json({ok:true,perfil:publicProfile(profile)});
@@ -182,7 +184,7 @@ async function setAvailability(req,res){
  if(!Pagamento.listarFormas(prof).length)error(409,'Ative Pix, Cartao ou Dinheiro em Formas de pagamento do perfil profissional');
  const usuario=await User.findById(own(req)).select('acessoExpiraEm subscriptionStatus status avatar').lean();
  if(profile.liberacaoManual !== true && !fotoAprovada(profile,usuario))error(403,'Foto do motorista ausente, alterada ou ainda não aprovada. Envie a foto e aguarde a análise no painel');
- if(!usuario||usuario.status==='blocked'||['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo. Regularize o acesso como os demais prestadores');
+ if(!usuario||['blocked','bloqueado','suspended','inactive'].includes(usuario.status)||(profile.liberacaoManual !== true && (['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())))error(403,'Plano profissional inativo. Regularize o acesso como os demais prestadores');
  if(profile.status!=='aprovado' || (profile.liberacaoManual !== true && !calc.validCnh(profile)))error(403,'Perfil de mobilidade não aprovado ou CNH pendente');
  if(profile.aprovacaoRestrita && profile.liberacaoManual !== true)error(403,'Aprovação administrativa restrita: finalize a validação documental no painel');
  if(!profile.veiculoAtivoId)error(400,'Selecione um veiculo aprovado');
@@ -191,6 +193,7 @@ async function setAvailability(req,res){
  if(profile.liberacaoManual !== true && !vehicle.placaConferidaEm)error(403,'Aguarde a conferência manual da foto frontal, placa e CRLV do veículo');
  if(!profile.ultimaLocalizacaoEm||new Date(profile.ultimaLocalizacaoEm).getTime()<Date.now()-120000)error(409,'Envie localizacao atual antes de ficar online');
  const services=arrayServices(req.body.servicosAtivos);
+ if(profile.liberacaoManual===true && services.some(s=>s!=='corrida_carro'))error(403,'Teste exclusivo de corrida de carro');
  for(const svc of services){
   if(!profile.servicosAprovados.includes(svc))error(403,`Modalidade nao aprovada: ${svc}`);
   if(!serviceVehicleCompatible(svc,vehicle.tipo) || (profile.liberacaoManual !== true && (!calc.cnhSupportsVehicle(profile.cnh?.categoria,vehicle.tipo)||!calc.validVehicle(vehicle,svc,1))) || (profile.liberacaoManual === true && svc.startsWith('corrida') && Number(vehicle.lugares || 0) < 2))error(403,`Veículo incompatível: ${svc}`);
@@ -397,9 +400,10 @@ async function acceptOffer(req,res){
  if(!job)error(409,await motivoOfertaIndisponivel(jobId,user));
  if((job.paradas||[]).length&&req.body?.suportaParadas!==true)error(409,'Atualize o Tanamão+ para aceitar viagens com paradas.');
  const usuario=await User.findById(user).select('acessoExpiraEm subscriptionStatus status genero preferenciaAtendimento avatar').lean();
- if(!usuario||usuario.status==='blocked')error(403,'Conta bloqueada');
+ if(!usuario||['blocked','bloqueado','suspended','inactive'].includes(usuario.status))error(403,'Conta bloqueada');
+ if(profile.liberacaoTeste?.clienteTesteId && !Teste.autorizadoPara(profile,job.clienteId,job.servico))error(403,'Corrida fora da demonstracao autorizada');
  if(!documentosAutorizados(profile,usuario))error(403,'O perfil ainda não está liberado no painel de mobilidade');
-  if(['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date())error(403,'Plano profissional inativo');
+  if(profile.liberacaoManual!==true && (['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date()))error(403,'Plano profissional inativo');
  if(profile.status!=='aprovado')error(403,'Motorista não aprovado');
  if(!profile.online||profile.emViagemId)error(403,'Motorista indisponivel');
  if(!profile.servicosAtivos.includes(job.servico)||!profile.servicosAprovados.includes(job.servico))error(403,'Modalidade nao autorizada');
