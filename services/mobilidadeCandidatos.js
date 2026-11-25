@@ -83,7 +83,7 @@ async function buscarElegiveis(job) {
   const userById = new Map(users.map(u => [String(u._id), u]));
   const clienteTeste=await Teste.existeClienteComTeste(job.clienteId,job.servico);
   const eligibleProfiles = profiles.filter(p => {
-    const reservado=!!p.liberacaoTeste?.clienteTesteId;
+    const reservado=!!p.liberacaoTeste?.clienteTesteId || p.liberacaoTeste?.somenteOnline === true;
     p.liberacaoManual=Teste.autorizadoPara(p,job.clienteId,job.servico);
     if ((reservado && !p.liberacaoManual) || (clienteTeste && !p.liberacaoManual)) return false;
     const account = userById.get(String(p.userId));

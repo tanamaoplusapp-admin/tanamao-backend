@@ -11,6 +11,7 @@ const schema = new S({
   servicosAtivos: [{ type: String, enum: SERVICES }],
   fotoAprovadaUrl: {type:String, maxlength:2048},
   liberacaoTeste: {
+    somenteOnline: {type:Boolean, default:false},
     clienteTesteId: {type:S.Types.ObjectId, ref:'User'},
     veiculoId: {type:S.Types.ObjectId, ref:'MobilidadeVeiculo'},
     servicos: [{type:String, enum:SERVICES}],
@@ -37,7 +38,7 @@ const schema = new S({
 }, {timestamps:true, minimize:false});
 schema.virtual('liberacaoManual').get(function(){
   const r=this.liberacaoTeste;
-  return process.env.MOBILITY_TEST_MODE_ENABLED==='true' && this.status==='aprovado' && !!r?.clienteTesteId && !!r?.veiculoId && String(r.veiculoId)===String(this.veiculoAtivoId) && !r.revogadaEm && new Date(r.expiraEm)>new Date() && r.servicos?.includes('corrida_carro');
+  return process.env.MOBILITY_TEST_MODE_ENABLED==='true' && this.status==='aprovado' && (r?.somenteOnline === true || !!r?.clienteTesteId) && !!r?.veiculoId && String(r.veiculoId)===String(this.veiculoAtivoId) && !r.revogadaEm && new Date(r.expiraEm)>new Date() && r.servicos?.includes('corrida_carro');
 });
 schema.index({localizacao:'2dsphere'}, {sparse:true});
 schema.index({online:1,status:1,ultimaLocalizacaoEm:-1});

@@ -8,12 +8,12 @@ const compara = (a, b) => !!a && !!b && String(a) === String(b);
 const seguro = p => !!p && !['suspenso', 'reprovado'].includes(p.status);
 function perfilEmTeste(p, agora = new Date()) {
   const r = p?.liberacaoTeste;
-  return ativo() && seguro(p) && p.status === 'aprovado' && String(r?.veiculoId) === String(p.veiculoAtivoId) && !!r?.clienteTesteId && !!r?.veiculoId &&
+  return ativo() && seguro(p) && p.status === 'aprovado' && String(r?.veiculoId) === String(p.veiculoAtivoId) && (r?.somenteOnline === true || !!r?.clienteTesteId) && !!r?.veiculoId &&
     !r?.revogadaEm && !!r?.expiraEm && new Date(r.expiraEm).getTime() > agora.getTime() &&
     Array.isArray(r.servicos) && r.servicos.includes('corrida_carro');
 }
 function autorizadoPara(p, clienteId, servico, agora = new Date()) {
-  return perfilEmTeste(p, agora) && compara(p.liberacaoTeste.clienteTesteId, clienteId) &&
+  return perfilEmTeste(p, agora) && p.liberacaoTeste.somenteOnline !== true && compara(p.liberacaoTeste.clienteTesteId, clienteId) &&
     p.liberacaoTeste.servicos.includes(servico) && servico === 'corrida_carro';
 }
 function veiculoDemo(v, servico, passageiros = 1, tipoVeiculo = null) {

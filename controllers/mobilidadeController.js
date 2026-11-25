@@ -401,7 +401,7 @@ async function acceptOffer(req,res){
  if((job.paradas||[]).length&&req.body?.suportaParadas!==true)error(409,'Atualize o Tanamão+ para aceitar viagens com paradas.');
  const usuario=await User.findById(user).select('acessoExpiraEm subscriptionStatus status genero preferenciaAtendimento avatar').lean();
  if(!usuario||['blocked','bloqueado','suspended','inactive'].includes(usuario.status))error(403,'Conta bloqueada');
- if(profile.liberacaoTeste?.clienteTesteId && !Teste.autorizadoPara(profile,job.clienteId,job.servico))error(403,'Corrida fora da demonstracao autorizada');
+ if((profile.liberacaoTeste?.somenteOnline === true || profile.liberacaoTeste?.clienteTesteId) && !Teste.autorizadoPara(profile,job.clienteId,job.servico))error(403,'Corrida fora da demonstracao autorizada');
  if(!documentosAutorizados(profile,usuario))error(403,'O perfil ainda não está liberado no painel de mobilidade');
   if(profile.liberacaoManual!==true && (['overdue','blocked'].includes(usuario.subscriptionStatus)||!usuario.acessoExpiraEm||new Date(usuario.acessoExpiraEm)<=new Date()))error(403,'Plano profissional inativo');
  if(profile.status!=='aprovado')error(403,'Motorista não aprovado');
