@@ -12,6 +12,7 @@ const {SERVICES,serviceVehicleCompatible}=require('../config/mobilidade');
 const {validCnh,validVehicle,cnhSupportsVehicle,norm}=require('../services/mobilidadeCalculo');
 const {decrypt}=require('../services/mobilidadeCrypto');
 const {emit}=require('../services/mobilidadeSocket');
+const {enviarPushParaUsuario}=require('../services/pushService');
 const Profissional=require('../models/Profissional');
 const User=require('../models/user');
 const {fotoValida}=require('../services/mobilidadeFoto');
@@ -75,6 +76,7 @@ async function reviewVehicle(req,res){
 }
 async function reviewProfile(req,res){
  const p=await Profile.findById(id(req.params.profileId));if(!p)error(404,'Perfil nao encontrado');
+ const jaAprovadoSemRestricao=p.status==='aprovado'&&!p.aprovacaoRestrita;
  const choice=req.body?.decisao,reason=text(req.body?.motivo);
  if(!['aprovar','reprovar','suspender','solicitar_reenvio'].includes(choice))error(400,'Decisao invalida');if(choice!=='aprovar'&&!reason)error(400,'Informe o motivo');
  if(choice==='aprovar'){
@@ -107,6 +109,18 @@ async function reviewProfile(req,res){
  p.online=false;p.servicosAtivos=[];p.avaliadoEm=new Date();p.avaliadoPor=req.userId;p.motivo=reason;
  await p.save();await audit(req,`admin.perfil.${choice}`,p._id,choice==='aprovar'&&p.aprovacaoRestrita?'Aprovacao administrativa restrita: documentos pendentes':reason);
  emit(req.app,p.userId,'perfil:aprovacao',{status:p.status,servicos:p.servicosAprovados});
+ // Compatibilidade com apps publicados: este tipo legado apenas navega para a home de mobilidade.
+ // Nao altera viagens nem emite eventos de cancelamento; o evento semantico fica em data.evento.
+ if(choice==='aprovar'&&!p.aprovacaoRestrita&&!jaAprovadoSemRestricao){
+  try{
+   await enviarPushParaUsuario(p.userId,{
+    title:'Parabéns! Seu perfil foi aprovado!',
+    body:'Você já pode ficar online e receber corridas pelo Tanamão+, se os demais requisitos estiverem em dia.',
+    type:'MOBILIDADE_CANCELADA',
+    data:{evento:'MOBILIDADE_MOTORISTA_APROVADO',destinatarioTipo:'profissional',perfilId:String(p._id)}
+   });
+  }catch(e){console.warn('[mobilidade] Falha no push de aprovação:',e.message);}
+ }
  res.json({ok:true,perfilId:p._id,status:p.status,servicosAprovados:p.servicosAprovados,aprovacaoRestrita:!!p.aprovacaoRestrita});
 }
 async function download(req,res){
