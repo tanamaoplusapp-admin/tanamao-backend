@@ -248,6 +248,9 @@ const authRoutes = require('./routes/authRoutes');
 app.use('/api/pedidos-abertos', require('./routes/pedidosAbertosRoutes'));
 app.use('/api/mobilidade', require('./routes/mobilidadeRoutes'));
 app.use('/api/admin/mobilidade', require('./routes/mobilidadeAdminRoutes'));
+const adminMobileAlerts = require('./routes/adminMobileAlerts');
+app.use('/api/admin/mobile-alerts', adminMobileAlerts.router);
+adminMobileAlerts.start();
 
 app.use('/api/auth', authRoutes);
 console.log('🟢 Rota pública registrada (isolada): /api/auth');
